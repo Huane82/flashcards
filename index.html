@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlashCard Master 單字卡大師 (v1.26.11.04)</title>
+
+    <!-- 防止 favicon.ico 404 報錯 -->
+    <link rel="icon" href="data:,">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', '"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+    <!-- 頁頭導航欄 -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                    <i class="fa-solid fa-layer-group text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-slate-900 leading-tight">FlashCard Master</h1>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 border border-brand-100">v1.26.11.04</span>
+                        <span class="text-xs text-slate-400">小考背單字神器</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 功能按鈕群 -->
+            <div class="flex items-center space-x-2">
+                <button type="button" onclick="openModal('batchModal')" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60 font-medium text-sm transition">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span class="hidden sm:inline">批量貼上匯入</span>
+                </button>
+                <button type="button" onclick="openModal('cardModal')" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm">
+                    <i class="fa-solid fa-plus"></i>
+                    <span class="hidden sm:inline">新增單字</span>
+                </button>
+                <button type="button" onclick="openModal('keyModal')" title="Gemini API Key 設定" class="p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition">
+                    <i class="fa-solid fa-key text-amber-500"></i>
+                </button>
+                <button type="button" onclick="openModal('backupModal')" title="備份與還原" class="p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition">
+                    <i class="fa-solid fa-database"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 分頁切換與字庫篩選條 -->
+    <div class="bg-white border-b border-slate-200 shadow-2xs">
+        <div class="max-w-6xl mx-auto px-4 flex flex-col md:flex-row md:items-center justify-between py-2 gap-2">
+            <div class="flex space-x-1 sm:space-x-4">
+                <button type="button" id="tab-flashcard" onclick="switchTab('flashcard')" class="py-2.5 px-3 text-sm font-semibold border-b-2 border-brand-600 text-brand-600 flex items-center space-x-2 transition">
+                    <i class="fa-solid fa-clone"></i>
+                    <span>卡片輪播 (5 級記憶)</span>
+                </button>
+                <button type="button" id="tab-quiz" onclick="switchTab('quiz')" class="py-2.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2 transition">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                    <span>隨堂測驗模式</span>
+                </button>
+                <button type="button" id="tab-list" onclick="switchTab('list')" class="py-2.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2 transition">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>字庫管理 (<span id="totalWordCount">0</span>)</span>
+                </button>
+            </div>
+
+            <!-- 【新增 1】字庫學習選取欄 (決定刷卡與測驗的字庫範圍) -->
+            <div class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
+                <i class="fa-solid fa-folder-tree text-brand-600 font-bold"></i>
+                <span class="font-bold text-slate-700">學習/測驗目標字庫:</span>
+                <select id="categoryFilterSelect" onchange="handleCategoryFilterChange()" class="bg-white font-semibold text-slate-800 border border-slate-300 rounded px-2 py-1 outline-none">
+                    <option value="ALL">全部字庫 (不限)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要內容區 -->
+    <main class="max-w-4xl mx-auto w-full px-4 py-8 flex-1">
+
+        <!-- 全空字庫提示 -->
+        <div id="emptyNotice" class="hidden mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start space-x-3 text-amber-800">
+            <i class="fa-solid fa-circle-info text-amber-600 text-lg mt-0.5"></i>
+            <div class="text-sm">
+                <p class="font-bold">目前選擇的字庫沒有單字！</p>
+                <p class="mt-1">您可以點選右上角「<span class="font-semibold text-emerald-700">批量貼上匯入</span>」直接匯入或載入 7000 單，或更換目標字庫。</p>
+            </div>
+        </div>
+
+        <!-- 區塊 1：卡片輪播區 -->
+        <section id="sec-flashcard" class="space-y-6">
+            <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
+                <div class="flex items-center space-x-2">
+                    <span class="px-2.5 py-1 bg-slate-200/70 text-slate-700 rounded-md">
+                        <i class="fa-solid fa-shield-halved mr-1 text-brand-600"></i>焦點池機制：最多 3 個 Lv1 + 4 個 Lv2
+                    </span>
+                </div>
+                <div>
+                    當前字庫字數: <span id="cardCountDisplay" class="font-bold text-slate-700">0</span>
+                </div>
+            </div>
+
+            <!-- 3D 翻轉單字卡容器 -->
+            <div class="perspective-1000 w-full max-w-lg mx-auto h-[380px] cursor-pointer group" onclick="flipCard()">
+                <div id="flashcard" class="relative w-full h-full transform-style-3d card-flip-duration shadow-xl rounded-2xl border border-slate-200/80 bg-white">
+                    
+                    <!-- 正面 (Front) -->
+                    <div class="absolute inset-0 backface-hidden rounded-2xl p-8 flex flex-col justify-between bg-gradient-to-br from-white to-slate-50">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <span id="cardPosFront" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">POS</span>
+                                <span id="cardLevelFront" class="px-2.5 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200">Lv.1 完全沒看過</span>
+                            </div>
+                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀發音" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-brand-100 hover:text-brand-600 text-slate-600 flex items-center justify-center transition">
+                                <i class="fa-solid fa-volume-high text-base"></i>
+                            </button>
+                        </div>
+
+                        <div class="text-center py-4">
+                            <h2 id="cardWord" class="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight">Select or Add Words</h2>
+                            <p id="cardPhonetic" class="text-lg text-slate-500 font-mono mt-3">/---/</p>
+                        </div>
+
+                        <div class="text-center text-xs text-slate-400 font-medium flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-rotate text-slate-300"></i>
+                            <span>點擊卡片翻面檢視中文釋義與例句</span>
+                        </div>
+                    </div>
+
+                    <!-- 背面 (Back) -->
+                    <div class="absolute inset-0 backface-hidden rotate-y-180 rounded-2xl p-8 flex flex-col justify-between bg-slate-900 text-white">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <span id="cardPosBack" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-brand-500/20 text-brand-300 border border-brand-500/30">POS</span>
+                                <span id="cardLevelBack" class="px-2.5 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200">Lv.1 完全沒看過</span>
+                            </div>
+                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀發音" class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition">
+                                <i class="fa-solid fa-volume-high text-base"></i>
+                            </button>
+                        </div>
+
+                        <div class="space-y-4 my-auto">
+                            <div id="cardMeaning" class="text-2xl sm:text-3xl font-bold text-center text-amber-300 leading-snug">
+                                請先新增或匯入單字
+                            </div>
+                            <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700/50 space-y-1.5">
+                                <p id="cardSentence" class="text-sm font-medium text-slate-200 italic leading-relaxed">
+                                    "No sentence provided."
+                                </p>
+                                <p id="cardTranslation" class="text-xs text-slate-400">
+                                    中文例句翻譯
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="text-center text-xs text-slate-500 font-medium">
+                            點擊任意處翻回正面
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 控制按鈕 -->
+            <div class="flex items-center justify-center space-x-3 max-w-lg mx-auto pt-2">
+                <button type="button" onclick="handleDontKnow()" class="flex-1 py-3.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-base shadow-lg shadow-rose-500/25 transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                    <span>不知道 (降級)</span>
+                </button>
+                <button type="button" onclick="handleKnow()" class="flex-1 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-lg shadow-emerald-500/25 transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-check text-lg"></i>
+                    <span>知道 (<span id="knowStreakText">0/3</span>)</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 區塊 2：隨堂測驗區 -->
+        <section id="sec-quiz" class="hidden space-y-6">
+            <div class="bg-white p-2 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button type="button" id="qmode-1" onclick="setQuizMode(1)" class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-brand-600 text-white shadow-xs">
+                    <i class="fa-solid fa-font"></i>
+                    <span>模式 1: 純英文上下文聯想</span>
+                </button>
+                <button type="button" id="qmode-2" onclick="setQuizMode(2)" class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200">
+                    <i class="fa-solid fa-shapes"></i>
+                    <span>模式 2: 詞性與變化</span>
+                </button>
+                <button type="button" id="qmode-3" onclick="setQuizMode(3)" class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200">
+                    <i class="fa-solid fa-bullseye text-amber-500"></i>
+                    <span>模式 3: 🎯 句意對照挖空</span>
+                </button>
+            </div>
+
+            <div id="quizContainer" class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span id="quizBadge" class="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-bold">
+                        模式 1 準備中
+                    </span>
+                    <span class="text-xs text-slate-400 font-medium">答對率紀錄: <span id="quizScore" class="font-bold text-slate-700">0/0</span></span>
+                </div>
+
+                <div class="space-y-3">
+                    <p id="quizPromptTitle" class="text-xs font-semibold uppercase text-slate-400 tracking-wider">題目提示</p>
+                    <div id="quizPromptBox" class="text-lg sm:text-2xl font-bold text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        載入測驗題目中...
+                    </div>
+                </div>
+
+                <form onsubmit="handleQuizSubmit(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">請輸入正確的英文單字：</label>
+                        <input type="text" id="quizInput" autocomplete="off" placeholder="在此輸入答案..." class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-lg font-semibold tracking-wide outline-none transition">
+                    </div>
+
+                    <div class="flex space-x-3">
+                        <button type="submit" class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition shadow-sm">
+                            提交答案
+                        </button>
+                        <button type="button" onclick="nextQuizQuestion()" class="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
+                            跳過 / 下一題
+                        </button>
+                    </div>
+                </form>
+
+                <div id="quizFeedback" class="hidden p-4 rounded-xl text-sm font-semibold transition"></div>
+            </div>
+        </section>
+
+        <!-- 區塊 3：字庫管理區 -->
+        <section id="sec-list" class="hidden space-y-4">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" oninput="renderWordList()" placeholder="搜尋單字、詞性、字庫或中文釋義..." class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition">
+                </div>
+                <div class="flex items-center space-x-2">
+                    <!-- 【新增 2】批量拆分大字庫按鈕 -->
+                    <button type="button" onclick="openSplitDeckModal()" class="px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 border border-purple-200 rounded-lg transition">
+                        <i class="fa-solid fa-scissors mr-1"></i>批量拆分字庫
+                    </button>
+                    <button type="button" onclick="handleClearAllWords()" class="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition">
+                        <i class="fa-solid fa-trash-can mr-1"></i>清空全庫
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                <th class="py-3 px-4">單字 / 音標</th>
+                                <th class="py-3 px-4">所屬字庫</th>
+                                <th class="py-3 px-4">記憶等級</th>
+                                <th class="py-3 px-4">中文釋義</th>
+                                <th class="py-3 px-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wordTableBody" class="divide-y divide-slate-100 text-sm">
+                            <!-- 動態渲染列表 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 頁腳 -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+        FlashCard Master &copy; 2026 | Version <span class="font-semibold text-slate-600">v1.26.11.04</span>
+    </footer>
+
+    <!-- 彈窗 1: 新增/編輯單字 Modal -->
+    <div id="cardModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 id="cardModalTitle" class="text-lg font-bold text-slate-900">新增/編輯單字卡</h3>
+                <button type="button" onclick="closeModal('cardModal')" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form id="cardForm" onsubmit="handleSaveCardForm(event)" class="space-y-4">
+                <input type="hidden" id="editCardId">
+
+                <!-- 【新增 3】指定所屬字庫名稱 -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">歸屬字庫/分類名稱</label>
+                    <input type="text" id="formCategory" placeholder="例如: 預設字庫 / 核心單字" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-semibold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">英文單字 <span class="text-rose-500">*</span></label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="formWord" required placeholder="例如: resilient" class="flex-1 px-3.5 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-semibold">
+                        <button type="button" onclick="handleAiSingleFill()" id="aiGenerateBtn" class="px-3.5 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-medium text-xs flex items-center space-x-1 shadow-sm transition">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>Gemini AI 自動帶入</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">詞性 (POS)</label>
+                        <input type="text" id="formPos" placeholder="例如: adj." class="w-full px-3.5 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">音標 (Phonetic)</label>
+                        <input type="text" id="formPhonetic" placeholder="例如: /rɪˈzɪl.jənt/" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">繁體中文釋義 <span class="text-rose-500">*</span></label>
+                    <input type="text" id="formMeaning" required placeholder="例如: 有彈性的；能迅速恢復的" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">英文例句</label>
+                    <textarea id="formSentence" rows="2" placeholder="例如: She is resilient enough to bounce back from failure." class="w-full px-3.5 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">例句繁體中文翻譯</label>
+                    <textarea id="formTranslation" rows="2" placeholder="例如: 她很有韌性，能從失敗中迅速振作起來。" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm"></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end space-x-2">
+                    <button type="button" onclick="closeModal('cardModal')" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100">取消</button>
+                    <button type="submit" class="px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-sm">儲存卡片</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 彈窗 2: 批量貼上與 AI 智慧解析 Modal -->
+    <div id="batchModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-3xl w-full p-6 space-y-5 shadow-2xl border border-slate-100 max-h-[92vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-file-import text-emerald-600 text-xl"></i>
+                    <h3 class="text-lg font-bold text-slate-900">批量貼上與 AI 智慧解析</h3>
+                </div>
+                <button type="button" onclick="closeModal('batchModal')" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 flex-1 overflow-y-auto pr-1">
+                <!-- 高中 7000 單字一鍵匯入區塊 -->
+                <div class="p-3.5 bg-gradient-to-r from-brand-50 to-indigo-50 border border-brand-200 rounded-xl space-y-2">
+                    <div class="flex items-center space-x-2 text-brand-900 font-bold text-xs">
+                        <i class="fa-solid fa-graduation-cap text-brand-600 text-sm"></i>
+                        <span>一鍵載入高中 7000 單字庫 (大考中心 / 108 課綱分級)</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                        <button type="button" onclick="handleLoadPreset(1)" class="py-1.5 px-2 bg-white hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-bold rounded-lg transition shadow-2xs">Level 1 (基礎)</button>
+                        <button type="button" onclick="handleLoadPreset(2)" class="py-1.5 px-2 bg-white hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-bold rounded-lg transition shadow-2xs">Level 2 (初級)</button>
+                        <button type="button" onclick="handleLoadPreset(3)" class="py-1.5 px-2 bg-white hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-bold rounded-lg transition shadow-2xs">Level 3 (中級)</button>
+                        <button type="button" onclick="handleLoadPreset(4)" class="py-1.5 px-2 bg-white hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-bold rounded-lg transition shadow-2xs">Level 4 (中高)</button>
+                        <button type="button" onclick="handleLoadPreset(5)" class="py-1.5 px-2 bg-white hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-bold rounded-lg transition shadow-2xs">Level 5 (高級)</button>
+                        <button type="button" onclick="handleLoadPreset(6)" class="py-1.5 px-2 bg-white hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-bold rounded-lg transition shadow-2xs">Level 6 (挑戰)</button>
+                    </div>
+                </div>
+
+                <!-- 匯入標的字庫名稱設定 -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">匯入至此字庫名稱：</label>
+                    <input type="text" id="batchTargetCategory" value="預設字庫" placeholder="例如: 高中 7000 單 L1" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none font-semibold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">貼上原始文字庫資料：</label>
+                    <textarea id="batchRawInput" rows="5" placeholder="請在此貼上單字內容...
+例如：
+apple n. 蘋果
+resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+                </div>
+
+                <div class="flex space-x-2">
+                    <button type="button" onclick="handleParseBatchText()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg transition flex items-center justify-center space-x-1.5">
+                        <i class="fa-solid fa-magnifying-glass font-normal"></i>
+                        <span>解析貼入文字</span>
+                    </button>
+                </div>
+
+                <!-- 預覽表格區塊 (含刪除/剔除單字功能) -->
+                <div id="batchPreviewBox" class="hidden space-y-3 pt-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700">解析預覽 (共 <span id="batchParsedCount">0</span> 筆)：</span>
+                        <button type="button" id="batchAiFillBtn" onclick="handleRunBatchAiAutoFill()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center space-x-1">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>AI 批次補齊缺漏欄位</span>
+                        </button>
+                    </div>
+
+                    <!-- 進度條 -->
+                    <div id="batchProgressContainer" class="hidden space-y-1">
+                        <div class="flex justify-between text-xs text-slate-600">
+                            <span id="batchProgressText">AI 自動補齊中...</span>
+                            <span id="batchProgressPercent">0%</span>
+                        </div>
+                        <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div id="batchProgressBar" class="h-full bg-purple-600 transition-all duration-300 w-0"></div>
+                        </div>
+                    </div>
+
+                    <div class="max-h-56 overflow-y-auto border border-slate-200 rounded-lg text-xs">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 font-bold sticky top-0">
+                                <tr>
+                                    <th class="p-2 border-b">單字</th>
+                                    <th class="p-2 border-b">詞性</th>
+                                    <th class="p-2 border-b">繁中釋義</th>
+                                    <th class="p-2 border-b">狀態</th>
+                                    <th class="p-2 border-b text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batchPreviewBody" class="divide-y divide-slate-100 font-mono">
+                                <!-- 動態解析列與移除按鈕 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex justify-end space-x-2 flex-shrink-0">
+                <button type="button" onclick="closeModal('batchModal')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100">取消</button>
+                <button type="button" id="confirmBatchImportBtn" onclick="handleConfirmBatchImport()" disabled class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition">確認匯入至字庫</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈窗 3: Gemini API Key Modal -->
+    <div id="keyModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-key text-amber-500"></i>
+                    <h3 class="text-base font-bold text-slate-900">Gemini API Key 設定</h3>
+                </div>
+                <button type="button" onclick="closeModal('keyModal')" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-500 leading-relaxed">
+                輸入您的 Google Gemini API Key 以啟用自動生成單字音標、詞性、繁體中文釋義及例句翻譯功能。
+            </p>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">API Key</label>
+                <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-amber-500 outline-none text-sm font-mono">
+            </div>
+
+            <div class="pt-2 flex justify-end space-x-2">
+                <button type="button" onclick="closeModal('keyModal')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100">取消</button>
+                <button type="button" onclick="handleSaveApiKey()" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm">儲存金鑰</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈窗 4: 全庫 / 選擇性 JSON 備份與還原 Modal -->
+    <div id="backupModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-100">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-database text-brand-600"></i>
+                    <h3 class="text-base font-bold text-slate-900">字庫 JSON 備份與還原</h3>
+                </div>
+                <button type="button" onclick="closeModal('backupModal')" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                    <h4 class="text-xs font-bold text-slate-700">選擇匯出的字庫 (Export)</h4>
+                    <select id="exportCategorySelect" class="w-full px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 outline-none">
+                        <option value="ALL">包含全部字庫</option>
+                    </select>
+                    <button type="button" onclick="exportJSON()" class="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition">
+                        <i class="fa-solid fa-download mr-1"></i>下載 JSON 備份檔
+                    </button>
+                </div>
+
+                <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                    <h4 class="text-xs font-bold text-slate-700">還原字庫 (Import)</h4>
+                    <p class="text-xs text-slate-500">上傳先前備份的 .json 檔案進行還原。</p>
+                    <input type="file" id="jsonFileInput" accept=".json" class="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                    <button type="button" onclick="handleImportJSON()" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition">
+                        <i class="fa-solid fa-upload mr-1"></i>匯入並更新字庫
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 【新增 4】彈窗 5: 批量拆分大字庫 Modal -->
+    <div id="splitModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2 text-purple-700 font-bold">
+                    <i class="fa-solid fa-scissors"></i>
+                    <h3 class="text-base text-slate-900">批量拆分大字庫</h3>
+                </div>
+                <button type="button" onclick="closeModal('splitModal')" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-500 leading-relaxed">
+                選擇要拆分的大字庫，並輸入每個新字庫包含的單字上限（例如：1000 個字的 Level 3，設定 200 字拆分，將自動產生「Level 3 - 1」到「Level 3 - 5」共 5 個小字庫）。
+            </p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">選擇要拆分的目標字庫：</label>
+                    <select id="splitTargetCategorySelect" class="w-full px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 outline-none">
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">每個拆分小字庫的單字數量：</label>
+                    <input type="number" id="splitChunkSizeInput" value="200" min="10" max="1000" class="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 outline-none">
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end space-x-2">
+                <button type="button" onclick="closeModal('splitModal')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100">取消</button>
+                <button type="button" onclick="handleConfirmSplitDeck()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-sm">開始拆分字庫</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 腳本引入 -->
+    <script src="js/storage.js"></script>
+    <script src="js/algorithm.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/quiz.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
