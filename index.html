@@ -93,7 +93,7 @@
                 </button>
             </div>
 
-            <!-- 【新增 1】字庫學習選取欄 (決定刷卡與測驗的字庫範圍) -->
+            <!-- 字庫學習選取欄 -->
             <div class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
                 <i class="fa-solid fa-folder-tree text-brand-600 font-bold"></i>
                 <span class="font-bold text-slate-700">學習/測驗目標字庫:</span>
@@ -255,29 +255,67 @@
             </div>
         </section>
 
-        <!-- 區塊 3：字庫管理區 -->
+        <!-- 區塊 3：字庫管理區 (包含全選與批量工具列) -->
         <section id="sec-list" class="hidden space-y-4">
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
-                <div class="relative flex-1">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
-                    <input type="text" id="searchInput" oninput="renderWordList()" placeholder="搜尋單字、詞性、字庫或中文釋義..." class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition">
+            <div class="flex flex-col space-y-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+                        <input type="text" id="searchInput" oninput="renderWordList()" placeholder="搜尋單字、詞性、字庫或中文釋義..." class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition">
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="openSplitDeckModal()" class="px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 border border-purple-200 rounded-lg transition">
+                            <i class="fa-solid fa-scissors mr-1"></i>批量拆分字庫
+                        </button>
+                        <button type="button" onclick="handleClearAllWords()" class="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition">
+                            <i class="fa-solid fa-trash-can mr-1"></i>清空全庫
+                        </button>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <!-- 【新增 2】批量拆分大字庫按鈕 -->
-                    <button type="button" onclick="openSplitDeckModal()" class="px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 border border-purple-200 rounded-lg transition">
-                        <i class="fa-solid fa-scissors mr-1"></i>批量拆分字庫
-                    </button>
-                    <button type="button" onclick="handleClearAllWords()" class="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition">
-                        <i class="fa-solid fa-trash-can mr-1"></i>清空全庫
-                    </button>
+
+                <!-- 批量操作按鈕列 -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <div class="flex items-center space-x-2 text-slate-600">
+                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAllWords(this)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+                        <label for="selectAllCheckbox" class="font-bold cursor-pointer">全選顯示的單字</label>
+                        <span id="selectedCountBadge" class="hidden ml-2 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 font-bold text-[11px]">已選擇 0 筆</span>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="handleBatchChangeCategory()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition flex items-center space-x-1">
+                            <i class="fa-solid fa-folder-pen"></i>
+                            <span>批量更改字庫</span>
+                        </button>
+                        <button type="button" onclick="handleBatchAiFillLibraryWords()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition flex items-center space-x-1 shadow-xs">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>✨ 批量 AI 補齊 (限 50 字內)</span>
+                        </button>
+                        <button type="button" onclick="handleBatchDeleteWords()" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-lg transition">
+                            <i class="fa-solid fa-trash"></i>
+                            <span>批量刪除</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 進度條 -->
+                <div id="libAiProgressContainer" class="hidden space-y-1 pt-2 border-t border-purple-100">
+                    <div class="flex justify-between text-xs text-purple-700 font-bold">
+                        <span id="libAiProgressText">AI 正在自動補充單字中...</span>
+                        <span id="libAiProgressPercent">0%</span>
+                    </div>
+                    <div class="w-full h-2 bg-purple-100 rounded-full overflow-hidden">
+                        <div id="libAiProgressBar" class="h-full bg-purple-600 transition-all duration-300 w-0"></div>
+                    </div>
                 </div>
             </div>
 
+            <!-- 單字列表表格 -->
             <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                <th class="py-3 px-4 w-10">勾選</th>
                                 <th class="py-3 px-4">單字 / 音標</th>
                                 <th class="py-3 px-4">所屬字庫</th>
                                 <th class="py-3 px-4">記憶等級</th>
@@ -313,7 +351,6 @@
             <form id="cardForm" onsubmit="handleSaveCardForm(event)" class="space-y-4">
                 <input type="hidden" id="editCardId">
 
-                <!-- 【新增 3】指定所屬字庫名稱 -->
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">歸屬字庫/分類名稱</label>
                     <input type="text" id="formCategory" placeholder="例如: 預設字庫 / 核心單字" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-semibold">
@@ -394,7 +431,6 @@
                     </div>
                 </div>
 
-                <!-- 匯入標的字庫名稱設定 -->
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">匯入至此字庫名稱：</label>
                     <input type="text" id="batchTargetCategory" value="預設字庫" placeholder="例如: 高中 7000 單 L1" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none font-semibold">
@@ -415,7 +451,7 @@ resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono 
                     </button>
                 </div>
 
-                <!-- 預覽表格區塊 (含刪除/剔除單字功能) -->
+                <!-- 預覽表格區塊 -->
                 <div id="batchPreviewBox" class="hidden space-y-3 pt-2">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-bold text-slate-700">解析預覽 (共 <span id="batchParsedCount">0</span> 筆)：</span>
@@ -448,7 +484,7 @@ resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono 
                                 </tr>
                             </thead>
                             <tbody id="batchPreviewBody" class="divide-y divide-slate-100 font-mono">
-                                <!-- 動態解析列與移除按鈕 -->
+                                <!-- 動態解析列 -->
                             </tbody>
                         </table>
                     </div>
@@ -491,7 +527,7 @@ resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono 
         </div>
     </div>
 
-    <!-- 彈窗 4: 全庫 / 選擇性 JSON 備份與還原 Modal -->
+    <!-- 彈窗 4: 字庫 JSON 備份與還原 Modal -->
     <div id="backupModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-100">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -527,7 +563,7 @@ resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono 
         </div>
     </div>
 
-    <!-- 【新增 4】彈窗 5: 批量拆分大字庫 Modal -->
+    <!-- 彈窗 5: 批量拆分大字庫 Modal -->
     <div id="splitModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">

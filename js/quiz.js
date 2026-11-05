@@ -1,9 +1,8 @@
 /**
  * 隨堂測驗模組 (Quiz Module)
- * - 出題演算法統一調用 algorithm.js 的 getNextCardSpacedRepetition()
- * - 模式 1：純英文上下文聯想 (僅提供英文例句/首尾字母提示，完全不提供中文)
- * - 模式 2：詞性與繁中釋義填空
- * - 模式 3：句意對照中英挖空填空
+ * - 自動過濾：僅出題「擁有英文例句 (sentence)」的單字
+ * - 無例句單字自動留在「卡片輪播區」背誦，避免測驗出現空題目
+ * - 出題權重與 5 級艾賓浩斯演算法完全連動
  */
 
 let currentQuizWord = null;
@@ -17,7 +16,6 @@ let quizScoreTotal = 0;
 function setQuizMode(mode) {
     currentQuizMode = mode;
     
-    // 更新模式按鈕 UI 狀態
     [1, 2, 3].forEach(m => {
         const btn = document.getElementById(`qmode-${m}`);
         if (btn) {
@@ -33,10 +31,9 @@ function setQuizMode(mode) {
 }
 
 /**
- * 產生下一題測驗 (出題機率與字卡輪播演算法完全一致)
+ * 產生下一題測驗 (僅過濾出有例句的單字進行出題)
  */
 function nextQuizQuestion() {
-    // 清空輸入框與反饋訊息
     const inputElem = document.getElementById('quizInput');
     const feedbackElem = document.getElementById('quizFeedback');
     if (inputElem) {
@@ -48,37 +45,68 @@ function nextQuizQuestion() {
         feedbackElem.innerHTML = '';
     }
 
-    // 【核心點 1】出題機率與字卡輪播完全一致：調用 5 級艾賓浩斯演算法選卡
-    if (typeof getNextCardSpacedRepetition === 'function') {
-        currentQuizWord = getNextCardSpacedRepetition();
-    } else if (typeof getNextCardNoRepeat === 'function') {
-        currentQuizWord = getNextCardNoRepeat();
-    } else {
-        currentQuizWord = (typeof wordList !== 'undefined' && wordList.length > 0) 
-            ? wordList[Math.floor(Math.random() * wordList.length)] 
-            : null;
-    }
-
     const promptBox = document.getElementById('quizPromptBox');
     const badgeElem = document.getElementById('quizBadge');
     const promptTitleElem = document.getElementById('quizPromptTitle');
 
-    if (!currentQuizWord || typeof wordList === 'undefined' || wordList.length === 0) {
-        if (promptBox) promptBox.innerHTML = '<span class="text-slate-400">字庫為空，請先新增單字！</span>';
-        if (badgeElem) badgeElem.innerText = '請先新增單字';
+    // 1. 篩選當前字庫中「具備英文例句」的合格單字
+    const validQuizCandidates = (typeof wordList !== 'undefined' ? wordList : []).filter(w => {
+        const matchCat = (typeof selectedCategory === 'undefined' || selectedCategory === "ALL")
+            ? true
+            : (w.category || "預設字庫") === selectedCategory;
+        const hasSentence = w.sentence && w.sentence.trim() !== '';
+        return matchCat && hasSentence;
+    });
+
+    // 2. 若當前字庫沒有任何帶有例句的單字，給予友善提示
+    if (validQuizCandidates.length === 0) {
+        currentQuizWord = null;
+        if (promptBox) {
+            promptBox.innerHTML = `
+                <div class="text-center py-4 space-y-2">
+                    <p class="text-amber-600 font-bold text-base">⚠️ 當前字庫尚無具備英文例句的單字！</p>
+                    <p class="text-xs text-slate-500 font-normal">
+                        隨堂測驗已開啟過濾保護（僅考有英文例句的單字）。<br>
+                        沒有例句的單字可先至「<span class="font-bold text-brand-600">卡片輪播</span>」背誦，或點擊「批量貼上」使用 AI 補齊例句。
+                    </p>
+                </div>
+            `;
+        }
+        if (badgeElem) badgeElem.innerText = '等待例句補齊';
         return;
     }
 
-    const word = currentQuizWord.word.trim();
-    const sentence = currentQuizWord.sentence ? currentQuizWord.sentence.trim() : '';
+    // 3. 從合格候選名單中，按 5 級記憶權重抽出下一題
+    // 為確保抽到的卡片一定有例句，多抽幾次直到符合條件
+    let attempts = 0;
+    let picked = null;
+    while (attempts < 20) {
+        if (typeof getNextCardSpacedRepetition === 'function') {
+            picked = getNextCardSpacedRepetition();
+        } else {
+            picked = validQuizCandidates[Math.floor(Math.random() * validQuizCandidates.length)];
+        }
 
-    // 依據選擇的模式渲染題目
+        if (picked && picked.sentence && picked.sentence.trim() !== '') {
+            break;
+        }
+        attempts++;
+    }
+
+    // 備用機制
+    currentQuizWord = (picked && picked.sentence && picked.sentence.trim() !== '')
+        ? picked
+        : validQuizCandidates[Math.floor(Math.random() * validQuizCandidates.length)];
+
+    const word = currentQuizWord.word.trim();
+    const sentence = currentQuizWord.sentence.trim();
+
+    // 4. 依據模式渲染測驗題目
     if (currentQuizMode === 1) {
-        // 【核心點 2】模式 1：純英文聯想能力 (僅給英文句子/首尾字母提示，不給中文)
-        if (badgeElem) badgeElem.innerText = '模式 1：純英文上下文聯想 (無中文提示)';
+        // 模式 1：純英文上下文聯想 (僅英文例句與首尾遮罩)
+        if (badgeElem) badgeElem.innerText = '模式 1：純英文上下文聯想';
         if (promptTitleElem) promptTitleElem.innerText = '英文上下文提示 (填出挖空單字)：';
 
-        // 產生首尾字母提示遮罩，例如 resilient -> r_______t
         let hintWord = '';
         if (word.length <= 2) {
             hintWord = word[0] + '_'.repeat(word.length - 1);
@@ -86,26 +114,14 @@ function nextQuizQuestion() {
             hintWord = word[0] + '_'.repeat(word.length - 2) + word[word.length - 1];
         }
 
-        if (sentence) {
-            // 將例句中的目標單字替換為首尾提示 (忽略大小寫)
-            const regex = new RegExp(`\\b${word}\\b`, 'gi');
-            let maskedSentence = sentence.replace(regex, `<span class="text-brand-600 font-extrabold underline decoration-wavy px-1">${hintWord}</span>`);
-            
-            // 若例句中未找到完全匹配的字，則顯示原文加上提示
-            if (maskedSentence === sentence) {
-                maskedSentence = `${sentence} <br><span class="text-xs text-slate-500 font-mono font-normal mt-2 block">[提示遮罩: ${hintWord}]</span>`;
-            }
-
-            promptBox.innerHTML = `<p class="font-serif italic text-xl leading-relaxed text-slate-800">${maskedSentence}</p>`;
-        } else {
-            // 無例句時顯示純英文字母遮罩與長度提示
-            promptBox.innerHTML = `
-                <div class="text-center py-2">
-                    <span class="font-mono text-3xl font-extrabold tracking-widest text-brand-600">${hintWord}</span>
-                    <span class="block text-xs font-normal text-slate-400 mt-2">（此單字包含 ${word.length} 個字母）</span>
-                </div>
-            `;
+        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+        let maskedSentence = sentence.replace(regex, `<span class="text-brand-600 font-extrabold underline decoration-wavy px-1">${hintWord}</span>`);
+        
+        if (maskedSentence === sentence) {
+            maskedSentence = `${sentence} <br><span class="text-xs text-slate-500 font-mono font-normal mt-2 block">[提示遮罩: ${hintWord}]</span>`;
         }
+
+        promptBox.innerHTML = `<p class="font-serif italic text-xl leading-relaxed text-slate-800">${maskedSentence}</p>`;
 
     } else if (currentQuizMode === 2) {
         // 模式 2：詞性與繁中釋義填空
@@ -121,12 +137,12 @@ function nextQuizQuestion() {
         `;
 
     } else if (currentQuizMode === 3) {
-        // 模式 3：🎯 句意對照中英挖空填空
+        // 模式 3：🎯 句意對照挖空
         if (badgeElem) badgeElem.innerText = '模式 3：🎯 句意對照挖空';
         if (promptTitleElem) promptTitleElem.innerText = '中英文句意對照：';
 
         const regex = new RegExp(`\\b${word}\\b`, 'gi');
-        const blankedSentence = sentence ? sentence.replace(regex, '____') : '____';
+        const blankedSentence = sentence.replace(regex, '____');
         const translation = currentQuizWord.translation || currentQuizWord.meaning || '（無翻譯對照）';
 
         promptBox.innerHTML = `
@@ -139,7 +155,7 @@ function nextQuizQuestion() {
 }
 
 /**
- * 處理提交答案與對錯結算 (同時連動記憶等級升降級)
+ * 處理提交答案與對錯結算
  */
 function handleQuizSubmit(e) {
     if (e) e.preventDefault();
@@ -155,7 +171,6 @@ function handleQuizSubmit(e) {
     if (userAns === targetAns) {
         quizScoreCorrect += 1;
 
-        // 答對獎勵：連動升級計數
         const card = wordList.find(w => w.id === currentQuizWord.id);
         if (card) {
             if (!card.level) card.level = 1;
@@ -180,7 +195,6 @@ function handleQuizSubmit(e) {
             </div>
         `;
     } else {
-        // 答錯懲罰：直接降一級
         const card = wordList.find(w => w.id === currentQuizWord.id);
         if (card) {
             card.level = Math.max(1, (card.level || 1) - 1);
@@ -200,13 +214,11 @@ function handleQuizSubmit(e) {
         `;
     }
 
-    // 更新得分統計 UI
     const scoreElem = document.getElementById('quizScore');
     if (scoreElem) {
         scoreElem.innerText = `${quizScoreCorrect}/${quizScoreTotal}`;
     }
 
-    // 1.8 秒後自動進入下一題
     setTimeout(() => {
         nextQuizQuestion();
     }, 1800);

@@ -121,7 +121,8 @@ function parseBatchText(raw) {
                     w = item.word || item.term || item.english || '';
                     p = item.pos || item.partOfSpeech || item.type || '';
                     phonetic = item.phonetic || item.pronunciation || '';
-                    m = item.meaning || item.definition || item.chinese || item.zh || '';
+                    // 在 js/ai.js 的 parseBatchText 函式中：
+m = item.meaning || item.definition || item.zh || item.ch || item.chinese || item.ch_meaning || item.trans || item.translation || '';
                     sentence = item.sentence || item.example || '';
                     translation = item.translation || item.exampleZh || '';
                 }

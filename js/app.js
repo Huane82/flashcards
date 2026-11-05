@@ -1,10 +1,12 @@
 /**
- * 主程式交互控制器、字庫分類與拆分邏輯 (含自動洗牌提煉詞性與單字淨化)
+ * 主程式交互控制器、字庫分類系統與批量手動/AI編輯 (含 50 字上限防崩潰保護)
  */
 
 let currentCard = null;
 let parsedBatchList = [];
+let selectedWordIds = new Set(); // 暫存勾選的單字 ID 集合
 
+const MAX_AI_BATCH_LIMIT = 50; // 🛡️ 單次 AI 自動補齊單字數量上限防崩潰保護
 const API_KEY_STORAGE_NAME = typeof STORAGE_KEY_APIKEY !== 'undefined' ? STORAGE_KEY_APIKEY : 'flashcard_gemini_key_v1';
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -15,12 +17,11 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * 更新所有字庫下拉選單選項 (頂部篩選器、備份選單、拆分選單)
+ * 更新所有字庫下拉選單選項
  */
 function updateCategorySelects() {
     const cats = getAllCategories();
 
-    // 1. 頂部學習篩選器
     const filterSelect = document.getElementById('categoryFilterSelect');
     if (filterSelect) {
         const cur = filterSelect.value;
@@ -32,14 +33,12 @@ function updateCategorySelects() {
         filterSelect.value = cats.includes(cur) || cur === 'ALL' ? cur : 'ALL';
     }
 
-    // 2. 備份匯出選單
     const exportSelect = document.getElementById('exportCategorySelect');
     if (exportSelect) {
         exportSelect.innerHTML = `<option value="ALL">包含全部字庫</option>` + 
             cats.map(c => `<option value="${c}">${c}</option>`).join('');
     }
 
-    // 3. 拆分字庫目標選單
     const splitSelect = document.getElementById('splitTargetCategorySelect');
     if (splitSelect) {
         splitSelect.innerHTML = cats.map(c => {
@@ -54,6 +53,7 @@ function handleCategoryFilterChange() {
     if (filterSelect) {
         selectedCategory = filterSelect.value;
     }
+    selectedWordIds.clear(); // 切換類別時清空選取
     updateUI();
     nextCard();
 }
@@ -76,6 +76,7 @@ function updateUI() {
     }
 
     renderWordList();
+    updateBatchBadgeUI();
 }
 
 /**
@@ -206,7 +207,7 @@ function switchTab(tab) {
 }
 
 /**
- * 渲染單字列表
+ * 渲染單字列表 (支援多選 Checkbox)
  */
 function renderWordList() {
     const tbody = document.getElementById('wordTableBody');
@@ -227,7 +228,7 @@ function renderWordList() {
     if (filtered.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="5" class="py-8 text-center text-slate-400 text-xs">
+                <td colspan="6" class="py-8 text-center text-slate-400 text-xs">
                     <i class="fa-solid fa-folder-open text-2xl mb-2 block"></i>
                     查無相關單字資料
                 </td>
@@ -238,8 +239,12 @@ function renderWordList() {
 
     tbody.innerHTML = filtered.map(item => {
         const lvInfo = getLevelInfo(item.level || 1);
+        const isChecked = selectedWordIds.has(item.id) ? 'checked' : '';
         return `
             <tr class="hover:bg-slate-50 transition">
+                <td class="py-3 px-4">
+                    <input type="checkbox" value="${item.id}" ${isChecked} onchange="toggleSelectWord('${item.id}', this.checked)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+                </td>
                 <td class="py-3 px-4 font-bold text-slate-900">
                     ${item.word}
                     <div class="text-xs font-mono font-normal text-slate-400">${item.phonetic || ''}</div>
@@ -266,6 +271,168 @@ function renderWordList() {
     }).join('');
 }
 
+/**
+ * 勾選控制邏輯
+ */
+function toggleSelectWord(id, isChecked) {
+    if (isChecked) {
+        selectedWordIds.add(id);
+    } else {
+        selectedWordIds.delete(id);
+    }
+    updateBatchBadgeUI();
+}
+
+function toggleSelectAllWords(masterCheckbox) {
+    const isChecked = masterCheckbox.checked;
+    const search = document.getElementById('searchInput') ? document.getElementById('searchInput').value.toLowerCase().trim() : '';
+
+    const filtered = wordList.filter(item => {
+        const matchesSearch = item.word.toLowerCase().includes(search) ||
+            (item.meaning && item.meaning.toLowerCase().includes(search)) ||
+            (item.category && item.category.toLowerCase().includes(search)) ||
+            (item.pos && item.pos.toLowerCase().includes(search));
+        const matchesCategory = (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") ? true : (item.category || "預設字庫") === selectedCategory;
+        return matchesSearch && matchesCategory;
+    });
+
+    filtered.forEach(item => {
+        if (isChecked) selectedWordIds.add(item.id);
+        else selectedWordIds.delete(item.id);
+    });
+
+    renderWordList();
+    updateBatchBadgeUI();
+}
+
+function updateBatchBadgeUI() {
+    const badge = document.getElementById('selectedCountBadge');
+    if (!badge) return;
+    if (selectedWordIds.size > 0) {
+        badge.innerText = `已選擇 ${selectedWordIds.size} 筆`;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+/**
+ * 【批量功能 1】批量變更所選單字歸屬字庫
+ */
+function handleBatchChangeCategory() {
+    if (selectedWordIds.size === 0) {
+        alert("請先勾選要變更字庫的單字！");
+        return;
+    }
+
+    const newCategory = prompt(`將已選取的 ${selectedWordIds.size} 筆單字移至新的字庫名稱：`, selectedCategory === 'ALL' ? '新字庫' : selectedCategory);
+    if (!newCategory || !newCategory.trim()) return;
+
+    const catName = newCategory.trim();
+    let count = 0;
+
+    wordList.forEach(item => {
+        if (selectedWordIds.has(item.id)) {
+            item.category = catName;
+            count++;
+        }
+    });
+
+    saveStorage();
+    updateCategorySelects();
+    updateUI();
+    alert(`成功將 ${count} 筆單字移至【${catName}】！`);
+}
+
+/**
+ * 【批量功能 2】批量刪除所選單字
+ */
+function handleBatchDeleteWords() {
+    if (selectedWordIds.size === 0) {
+        alert("請先勾選要刪除的單字！");
+        return;
+    }
+
+    if (confirm(`確定要批量刪除已勾選的 ${selectedWordIds.size} 筆單字嗎？此操作無法復原！`)) {
+        wordList = wordList.filter(item => !selectedWordIds.has(item.id));
+        selectedWordIds.clear();
+        saveStorage();
+        updateCategorySelects();
+        updateUI();
+        nextCard();
+    }
+}
+
+/**
+ * 【批量功能 3】批量 AI 自動補充 (含 50 筆上限安全保護)
+ */
+async function handleBatchAiFillLibraryWords() {
+    // 1. 決定要 AI 處理的目標單字集合
+    let targetWords = [];
+    if (selectedWordIds.size > 0) {
+        targetWords = wordList.filter(item => selectedWordIds.has(item.id));
+    } else {
+        targetWords = wordList.filter(item => {
+            if (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") return true;
+            return (item.category || "預設字庫") === selectedCategory;
+        });
+    }
+
+    if (targetWords.length === 0) {
+        alert("目前列表中無可補充的單字！");
+        return;
+    }
+
+    // 2. 篩選出「需要被 AI 填補」的缺漏單字 (缺少釋義、詞性、例句或翻譯)
+    const incompleteWords = targetWords.filter(item => {
+        return !item.meaning || !item.pos || !item.sentence || !item.translation;
+    });
+
+    if (incompleteWords.length === 0) {
+        alert("所選的單字皆已具備完整資料 (中文、詞性、例句與翻譯)，無需補齊！");
+        return;
+    }
+
+    // 🛡️ 3. 【核心限制保護】：檢查需要補齊的單字量是否超過上限
+    if (incompleteWords.length > MAX_AI_BATCH_LIMIT) {
+        alert(`⚠️ 【AI 數量限制保護啟動】\n\n目前待補齊的單字共有 ${incompleteWords.length} 筆，超過單次限制 (${MAX_AI_BATCH_LIMIT} 筆)！\n\n原因：單次過量 API 呼叫容易引發限流 (HTTP 429) 失敗或瀏覽器無回應崩潰。\n\n💡 建議解法：\n1. 請在列表中「勾選少於 ${MAX_AI_BATCH_LIMIT} 筆」進行分批 AI 補充。\n2. 或點擊右上角「批量拆分字庫」，將大字庫拆成 100~200 字的小字庫。`);
+        return;
+    }
+
+    if (!confirm(`找到 ${incompleteWords.length} 筆缺漏欄位的單字，確定要讓 AI 自動補充嗎？\n(補充期間請保持網路連線)`)) {
+        return;
+    }
+
+    const progressContainer = document.getElementById('libAiProgressContainer');
+    const progressBar = document.getElementById('libAiProgressBar');
+    const progressText = document.getElementById('libAiProgressText');
+    const progressPercent = document.getElementById('libAiProgressPercent');
+
+    if (progressContainer) progressContainer.classList.remove('hidden');
+
+    // 呼叫 ai.js 模組進行多組批量補齊
+    await runBatchAiAutoFill(wordList, (current, total) => {
+        const pct = Math.round((current / total) * 100);
+        if (progressText) progressText.innerText = `AI 補充進度 (${current} / ${total})...`;
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (progressPercent) progressPercent.innerText = `${pct}%`;
+        renderWordList();
+    });
+
+    saveStorage();
+    updateUI();
+
+    if (progressText) progressText.innerText = "✨ 批量補充完成！";
+    if (progressBar) progressBar.style.width = "100%";
+    if (progressPercent) progressPercent.innerText = "100%";
+
+    setTimeout(() => {
+        if (progressContainer) progressContainer.classList.add('hidden');
+    }, 2500);
+
+    alert(`🎉 成功為 ${incompleteWords.length} 筆單字自動補齊中文釋義與例句！`);
+}
+
 function editCard(id) {
     const item = wordList.find(w => w.id === id);
     if (!item) return;
@@ -286,6 +453,7 @@ function editCard(id) {
 function deleteCard(id) {
     if (confirm("確定要刪除這張單字卡嗎？")) {
         wordList = wordList.filter(w => w.id !== id);
+        selectedWordIds.delete(id);
         saveStorage();
         updateCategorySelects();
         updateUI();
@@ -296,6 +464,7 @@ function deleteCard(id) {
 function handleClearAllWords() {
     if (confirm("警告：此操作將清空全部單字庫，無法復原！確定要清空嗎？")) {
         wordList = [];
+        selectedWordIds.clear();
         saveStorage();
         updateCategorySelects();
         updateUI();
@@ -314,7 +483,6 @@ function handleSaveCardForm(e) {
     const sentence = document.getElementById('formSentence').value.trim();
     const translation = document.getElementById('formTranslation').value.trim();
 
-    // 手動儲存時一併進行淨化
     const cleanObj = (typeof sanitizeWordAndPos === 'function')
         ? sanitizeWordAndPos(rawWord, rawPos, rawMeaning)
         : { word: rawWord, pos: rawPos, meaning: rawMeaning };
@@ -382,75 +550,122 @@ async function handleAiSingleFill() {
 }
 
 /**
- * 一鍵載入 GitHub 開源高中 7000 單字庫 (含自動洗牌提煉詞性與單字淨化)
+ * 遠端抓取 7000 單全物件中文掃描器
+ */
+function findChineseMeaningFromObject(item) {
+    if (!item || typeof item !== 'object') return '';
+    const preferredKeys = ['meaning', 'definition', 'zh', 'ch', 'chinese', 'ch_meaning', 'trans', 'translation', 'm', 'd', 'explanation', 'note'];
+    for (const key of preferredKeys) {
+        if (item[key] && typeof item[key] === 'string' && /[\u4e00-\u9fa5]/.test(item[key])) {
+            return item[key];
+        }
+    }
+    for (const key in item) {
+        if (typeof item[key] === 'string' && /[\u4e00-\u9fa5]/.test(item[key])) {
+            return item[key];
+        }
+    }
+    return '';
+}
+
+/**
+ * 一鍵載入 GitHub 開源高中 7000 單字庫
  */
 async function handleLoadPreset(levelNum) {
     if (!confirm(`確定要載入【Level ${levelNum}】高中單字嗎？`)) return;
 
-    const CDN_URL = "https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json";
+    const CDN_SOURCES = [
+        "https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json",
+        "https://raw.githubusercontent.com/EngTW/English-for-Programmers/master/lists/Taiwan-high-school-6K-108-edition/words_full.json",
+        "https://cdn.jsdelivr.net/gh/zenkarsha/words7000@main/words.json",
+        "https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json"
+    ];
 
-    try {
-        const btn = event.currentTarget;
-        const origText = btn.innerText;
+    const btn = event ? (event.currentTarget || event.target) : null;
+    const origText = btn ? btn.innerText : "";
+    if (btn) {
         btn.disabled = true;
         btn.innerText = "下載中...";
+    }
 
-        const response = await fetch(CDN_URL);
-        if (!response.ok) throw new Error("下載預設字庫失敗");
+    let allWords = null;
 
-        const allWords = await response.json();
+    for (const url of CDN_SOURCES) {
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    allWords = data;
+                    break;
+                }
+            }
+        } catch (e) {
+            console.warn(`[CDN] 連線至 ${url} 失敗，嘗試備援...`);
+        }
+    }
 
-        const targetWords = allWords.filter(item => {
-            if (item.level) return Number(item.level) === levelNum;
-            const idx = allWords.indexOf(item);
-            return Math.floor(idx / 1000) + 1 === levelNum;
-        });
+    if (!allWords) {
+        alert("⚠️ 無法連線至字庫伺服器，請確認網路連線。");
+        if (btn) { btn.disabled = false; btn.innerText = origText; }
+        return;
+    }
 
-        if (!targetWords || targetWords.length === 0) {
-            alert(`找不到 Level ${levelNum} 的單字資料。`);
-            btn.disabled = false;
-            btn.innerText = origText;
-            return;
+    const targetWords = allWords.filter(item => {
+        const itemLv = Number(item.level || item.lv || item.L || 0);
+        if (itemLv > 0) return itemLv === levelNum;
+        const idx = allWords.indexOf(item);
+        return Math.floor(idx / 1000) + 1 === levelNum;
+    });
+
+    if (!targetWords || targetWords.length === 0) {
+        alert(`找不到 Level ${levelNum} 的單字資料。`);
+        if (btn) { btn.disabled = false; btn.innerText = origText; }
+        return;
+    }
+
+    const catName = `高中 7000 單 L${levelNum}`;
+    const targetCategoryInput = document.getElementById('batchTargetCategory');
+    if (targetCategoryInput) targetCategoryInput.value = catName;
+
+    parsedBatchList = targetWords.map(item => {
+        const rawW = item.word || item.term || item.english || item.w || '';
+        const rawP = item.pos || item.partOfSpeech || item.type || item.p || '';
+        
+        let rawM = findChineseMeaningFromObject(item);
+        if (!rawM) {
+            rawM = item.meaning || item.definition || item.zh || item.ch || item.chinese || item.trans || item.m || '';
         }
 
-        const catName = `高中 7000 單 L${levelNum}`;
-        document.getElementById('batchTargetCategory').value = catName;
+        const cleanObj = (typeof sanitizeWordAndPos === 'function') 
+            ? sanitizeWordAndPos(rawW, rawP, rawM)
+            : { word: rawW, pos: rawP, meaning: rawM };
 
-        // 載入時自動執行 sanitizeWordAndPos 提煉詞性與淨化單字
-        parsedBatchList = targetWords.map(item => {
-            const rawW = item.word || item.term || '';
-            const rawP = item.pos || item.partOfSpeech || '';
-            const rawM = item.meaning || item.definition || item.zh || '';
+        return {
+            word: cleanObj.word,
+            pos: cleanObj.pos,
+            phonetic: item.phonetic || item.pronunciation || '',
+            meaning: cleanObj.meaning,
+            sentence: item.sentence || item.example || '',
+            translation: item.translation || item.exampleZh || ''
+        };
+    });
 
-            const cleanObj = (typeof sanitizeWordAndPos === 'function') 
-                ? sanitizeWordAndPos(rawW, rawP, rawM)
-                : { word: rawW, pos: rawP, meaning: rawM };
-
-            return {
-                word: cleanObj.word,
-                pos: cleanObj.pos,
-                phonetic: item.phonetic || '',
-                meaning: cleanObj.meaning,
-                sentence: item.sentence || '',
-                translation: item.translation || ''
-            };
-        });
-
+    if (btn) {
         btn.disabled = false;
         btn.innerText = origText;
+    }
 
-        renderBatchPreview();
-        alert(`成功抓取【${catName}】共 ${parsedBatchList.length} 筆單字！已自動淨化單字並分離詞性，點選「確認匯入至字庫」即可完成匯入。`);
+    if (typeof renderBatchPreview === 'function') renderBatchPreview();
 
-    } catch (err) {
-        console.error(err);
-        alert("⚠️ 無法連線至 GitHub 抓取字庫，請確認網路連線。");
+    const hasChineseCount = parsedBatchList.filter(w => w.meaning && w.meaning.trim() !== '').length;
+    if (hasChineseCount === 0) {
+        alert(`成功抓取【${catName}】共 ${parsedBatchList.length} 筆單字！\n⚠️ 此字庫來源僅包含英文單字。您可以點擊預覽區右上角的「✨ AI 批次補齊缺漏欄位」自動補齊中文釋義與例句！`);
+    } else {
+        alert(`成功抓取【${catName}】共 ${parsedBatchList.length} 筆單字！成功自動辨識出 ${hasChineseCount} 筆繁體中文釋義與詞性。`);
     }
 }
 
-/**
- * 批量貼上解析與 AI 處理
- */
 function handleParseBatchText() {
     const raw = document.getElementById('batchRawInput').value.trim();
     if (!raw) {
@@ -467,9 +682,6 @@ function handleParseBatchText() {
     renderBatchPreview();
 }
 
-/**
- * 渲染批量預覽表格 (含剔除單字按鈕)
- */
 function renderBatchPreview() {
     const previewBox = document.getElementById('batchPreviewBox');
     const previewBody = document.getElementById('batchPreviewBody');
@@ -535,9 +747,6 @@ async function handleRunBatchAiAutoFill() {
     btn.disabled = false;
 }
 
-/**
- * 重置彈窗狀態、文字區域與預覽列表
- */
 function resetBatchModal() {
     parsedBatchList = [];
     
@@ -560,9 +769,6 @@ function resetBatchModal() {
     if (progressBar) progressBar.style.width = '0%';
 }
 
-/**
- * 確認將單字寫入庫存，並自動清空重置彈窗
- */
 function handleConfirmBatchImport() {
     if (parsedBatchList.length === 0) return;
 
@@ -597,9 +803,6 @@ function handleConfirmBatchImport() {
     if (!currentCard) nextCard();
 }
 
-/**
- * 批量拆分大字庫對話框與邏輯
- */
 function openSplitDeckModal() {
     updateCategorySelects();
     openModal('splitModal');
