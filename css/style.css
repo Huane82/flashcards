@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /* 3D 翻轉卡片視覺樣式與動畫時間優化 (200ms) */
 .perspective-1000 {
     perspective: 1000px;
@@ -39,4 +40,47 @@
 
 ::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+=======
+/* 3D 翻轉卡片視覺樣式與動畫時間優化 (200ms) */
+.perspective-1000 {
+    perspective: 1000px;
+}
+
+.transform-style-3d {
+    transform-style: preserve-3d;
+}
+
+.backface-hidden {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+    transform: rotateY(180deg);
+}
+
+/* 需求 2：動畫速度優化，過渡時間精準設定為 200ms (0.2s) */
+.card-flip-duration {
+    transition: transform 0.2s ease-in-out;
+}
+
+/* 自訂選單與自訂滾動條 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+>>>>>>> 97df496a385b551c22b8b915f775accc7c4dd07e
 }

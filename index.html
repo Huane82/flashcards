@@ -44,7 +44,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
 
-<!-- 頁頭導航欄 -->
+    <!-- 頁頭導航欄 -->
     <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -74,7 +74,6 @@
                 
                 <button type="button" onclick="openModal('keyModal')" title="Gemini API Key 設定" class="p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition">
                     <i id="apiKeyIcon" class="fa-solid fa-key text-amber-500"></i>
-                
                 </button>
                 <button type="button" onclick="openModal('backupModal')" title="備份與還原" class="p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition">
                     <i class="fa-solid fa-database"></i>
@@ -82,7 +81,6 @@
 
                 <!-- 會員登入/登出狀態區塊 -->
                 <div id="auth-section" class="flex items-center pl-2 border-l border-slate-200 ml-1">
-                    
                     <!-- 未登入狀態 -->
                     <div id="user-logged-out">
                         <button type="button" id="btn-google-login" onclick="loginWithGoogle()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-sm transition shadow-sm">
@@ -101,7 +99,6 @@
                         </button>
                     </div>
                 </div>
-                <!-- 👆 新增結束 -->
             </div>
         </div>
     </header>
@@ -629,9 +626,11 @@ resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono 
             </div>
         </div>
     </div>
-<!-- 全域 Toast 浮動提示容器 -->
+
+    <!-- 全域 Toast 浮動提示容器 -->
     <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
-<!-- 腳本引入（請確保 firebase.js 放在最前面） -->
+
+    <!-- 腳本引入（請確保 firebase.js 放在最前面） -->
     <script src="js/firebase.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/algorithm.js"></script>
