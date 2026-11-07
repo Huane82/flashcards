@@ -646,9 +646,14 @@ function handleSaveCardForm(e) {
     const rawWord = document.getElementById('formWord').value.trim();
     const rawPos = document.getElementById('formPos').value.trim();
     const phonetic = document.getElementById('formPhonetic').value.trim();
-    const rawMeaning = document.getElementById('formMeaning').value.trim();
+    const rawMeaning = document.getElementById('formMeaning').value.trim() || '尚未填寫釋義';
     const sentence = document.getElementById('formSentence').value.trim();
     const translation = document.getElementById('formTranslation').value.trim();
+
+    if (!rawWord) {
+        showToast("請填寫單字！", 'warning');
+        return;
+    }
 
     const cleanObj = (typeof sanitizeWordAndPos === 'function')
         ? sanitizeWordAndPos(rawWord, rawPos, rawMeaning)
@@ -1043,8 +1048,13 @@ function handleSaveApiKey() {
         updateApiKeyStatusUI();
     }
 
+    // 🌟 關鍵：同步保存至 Firebase 雲端
+    if (typeof saveStorage === 'function') {
+        saveStorage();
+    }
+
     closeModal('keyModal');
-    showToast("🔑 Gemini API Key 已成功儲存！", 'success');
+    showToast("🔑 Gemini API Key 已成功儲存並同步至雲端！", 'success');
 }
 
 /**
@@ -1221,23 +1231,28 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * ⚡ 快速收錄生字並自動觸發 AI 補充
+ * ⚡ 快速收錄生字並自動觸發 AI 補充 (已修復卡片與測驗即時刷新)
+ */
+/**
+ * ⚡ 快速收錄生字並自動觸發 AI 補充 (徹底修復卡片、測驗與字庫選單同步)
  */
 async function handleQuickAddWords() {
     const inputElem = document.getElementById('quickAddInput');
     const rawText = inputElem ? inputElem.value.trim() : '';
+
     if (!rawText) {
         showToast("請先輸入單字！", 'warning');
         return;
     }
 
+    // 支援換行、逗號、分號與空白分隔多個單字
     const wordsToProcess = rawText
-        .split(/[,;\n\s]+/)
-        .map(w => w.trim().toLowerCase())
+        .split(/[,;\n\r\t，；]+/)
+        .map(w => w.trim())
         .filter(w => w.length > 0);
 
     if (wordsToProcess.length === 0) {
-        showToast("未檢測到有效的英文單字", 'warning');
+        showToast("未檢測到有效的單字內容！", 'warning');
         return;
     }
 
@@ -1245,9 +1260,10 @@ async function handleQuickAddWords() {
     const origText = btn ? btn.innerText : '';
     if (btn) {
         btn.disabled = true;
-        btn.innerText = "AI 處理中...";
+        btn.innerText = "處理中...";
     }
 
+    // 判斷歸屬字庫
     const targetCategory = (typeof selectedCategory !== 'undefined' && selectedCategory !== 'ALL') 
         ? selectedCategory 
         : '預設字庫';
@@ -1255,14 +1271,15 @@ async function handleQuickAddWords() {
     let addedList = [];
 
     for (const rawWord of wordsToProcess) {
+        // 檢查該字庫中是否已有重複單字
         const exists = wordList.some(w => 
             (w.category || '預設字庫').toLowerCase() === targetCategory.toLowerCase() && 
-            w.word.toLowerCase() === rawWord
+            w.word.toLowerCase() === rawWord.toLowerCase()
         );
 
         if (!exists) {
             const newCard = {
-                id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                 category: targetCategory,
                 word: rawWord,
                 pos: '',
@@ -1279,37 +1296,163 @@ async function handleQuickAddWords() {
         }
     }
 
-    saveStorage();
-    updateUI();
+    // 關閉 Modal 並清空輸入框
     closeModal('quickAddModal');
     if (inputElem) inputElem.value = '';
-
     if (btn) {
         btn.disabled = false;
         btn.innerText = origText;
     }
 
     if (addedList.length === 0) {
-        showToast("所輸入的單字已存在於字庫中！", 'info');
+        showToast("輸入的單字已存在於字庫中！", 'info');
         return;
     }
 
-    showToast(`⚡ 已收錄 ${addedList.length} 個生字，AI 正在背景自動補充...`, 'info');
+    // 1. 儲存至本機與雲端，並刷新 DOM 選單與統計數字
+    saveStorage();
+    if (typeof updateCategorySelects === 'function') updateCategorySelects();
+    if (typeof updateUI === 'function') updateUI();
 
-    runBatchAiAutoFill(addedList, (current, total) => {
-        saveStorage();
-        updateUI();
-    }).then(() => {
-        showToast(`🎉 生字資料已全數由 AI 自動帶入完成！`, 'success');
-    });
+    // 2. 🌟 強制刷新卡片 (卡片輪播模式)
+    if (typeof nextCard === 'function') {
+        nextCard();
+    }
+    // 若演算法未即時抓到卡片，強制將最新單字印上卡片 DOM
+    if (!currentCard || currentCard.word === "無可用單字") {
+        currentCard = addedList[0];
+        const wordElem = document.getElementById('cardWord');
+        const meaningElem = document.getElementById('cardMeaning');
+        if (wordElem) wordElem.innerText = currentCard.word;
+        if (meaningElem) meaningElem.innerText = currentCard.meaning || 'AI 自動解析中...';
+    }
+
+    // 3. 🌟 強制刷新測驗題庫 (隨堂測驗模式)
+    if (typeof initQuiz === 'function') {
+        initQuiz();
+    } else if (typeof startQuiz === 'function') {
+        startQuiz();
+    } else if (typeof nextQuizQuestion === 'function') {
+        nextQuizQuestion();
+    }
+
+    showToast(`⚡ 已成功新增 ${addedList.length} 個單字！`, 'success');
+
+    // 4. 🌟 背景 AI 補齊 (防範 API 未設定或請求失敗導致崩潰)
+    if (typeof runBatchAiAutoFill === 'function') {
+        try {
+            await runBatchAiAutoFill(addedList, (current, total) => {
+                saveStorage();
+                if (typeof updateUI === 'function') updateUI();
+            });
+            
+            saveStorage();
+            if (typeof updateUI === 'function') updateUI();
+
+            // AI 完成後更新當前顯示的卡片內容
+            if (currentCard) {
+                const updated = wordList.find(w => w.id === currentCard.id);
+                if (updated) {
+                    currentCard = updated;
+                    if (typeof nextCard === 'function') nextCard();
+                }
+            }
+            showToast(`✨ AI 已完成單字音標與例句補充！`, 'success');
+        } catch (err) {
+            console.warn("AI 自動補充跳過或失敗:", err);
+        }
+    }
 }
 
 /**
- * 🌐 語言與卡片正面顯示模式控制器
+ * 🌐 全全域設定 UI 同步與多語系控制器
  */
+function syncSettingsUI() {
+    const savedNative = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
+    const savedTarget = localStorage.getItem('lzhcard_target_lang') || 'en';
+    const customNative = localStorage.getItem('lzhcard_custom_native') || '';
+    const customTarget = localStorage.getItem('lzhcard_custom_target') || '';
+    const savedDisplayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
+    const savedTheme = localStorage.getItem('theme_preference') || 'system';
+
+    const nativeSelect = document.getElementById('nativeLangSelect');
+    if (nativeSelect) nativeSelect.value = savedNative;
+
+    const targetSelect = document.getElementById('targetLangSelect');
+    if (targetSelect) targetSelect.value = savedTarget;
+
+    const displaySelect = document.getElementById('cardDisplayModeSelect');
+    if (displaySelect) displaySelect.value = savedDisplayMode;
+
+    const themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) themeSelect.value = savedTheme;
+
+    const customNativeInput = document.getElementById('customNativeInput');
+    if (customNativeInput) {
+        customNativeInput.value = customNative;
+        customNativeInput.classList.toggle('hidden', savedNative !== 'custom');
+    }
+
+    const customTargetInput = document.getElementById('customTargetInput');
+    if (customTargetInput) {
+        customTargetInput.value = customTarget;
+        customTargetInput.classList.toggle('hidden', savedTarget !== 'custom');
+    }
+}
+
+function initLanguageSettings() {
+    if (!localStorage.getItem('lzhcard_native_lang')) {
+        const navLang = (navigator.language || '').toLowerCase();
+        if (navLang.startsWith('zh')) {
+            localStorage.setItem('lzhcard_native_lang', 'zh-TW');
+        } else if (navLang.startsWith('ja')) {
+            localStorage.setItem('lzhcard_native_lang', 'ja');
+        } else {
+            localStorage.setItem('lzhcard_native_lang', 'en');
+        }
+    }
+
+    if (!localStorage.getItem('lzhcard_target_lang')) {
+        localStorage.setItem('lzhcard_target_lang', 'en');
+    }
+
+    syncSettingsUI();
+
+    if (typeof applyLanguageUI === 'function') {
+        applyLanguageUI();
+    }
+}
+
+function handleNativeLangChange(lang) {
+    localStorage.setItem('lzhcard_native_lang', lang);
+    syncSettingsUI();
+
+    if (typeof applyLanguageUI === 'function') {
+        applyLanguageUI();
+    }
+
+    showToast('母語設定已更新！', 'info');
+    if (typeof saveStorage === 'function') saveStorage();
+}
+
 function handleTargetLangChange(lang) {
     localStorage.setItem('lzhcard_target_lang', lang);
-    showToast(`已切換學習目標語言為：${lang === 'ja' ? '日文 (日本語)' : '英文 (English)'}`, 'info');
+    syncSettingsUI();
+    showToast('學習目標語言已更新！', 'info');
+    if (typeof saveStorage === 'function') saveStorage(); // 🌟 同步保存至雲端
+}
+
+function handleCustomLangChange(type, value) {
+    const cleanValue = value.trim();
+    if (type === 'native') {
+        localStorage.setItem('lzhcard_custom_native', cleanValue);
+        if (cleanValue && typeof translateUiWithAI === 'function') {
+            translateUiWithAI(cleanValue);
+        }
+    } else if (type === 'target') {
+        localStorage.setItem('lzhcard_custom_target', cleanValue);
+    }
+    if (typeof saveStorage === 'function') saveStorage();
 }
 
 function handleCardDisplayModeChange(mode) {
@@ -1317,16 +1460,22 @@ function handleCardDisplayModeChange(mode) {
     updateUI();
     nextCard();
     showToast('卡片顯示模式已更新！', 'success');
+    if (typeof saveStorage === 'function') saveStorage();
 }
 
-// 頁面載入時自動初始化選單狀態
+function handleThemeChange(mode) {
+    localStorage.setItem('theme_preference', mode);
+    applyTheme(mode);
+    if (typeof saveStorage === 'function') saveStorage(); // 🌟 同步主題設定至雲端
+}
+
+// 帳號登入狀態變更時，同時觸發 UI 語系刷新
 document.addEventListener('DOMContentLoaded', () => {
-    const savedLang = localStorage.getItem('lzhcard_target_lang') || 'en';
-    const savedDisplayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
+    initLanguageSettings();
 
-    const langSelect = document.getElementById('targetLangSelect');
-    if (langSelect) langSelect.value = savedLang;
-
-    const displaySelect = document.getElementById('cardDisplayModeSelect');
-    if (displaySelect) displaySelect.value = savedDisplayMode;
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().onAuthStateChanged(() => {
+            if (typeof applyLanguageUI === 'function') applyLanguageUI();
+        });
+    }
 });

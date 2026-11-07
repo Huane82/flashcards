@@ -41,13 +41,14 @@ function getNextCardSpacedRepetition() {
         if (typeof w.knowStreak === 'undefined') w.knowStreak = 0;
     });
 
+    // 🌟 將 Level 1 焦點池容量上限由 3 擴充至 6，讓更多 1 級生字同時進入輪播
     activeLevel1Pool = activeLevel1Pool.filter(id => {
         const w = filteredList.find(item => item.id === id);
         return w && w.level === 1;
     });
     const allLevel1Words = filteredList.filter(w => w.level === 1);
     for (const w of allLevel1Words) {
-        if (activeLevel1Pool.length >= 3) break;
+        if (activeLevel1Pool.length >= 6) break;
         if (!activeLevel1Pool.includes(w.id)) {
             activeLevel1Pool.push(w.id);
         }
@@ -74,7 +75,8 @@ function getNextCardSpacedRepetition() {
     if (candidateWords.length === 0) return filteredList[0];
     if (candidateWords.length === 1) return candidateWords[0];
 
-    const BASE_WEIGHTS = { 1: 100, 2: 70, 3: 35, 4: 15, 5: 4 };
+    // 🌟 將 Level 1 的抽牌權重由 100 調高至 250，大幅提升出現頻率
+    const BASE_WEIGHTS = { 1: 250, 2: 70, 3: 35, 4: 15, 5: 4 };
 
     const weightedCandidates = candidateWords.map(word => {
         let weight = BASE_WEIGHTS[word.level] || 50;

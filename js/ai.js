@@ -1,8 +1,16 @@
 /**
- * LZHCard - Gemini AI 對接與智慧單字清洗解析模組 (多語系 + 全繁體 + 全詞性捕捉版)
+ * LZHCard - Gemini AI 萬能多語系解析模組 (Gemini 3.x 現役版)
  */
 
-const GEMINI_MODEL = "gemini-1.5-flash";
+// 強制清空全域舊快取
+window.cachedWorkingModel = null;
+
+// 採用 Gemini 3.x 系列現役模型
+const GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite"
+];
 
 function updateApiKeyStatusUI() {
     const icon = document.getElementById('apiKeyIcon');
@@ -33,11 +41,69 @@ function getValidApiKey() {
     return rawKey.trim();
 }
 
-function buildGeminiUrl(apiKey) {
-    if (!apiKey) return '';
+/**
+ * 萬能 API 呼叫器
+ */
+async function callGeminiApi(apiKey, promptText) {
     const cleanKey = apiKey.trim();
-    const model = (typeof GEMINI_MODEL !== 'undefined' && GEMINI_MODEL) ? GEMINI_MODEL : 'gemini-1.5-flash';
-    return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+
+    // 若已有測試通過的 3.x 快取模型，優先使用
+    if (window.cachedWorkingModel) {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${window.cachedWorkingModel}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+        try {
+            const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            }
+            if (res.status === 404) {
+                window.cachedWorkingModel = null;
+            }
+        } catch (e) {
+            console.error(`[AI Engine Exception]:`, e);
+            window.cachedWorkingModel = null;
+        }
+    }
+
+    // 依序輪詢現役 Gemini 3.x 模型
+    for (const model of GEMINI_MODELS) {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+        try {
+            const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                window.cachedWorkingModel = model;
+                console.log(`[AI Engine] 成功連線並鎖定現役模型：${model}`);
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            }
+
+            if (res.status === 401 || res.status === 403) {
+                localStorage.removeItem('flashcard_gemini_key_v1');
+                updateApiKeyStatusUI();
+                if (typeof showToast === 'function') showToast("⚠️ API Key 無效，請重新設定 Key！", "error");
+                if (typeof openModal === 'function') openModal('keyModal');
+                return null;
+            } else if (res.status === 429) {
+                if (typeof showToast === 'function') showToast("⚠️ 觸發 API 頻率限制，請稍後再試！", "warning");
+                return null;
+            }
+        } catch (e) {
+            console.error(`[AI Engine] 嘗試模型 ${model} 失敗:`, e);
+        }
+    }
+
+    if (typeof showToast === 'function') showToast("⚠️ 無法連線至 Gemini 3.x API 端點，請確認 API Key 權限！", "error");
+    return null;
 }
 
 function safeParseJSON(rawText) {
@@ -95,12 +161,28 @@ function safeParseJSON(rawText) {
 function isFieldIncomplete(val) {
     if (!val) return true;
     const str = String(val).trim();
-    return str === '' || str === '尚未填寫釋義' || str === '-' || str === 'N/A' || str === 'EMPTY';
+    return str === '' || str === '尚未填寫釋義' || str === 'AI 自動解析中...' || str === '-' || str === 'N/A' || str === 'EMPTY';
 }
 
-/**
- * 衛生化單字與詞性（支援多詞性組合，如 n. / v.）
- */
+function getLanguageConfig() {
+    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
+    const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
+    const customTarget = localStorage.getItem('lzhcard_custom_target') || 'Custom Target Language';
+    const customNative = localStorage.getItem('lzhcard_custom_native') || 'Custom Native Language';
+
+    const langNameMap = {
+        'en': 'English',
+        'ja': 'Japanese (日本語)',
+        'zh-TW': 'Traditional Chinese (繁體中文, 臺灣標準)',
+        'custom': ''
+    };
+
+    const targetName = targetLang === 'custom' ? customTarget : (langNameMap[targetLang] || 'English');
+    const nativeName = nativeLang === 'custom' ? customNative : (langNameMap[nativeLang] || 'Traditional Chinese (繁體中文)');
+
+    return { targetLang, nativeLang, targetName, nativeName };
+}
+
 function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     let word = (rawWord || '').trim();
     let pos = (rawPos || '').trim();
@@ -128,7 +210,7 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
 }
 
 /**
- * AI 單一單字自動填寫 (支援英/日雙語、全繁體中文、全詞性)
+ * AI 單一單字自動填寫
  */
 async function autoFillWithAI(word) {
     const rawKey = getValidApiKey();
@@ -140,69 +222,26 @@ async function autoFillWithAI(word) {
 
     const cleaned = sanitizeWordAndPos(word, '', '');
     const cleanWord = cleaned.word;
-    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en'; // 'en' 或 'ja'
+    const { targetName, nativeName } = getLanguageConfig();
 
-    let langPrompt = "";
-    if (targetLang === 'ja') {
-        langPrompt = `The word is Japanese: "${cleanWord}". 
-- "phonetic": Provide Romaji and Hiragana/Katakana reading (e.g., "たべる / taberu").
-- "pos": ALL relevant parts of speech in Japanese/Traditional Chinese (e.g. "動詞 / 他動詞" or "名詞 / 形容詞").
-- "meaning": Traditional Chinese definition.
-- "sentence": Example Japanese sentence.
-- "translation": Traditional Chinese translation of the sentence.`;
-    } else {
-        langPrompt = `The word is English: "${cleanWord}".
-- "phonetic": IPA pronunciation.
-- "pos": ALL relevant parts of speech (e.g., "n. / v." if it functions as both noun and verb).
-- "meaning": Traditional Chinese definition.
-- "sentence": Example English sentence.
-- "translation": Traditional Chinese translation of the sentence.`;
-    }
+    const prompt = `You are a professional lexicographer. 
+Analyze term: "${cleanWord}"
+Target Language: ${targetName}
+Native Language: ${nativeName}
 
-    const prompt = `You are an expert bilingual lexicographer. Parse the term "${cleanWord}". 
-${langPrompt}
+Return ONLY raw JSON with:
+1. "phonetic": Pronunciation guide
+2. "pos": Parts of speech in ${nativeName}
+3. "meaning": Definition in ${nativeName}
+4. "sentence": Example sentence in ${targetName}
+5. "translation": Sentence translation in ${nativeName}`;
 
-CRITICAL STRICT RULES:
-1. ALL Chinese outputs MUST be exclusively in TRADITIONAL CHINESE (繁體中文, 臺灣標準). Absolutely NEVER use Simplified Chinese (簡體中文).
-2. "pos" MUST list ALL common parts of speech for this word, separated by " / ".
-3. Return ONLY a pure valid JSON object with keys: "phonetic", "pos", "meaning", "sentence", "translation". No markdown explanations around it.`;
-
-    try {
-        const apiUrl = buildGeminiUrl(rawKey);
-
-        const res = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-
-        if (!res.ok) {
-            if (res.status === 401 || res.status === 403) {
-                localStorage.removeItem('flashcard_gemini_key_v1');
-                updateApiKeyStatusUI();
-                if (typeof showToast === 'function') showToast("⚠️ API Key 無效，已自動清除，請重新設定！", "error");
-                if (typeof openModal === 'function') openModal('keyModal');
-            } else if (res.status === 429) {
-                if (typeof showToast === 'function') showToast("⚠️ 觸發免費 API 頻率限制，請稍後再試！", "warning");
-            } else {
-                if (typeof showToast === 'function') showToast(`⚠️ API 服務異常 (HTTP ${res.status})`, "error");
-            }
-            return null;
-        }
-
-        const data = await res.json();
-        let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        return safeParseJSON(rawText);
-
-    } catch (err) {
-        console.error(err);
-        if (typeof showToast === 'function') showToast("⚠️ 網路請求失敗，請檢查網路狀態！", "error");
-        return null;
-    }
+    const rawResponse = await callGeminiApi(rawKey, prompt);
+    return safeParseJSON(rawResponse);
 }
 
 /**
- * 批次 AI 欄位補齊 (全繁體 + 多詞性支援)
+ * 批次 AI 欄位補充
  */
 async function runBatchAiAutoFill(targetList, progressCallback) {
     const rawKey = getValidApiKey();
@@ -221,12 +260,9 @@ async function runBatchAiAutoFill(targetList, progressCallback) {
     );
 
     const total = incompleteItems.length;
-    if (total === 0) {
-        if (typeof showToast === 'function') showToast("所選單字皆已具備完整資料，無需補齊！", "info");
-        return;
-    }
+    if (total === 0) return;
 
-    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
+    const { targetName, nativeName } = getLanguageConfig();
     const batchSize = 5;
     let completedCount = 0;
 
@@ -234,49 +270,25 @@ async function runBatchAiAutoFill(targetList, progressCallback) {
         const chunk = incompleteItems.slice(i, i + batchSize);
         const chunkWords = chunk.map(item => item.word);
 
-        const prompt = `Return a JSON array of objects for these terms: ${JSON.stringify(chunkWords)}.
-Target Language Mode: ${targetLang.toUpperCase()}.
+        const prompt = `Analyze terms: ${JSON.stringify(chunkWords)}.
+Target Language: ${targetName}
+Native Language: ${nativeName}
 
-Format for each object:
-{
-  "word": "original term",
-  "pos": "ALL major parts of speech (e.g. 'n. / v.' or '名詞 / 動詞')",
-  "phonetic": "pronunciation or kana reading",
-  "meaning": "Traditional Chinese definition",
-  "sentence": "Example sentence in target language",
-  "translation": "Traditional Chinese sentence translation"
-}
+Return pure JSON array:
+[
+  {
+    "word": "original term",
+    "pos": "pos in ${nativeName}",
+    "phonetic": "Pronunciation",
+    "meaning": "Definition in ${nativeName}",
+    "sentence": "Example sentence",
+    "translation": "Translation in ${nativeName}"
+  }
+]`;
 
-CRITICAL RULES:
-1. ALL Chinese outputs MUST BE EXCLUSIVELY TRADITIONAL CHINESE (繁體中文). NO Simplified Chinese allowed under any circumstances.
-2. Capture ALL common parts of speech for each word in "pos".
-3. Output ONLY pure JSON array. No extra text.`;
-
-        try {
-            const apiUrl = buildGeminiUrl(rawKey);
-
-            const res = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-            });
-
-            if (!res.ok) {
-                if (res.status === 401 || res.status === 403) {
-                    localStorage.removeItem('flashcard_gemini_key_v1');
-                    if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
-                    if (typeof showToast === 'function') showToast("⚠️ API Key 無效，已自動清除！", "error");
-                    if (typeof openModal === 'function') openModal('keyModal');
-                } else if (res.status === 429) {
-                    if (typeof showToast === 'function') showToast("⚠️ 觸發 API 頻率限制 (15次/分)，請稍等 1 分鐘！", "warning");
-                }
-                break;
-            }
-
-            const data = await res.json();
-            let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-            const results = safeParseJSON(rawText);
+        const rawResponse = await callGeminiApi(rawKey, prompt);
+        if (rawResponse) {
+            const results = safeParseJSON(rawResponse);
             if (Array.isArray(results)) {
                 results.forEach(resItem => {
                     if (!resItem || !resItem.word) return;
@@ -291,8 +303,6 @@ CRITICAL RULES:
                     }
                 });
             }
-        } catch(e) {
-            console.warn("[Batch AI Exception Handled]:", e);
         }
 
         completedCount += chunk.length;
@@ -301,7 +311,7 @@ CRITICAL RULES:
         }
 
         if (i + batchSize < total) {
-            await new Promise(resolve => setTimeout(resolve, 4000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
 }
