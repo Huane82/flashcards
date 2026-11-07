@@ -1,5 +1,5 @@
 /**
- * FlashCard Master - 主程式交互控制器 (全功能修復終極版)
+ * LZHCard - 主程式交互控制器
  */
 
 let selectedCategory = 'ALL';
@@ -134,7 +134,15 @@ function updateUI() {
 
 function nextCard() {
     const flashcardElem = document.getElementById('flashcard');
-    if (flashcardElem) flashcardElem.classList.remove('rotate-y-180');
+
+    // 🌟 關鍵修復：切換下一張卡片時，先「無視覺動畫」瞬間切回正面，徹底防止背面文字被閃爍看見[cite: 2]
+    if (flashcardElem) {
+        flashcardElem.classList.add('no-transition');
+        flashcardElem.classList.remove('rotate-y-180');
+        // 強制瀏覽器即時重繪 (Reflow)，確保在寫入新單字文字前，卡片早已回到正面
+        void flashcardElem.offsetHeight;
+        flashcardElem.classList.remove('no-transition');
+    }
 
     currentCard = getNextCardSpacedRepetition();
 
@@ -155,7 +163,28 @@ function nextCard() {
     const streakTextElem = document.getElementById('knowStreakText');
     if (streakTextElem) streakTextElem.innerText = `${streak}/3`;
 
-    if (document.getElementById('cardWord')) document.getElementById('cardWord').innerText = currentCard.word || '';
+    // 🌐 讀取卡片正反面顯示模式設定 (外文在正面 / 中文在正面 / 雙語對照)
+    const displayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
+    const wordText = currentCard.word || '';
+    const meaningText = currentCard.meaning || '';
+
+    const frontWordElem = document.getElementById('cardWord');
+    const backMeaningElem = document.getElementById('cardMeaning');
+
+    if (displayMode === 'native_front') {
+        // 🇹🇼 中文在正面，外文在背面
+        if (frontWordElem) frontWordElem.innerText = meaningText || '（無中文釋義）';
+        if (backMeaningElem) backMeaningElem.innerText = wordText;
+    } else if (displayMode === 'both_front') {
+        // ✨ 正面同時顯示 (雙語對照)
+        if (frontWordElem) frontWordElem.innerHTML = `${wordText}<div class="text-xl sm:text-2xl font-medium text-amber-500 dark:text-amber-400 mt-2">${meaningText}</div>`;
+        if (backMeaningElem) backMeaningElem.innerText = `${wordText} - ${meaningText}`;
+    } else {
+        // 🔤 外文在正面，中文在背面 (預設)
+        if (frontWordElem) frontWordElem.innerText = wordText;
+        if (backMeaningElem) backMeaningElem.innerText = meaningText;
+    }
+
     if (document.getElementById('cardPhonetic')) document.getElementById('cardPhonetic').innerText = currentCard.phonetic || '/---/';
     if (document.getElementById('cardPosFront')) document.getElementById('cardPosFront').innerText = currentCard.pos || 'N/A';
     
@@ -172,7 +201,6 @@ function nextCard() {
         levelBack.className = `px-2.5 py-1 rounded-full text-xs font-bold border ${lvInfo.color}`;
     }
 
-    if (document.getElementById('cardMeaning')) document.getElementById('cardMeaning').innerText = currentCard.meaning || '';
     if (document.getElementById('cardSentence')) document.getElementById('cardSentence').innerText = currentCard.sentence ? `"${currentCard.sentence}"` : '"無例句資訊"';
     if (document.getElementById('cardTranslation')) document.getElementById('cardTranslation').innerText = currentCard.translation || '';
 }
@@ -225,43 +253,114 @@ function speakWord() {
     }
 }
 
+/**
+ * 切換頁面 (Home, List, Store, Settings)
+ */
 function switchTab(tab) {
+    const secHome = document.getElementById('sec-home');
     const secFlashcard = document.getElementById('sec-flashcard');
     const secQuiz = document.getElementById('sec-quiz');
     const secList = document.getElementById('sec-list');
+    const secStore = document.getElementById('sec-store');
+    const secSettings = document.getElementById('sec-settings');
 
-    const tabFlashcard = document.getElementById('tab-flashcard');
-    const tabQuiz = document.getElementById('tab-quiz');
-    const tabList = document.getElementById('tab-list');
+    const bnavHome = document.getElementById('bnav-home');
+    const bnavList = document.getElementById('bnav-list');
+    const bnavStore = document.getElementById('bnav-store');
+    const bnavSettings = document.getElementById('bnav-settings');
 
-    if (secFlashcard) secFlashcard.classList.add('hidden');
-    if (secQuiz) secQuiz.classList.add('hidden');
-    if (secList) secList.classList.add('hidden');
+    [secHome, secFlashcard, secQuiz, secList, secStore, secSettings].forEach(el => el && el.classList.add('hidden'));
 
-    if (tabFlashcard) tabFlashcard.className = "py-2.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2 transition";
-    if (tabQuiz) tabQuiz.className = "py-2.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2 transition";
-    if (tabList) tabList.className = "py-2.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2 transition";
+    [bnavHome, bnavList, bnavStore, bnavSettings].forEach(el => {
+        if (el) el.className = "flex flex-col items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 space-y-1";
+    });
 
-    if (tab === 'flashcard') {
-        if (secFlashcard) secFlashcard.classList.remove('hidden');
-        if (tabFlashcard) tabFlashcard.className = "py-2.5 px-3 text-sm font-semibold border-b-2 border-brand-600 text-brand-600 flex items-center space-x-2 transition";
-    } else if (tab === 'quiz') {
-        if (secQuiz) secQuiz.classList.remove('hidden');
-        if (tabQuiz) tabQuiz.className = "py-2.5 px-3 text-sm font-semibold border-b-2 border-brand-600 text-brand-600 flex items-center space-x-2 transition";
-        if (typeof nextQuizQuestion === 'function') nextQuizQuestion();
+    const header = document.getElementById('main-header');
+    const bottomNav = document.getElementById('bottom-nav');
+    if (header) header.classList.remove('hidden');
+    if (bottomNav) bottomNav.classList.remove('hidden');
+
+    if (tab === 'home') {
+        if (secHome) secHome.classList.remove('hidden');
+        if (bnavHome) bnavHome.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
     } else if (tab === 'list') {
         if (secList) secList.classList.remove('hidden');
-        if (tabList) tabList.className = "py-2.5 px-3 text-sm font-semibold border-b-2 border-brand-600 text-brand-600 flex items-center space-x-2 transition";
+        if (bnavList) bnavList.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
         renderWordList();
+    } else if (tab === 'store') {
+        if (secStore) secStore.classList.remove('hidden');
+        if (bnavStore) bnavStore.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
+    } else if (tab === 'settings') {
+        if (secSettings) secSettings.classList.remove('hidden');
+        if (bnavSettings) bnavSettings.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
     }
 }
 
+/**
+ * 進入專注全螢幕模式 (輪播 / 測驗)
+ */
+function startFocusMode(mode) {
+    const header = document.getElementById('main-header');
+    const bottomNav = document.getElementById('bottom-nav');
+
+    if (header) header.classList.add('hidden');
+    if (bottomNav) bottomNav.classList.add('hidden');
+
+    const secHome = document.getElementById('sec-home');
+    if (secHome) secHome.classList.add('hidden');
+
+    if (mode === 'flashcard') {
+        const secFlashcard = document.getElementById('sec-flashcard');
+        if (secFlashcard) secFlashcard.classList.remove('hidden');
+        nextCard();
+    } else if (mode === 'quiz') {
+        const secQuiz = document.getElementById('sec-quiz');
+        if (secQuiz) secQuiz.classList.remove('hidden');
+        if (typeof nextQuizQuestion === 'function') nextQuizQuestion();
+    }
+}
+
+function exitFocusMode() {
+    switchTab('home');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(async (user) => {
+      const loggedOutBox = document.getElementById('settings-logged-out');
+      const loggedInBox = document.getElementById('settings-logged-in');
+      const emailSpan = document.getElementById('settings-email');
+      const avatarImg = document.getElementById('settings-avatar');
+      const navAvatar = document.getElementById('nav-avatar');
+
+      if (user) {
+        if (loggedOutBox) loggedOutBox.style.display = 'none';
+        if (loggedInBox) loggedInBox.style.display = 'block';
+        if (emailSpan) emailSpan.textContent = user.displayName || user.email;
+        const avatarUrl = user.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=user';
+        if (avatarImg) avatarImg.src = avatarUrl;
+        if (navAvatar) navAvatar.src = avatarUrl;
+      } else {
+        if (loggedOutBox) loggedOutBox.style.display = 'block';
+        if (loggedInBox) loggedInBox.style.display = 'none';
+        if (emailSpan) emailSpan.textContent = '訪客模式';
+        const avatarUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=user';
+        if (avatarImg) avatarImg.src = avatarUrl;
+        if (navAvatar) navAvatar.src = avatarUrl;
+      }
+    });
+  }
+});
+
 function getFilteredWords() {
     const searchInput = document.getElementById('searchInput');
-    const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const sortSelect = document.getElementById('sortSelect');
     
-    return wordList.filter(item => {
-        const matchesSearch = item.word.toLowerCase().includes(search) ||
+    const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const sortBy = sortSelect ? sortSelect.value : 'default';
+
+    let filtered = wordList.filter(item => {
+        const matchesSearch = (item.word || '').toLowerCase().includes(search) ||
             (item.meaning && item.meaning.toLowerCase().includes(search)) ||
             (item.category && item.category.toLowerCase().includes(search)) ||
             (item.pos && item.pos.toLowerCase().includes(search));
@@ -272,6 +371,23 @@ function getFilteredWords() {
             
         return matchesSearch && matchesCategory;
     });
+
+    filtered.sort((a, b) => {
+        if (sortBy === 'alpha-asc') {
+            return (a.word || '').localeCompare(b.word || '');
+        } else if (sortBy === 'alpha-desc') {
+            return (b.word || '').localeCompare(a.word || '');
+        } else if (sortBy === 'pos') {
+            return (a.pos || '').localeCompare(b.pos || '');
+        } else if (sortBy === 'level-asc') {
+            return (a.level || 1) - (b.level || 1);
+        } else if (sortBy === 'level-desc') {
+            return (b.level || 1) - (a.level || 1);
+        }
+        return 0;
+    });
+
+    return filtered;
 }
 
 function renderWordList() {
@@ -294,28 +410,28 @@ function renderWordList() {
             const lvInfo = getLevelInfo(item.level || 1);
             const isChecked = selectedWordIds.has(item.id) ? 'checked' : '';
             return `
-                <tr class="hover:bg-slate-50 transition">
-                    <td class="py-3 px-4">
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                    <td class="py-3 px-3">
                         <input type="checkbox" value="${item.id}" ${isChecked} onchange="toggleSelectWord('${item.id}', this.checked)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
                     </td>
-                    <td class="py-3 px-4 font-bold text-slate-900">
+                    <td class="py-3 px-3 font-bold text-slate-900 dark:text-white">
                         ${item.word}
                         <div class="text-xs font-mono font-normal text-slate-400">${item.phonetic || ''}</div>
                     </td>
-                    <td class="py-3 px-4">
-                        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">${item.category || '預設字庫'}</span>
+                    <td class="py-3 px-3">
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">${item.category || '預設字庫'}</span>
                     </td>
-                    <td class="py-3 px-4">
+                    <td class="py-3 px-3">
                         <span class="px-2 py-0.5 rounded text-xs font-semibold ${lvInfo.color} border">${lvInfo.name}</span>
                     </td>
-                    <td class="py-3 px-4 font-medium text-slate-800">
+                    <td class="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
                         ${item.meaning || ''}
                     </td>
-                    <td class="py-3 px-4 text-right space-x-2">
-                        <button type="button" onclick="editCard('${item.id}')" class="p-1.5 text-brand-600 hover:bg-brand-50 rounded transition" title="編輯">
+                    <td class="py-3 px-3 text-right space-x-2">
+                        <button type="button" onclick="editCard('${item.id}')" class="p-1.5 text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-700 rounded transition" title="編輯">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <button type="button" onclick="deleteCard('${item.id}')" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition" title="刪除">
+                        <button type="button" onclick="deleteCard('${item.id}')" class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-700 rounded transition" title="刪除">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </td>
@@ -364,7 +480,7 @@ function updateBatchBadgeUI() {
 
     if (!badge) return;
     if (selectedWordIds.size > 0) {
-        badge.innerText = `已選擇 ${selectedWordIds.size} 筆`;
+        badge.innerText = `${selectedWordIds.size} 筆`;
         badge.classList.remove('hidden');
     } else {
         badge.classList.add('hidden');
@@ -746,12 +862,12 @@ function renderBatchPreview() {
                 `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">待補齊</span>`;
 
             return `
-                <tr class="hover:bg-slate-50">
-                    <td class="p-2 border-b font-bold text-slate-800">${item.word}</td>
-                    <td class="p-2 border-b text-slate-600">${item.pos || '-'}</td>
-                    <td class="p-2 border-b text-slate-700">${item.meaning || '-'}</td>
-                    <td class="p-2 border-b">${statusBadge}</td>
-                    <td class="p-2 border-b text-right">
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <td class="p-2 border-b dark:border-slate-700 font-bold">${item.word}</td>
+                    <td class="p-2 border-b dark:border-slate-700">${item.pos || '-'}</td>
+                    <td class="p-2 border-b dark:border-slate-700">${item.meaning || '-'}</td>
+                    <td class="p-2 border-b dark:border-slate-700">${statusBadge}</td>
+                    <td class="p-2 border-b dark:border-slate-700 text-right">
                         <button type="button" onclick="removeBatchItem(${idx})" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-0.5 rounded hover:bg-rose-50 transition" title="剔除此單字">
                             <i class="fa-solid fa-trash"></i> 移除
                         </button>
@@ -931,6 +1047,9 @@ function handleSaveApiKey() {
     showToast("🔑 Gemini API Key 已成功儲存！", 'success');
 }
 
+/**
+ * 彈窗打開 / 關閉控管
+ */
 function openModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
@@ -966,38 +1085,6 @@ function closeModal(id) {
         resetBatchModal();
     }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  const loggedOutBox = document.getElementById('user-logged-out');
-  const loggedInBox = document.getElementById('user-logged-in');
-  const userEmailSpan = document.getElementById('user-email');
-  const userAvatarImg = document.getElementById('user-avatar');
-
-  if (typeof firebase !== 'undefined' && firebase.auth) {
-    firebase.auth().onAuthStateChanged(async (user) => {
-      if (user) {
-        console.log("目前登入帳號:", user.email);
-        if (loggedOutBox) loggedOutBox.style.display = 'none';
-        if (loggedInBox) loggedInBox.style.display = 'flex';
-        
-        if (userEmailSpan) userEmailSpan.textContent = user.displayName || user.email;
-        if (userAvatarImg) {
-          userAvatarImg.src = user.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=user';
-        }
-      } else {
-        console.log("目前為訪客模式");
-        if (loggedOutBox) loggedOutBox.style.display = 'block';
-        if (loggedInBox) loggedInBox.style.display = 'none';
-        if (userEmailSpan) userEmailSpan.textContent = '';
-        if (userAvatarImg) userAvatarImg.src = '';
-      }
-
-      if (typeof loadStorage === 'function') {
-        await loadStorage();
-      }
-    });
-  }
-});
 
 function exportJSON() {
     const select = document.getElementById('exportCategorySelect');
@@ -1100,3 +1187,146 @@ function handleImportJSON() {
 
     reader.readAsText(file);
 }
+
+/**
+ * 🎨 主題/夜間模式控制器
+ */
+function handleThemeChange(mode) {
+    localStorage.setItem('theme_preference', mode);
+    applyTheme(mode);
+}
+
+function applyTheme(mode) {
+    const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (mode === 'dark' || (mode === 'system' && isSystemDark)) {
+        document.documentElement.classList.add('dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+    }
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    const preference = localStorage.getItem('theme_preference') || 'system';
+    if (preference === 'system') {
+        applyTheme('system');
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const preference = localStorage.getItem('theme_preference') || 'system';
+    const themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) themeSelect.value = preference;
+    applyTheme(preference);
+});
+
+/**
+ * ⚡ 快速收錄生字並自動觸發 AI 補充
+ */
+async function handleQuickAddWords() {
+    const inputElem = document.getElementById('quickAddInput');
+    const rawText = inputElem ? inputElem.value.trim() : '';
+    if (!rawText) {
+        showToast("請先輸入單字！", 'warning');
+        return;
+    }
+
+    const wordsToProcess = rawText
+        .split(/[,;\n\s]+/)
+        .map(w => w.trim().toLowerCase())
+        .filter(w => w.length > 0);
+
+    if (wordsToProcess.length === 0) {
+        showToast("未檢測到有效的英文單字", 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('quickAddConfirmBtn');
+    const origText = btn ? btn.innerText : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "AI 處理中...";
+    }
+
+    const targetCategory = (typeof selectedCategory !== 'undefined' && selectedCategory !== 'ALL') 
+        ? selectedCategory 
+        : '預設字庫';
+
+    let addedList = [];
+
+    for (const rawWord of wordsToProcess) {
+        const exists = wordList.some(w => 
+            (w.category || '預設字庫').toLowerCase() === targetCategory.toLowerCase() && 
+            w.word.toLowerCase() === rawWord
+        );
+
+        if (!exists) {
+            const newCard = {
+                id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                category: targetCategory,
+                word: rawWord,
+                pos: '',
+                phonetic: '',
+                meaning: 'AI 自動解析中...',
+                sentence: '',
+                translation: '',
+                level: 1,
+                knowStreak: 0,
+                updatedAt: Date.now()
+            };
+            wordList.unshift(newCard);
+            addedList.push(newCard);
+        }
+    }
+
+    saveStorage();
+    updateUI();
+    closeModal('quickAddModal');
+    if (inputElem) inputElem.value = '';
+
+    if (btn) {
+        btn.disabled = false;
+        btn.innerText = origText;
+    }
+
+    if (addedList.length === 0) {
+        showToast("所輸入的單字已存在於字庫中！", 'info');
+        return;
+    }
+
+    showToast(`⚡ 已收錄 ${addedList.length} 個生字，AI 正在背景自動補充...`, 'info');
+
+    runBatchAiAutoFill(addedList, (current, total) => {
+        saveStorage();
+        updateUI();
+    }).then(() => {
+        showToast(`🎉 生字資料已全數由 AI 自動帶入完成！`, 'success');
+    });
+}
+
+/**
+ * 🌐 語言與卡片正面顯示模式控制器
+ */
+function handleTargetLangChange(lang) {
+    localStorage.setItem('lzhcard_target_lang', lang);
+    showToast(`已切換學習目標語言為：${lang === 'ja' ? '日文 (日本語)' : '英文 (English)'}`, 'info');
+}
+
+function handleCardDisplayModeChange(mode) {
+    localStorage.setItem('lzhcard_display_mode', mode);
+    updateUI();
+    nextCard();
+    showToast('卡片顯示模式已更新！', 'success');
+}
+
+// 頁面載入時自動初始化選單狀態
+document.addEventListener('DOMContentLoaded', () => {
+    const savedLang = localStorage.getItem('lzhcard_target_lang') || 'en';
+    const savedDisplayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
+
+    const langSelect = document.getElementById('targetLangSelect');
+    if (langSelect) langSelect.value = savedLang;
+
+    const displaySelect = document.getElementById('cardDisplayModeSelect');
+    if (displaySelect) displaySelect.value = savedDisplayMode;
+});

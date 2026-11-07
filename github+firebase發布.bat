@@ -21,7 +21,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo 🚀 [2/2] 正在備份推送至 GitHub (huane82/flashcards)...
+echo 🚀 [2/2] 正在備份推送至 GitHub (huane82/lzhcard)...
 git add .
 git commit -m "%commit_msg%"
 git push origin main

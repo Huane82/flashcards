@@ -12,7 +12,7 @@ function setQuizMode(mode) {
             if (m === mode) {
                 btn.className = "py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-brand-600 text-white shadow-xs";
             } else {
-                btn.className = "py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200";
+                btn.className = "py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600";
             }
         }
     });
@@ -49,10 +49,10 @@ function nextQuizQuestion() {
         if (promptBox) {
             promptBox.innerHTML = `
                 <div class="text-center py-4 space-y-2">
-                    <p class="text-amber-600 font-bold text-base">⚠️ 當前字庫尚無具備英文例句的單字！</p>
-                    <p class="text-xs text-slate-500 font-normal">
+                    <p class="text-amber-600 dark:text-amber-400 font-bold text-base">⚠️ 當前字庫尚無具備英文例句的單字！</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-normal">
                         隨堂測驗已開啟過濾保護（僅考有英文例句的單字）。<br>
-                        沒有例句的單字可先至「<span class="font-bold text-brand-600">卡片輪播</span>」背誦，或點擊「批量貼上」使用 AI 補齊例句。
+                        沒有例句的單字可先至「<span class="font-bold text-brand-600 dark:text-brand-400">卡片輪播</span>」背誦，或點擊「批量貼上」使用 AI 補齊例句。
                     </p>
                 </div>
             `;
@@ -95,23 +95,24 @@ function nextQuizQuestion() {
         }
 
         const regex = new RegExp(`\\b${word}\\b`, 'gi');
-        let maskedSentence = sentence.replace(regex, `<span class="text-brand-600 font-extrabold underline decoration-wavy px-1">${hintWord}</span>`);
+        // 🌟 移除底線 decoration-wavy，改用明顯的高亮 tag，修復藍色波浪線與深色模式下字體偏暗問題
+        let maskedSentence = sentence.replace(regex, `<span class="text-brand-500 dark:text-sky-400 font-extrabold border-b-2 border-brand-500 dark:border-sky-400 px-1 py-0.5">${hintWord}</span>`);
         
         if (maskedSentence === sentence) {
-            maskedSentence = `${sentence} <br><span class="text-xs text-slate-500 font-mono font-normal mt-2 block">[提示遮罩: ${hintWord}]</span>`;
+            maskedSentence = `${sentence} <br><span class="text-xs text-slate-400 dark:text-slate-500 font-mono font-normal mt-2 block">[提示遮罩: ${hintWord}]</span>`;
         }
 
-        promptBox.innerHTML = `<p class="font-serif italic text-xl leading-relaxed text-slate-800">${maskedSentence}</p>`;
+        promptBox.innerHTML = `<p class="font-serif italic text-xl leading-relaxed text-slate-800 dark:text-slate-100">${maskedSentence}</p>`;
 
     } else if (currentQuizMode === 2) {
         if (badgeElem) badgeElem.innerText = '模式 2：詞性與繁中釋義對照';
         if (promptTitleElem) promptTitleElem.innerText = '中文釋義與詞性提示：';
 
-        const posStr = currentQuizWord.pos ? `<span class="px-2 py-0.5 rounded bg-brand-100 text-brand-700 text-xs font-bold mr-2">[${currentQuizWord.pos}]</span>` : '';
+        const posStr = currentQuizWord.pos ? `<span class="px-2 py-0.5 rounded bg-brand-100 dark:bg-brand-900/50 text-brand-700 dark:text-brand-300 text-xs font-bold mr-2">[${currentQuizWord.pos}]</span>` : '';
         promptBox.innerHTML = `
             <div class="flex items-center">
                 ${posStr}
-                <span class="text-2xl font-bold text-slate-800">${currentQuizWord.meaning || '（未填寫釋義）'}</span>
+                <span class="text-2xl font-bold text-slate-800 dark:text-slate-100">${currentQuizWord.meaning || '（未填寫釋義）'}</span>
             </div>
         `;
 
@@ -120,13 +121,13 @@ function nextQuizQuestion() {
         if (promptTitleElem) promptTitleElem.innerText = '中英文句意對照：';
 
         const regex = new RegExp(`\\b${word}\\b`, 'gi');
-        const blankedSentence = sentence.replace(regex, '____');
+        const blankedSentence = sentence.replace(regex, '<span class="text-brand-500 dark:text-sky-400 font-bold border-b-2 border-brand-500 dark:border-sky-400 px-2">____</span>');
         const translation = currentQuizWord.translation || currentQuizWord.meaning || '（無翻譯對照）';
 
         promptBox.innerHTML = `
             <div class="space-y-2">
-                <p class="font-serif italic text-lg text-slate-800">${blankedSentence}</p>
-                <p class="text-sm font-semibold text-emerald-700 border-t border-slate-200 pt-2">中文對照: ${translation}</p>
+                <p class="font-serif italic text-lg text-slate-800 dark:text-slate-100">${blankedSentence}</p>
+                <p class="text-sm font-semibold text-emerald-600 dark:text-emerald-400 border-t border-slate-200 dark:border-slate-700 pt-2">中文對照: ${translation}</p>
             </div>
         `;
     }
@@ -162,10 +163,10 @@ function handleQuizSubmit(e) {
             if (typeof saveStorage === 'function') saveStorage();
         }
 
-        feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 block";
+        feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 block";
         feedbackElem.innerHTML = `
             <div class="flex items-center space-x-2">
-                <i class="fa-solid fa-circle-check text-emerald-600 text-lg"></i>
+                <i class="fa-solid fa-circle-check text-emerald-600 dark:text-emerald-400 text-lg"></i>
                 <span>恭喜答對！ <strong>${currentQuizWord.word}</strong> (${currentQuizWord.meaning || ''})</span>
             </div>
         `;
@@ -177,14 +178,14 @@ function handleQuizSubmit(e) {
             if (typeof saveStorage === 'function') saveStorage();
         }
 
-        feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-rose-50 text-rose-800 border border-rose-200 block";
+        feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 block";
         feedbackElem.innerHTML = `
             <div class="space-y-1">
                 <div class="flex items-center space-x-2">
-                    <i class="fa-solid fa-circle-xmark text-rose-600 text-lg"></i>
-                    <span>答錯了！正確答案是：<strong class="text-rose-900 underline">${currentQuizWord.word}</strong></span>
+                    <i class="fa-solid fa-circle-xmark text-rose-600 dark:text-rose-400 text-lg"></i>
+                    <span>答錯了！正確答案是：<strong class="text-rose-900 dark:text-rose-300 underline">${currentQuizWord.word}</strong></span>
                 </div>
-                <p class="text-xs text-rose-700 pl-6">釋義：${currentQuizWord.meaning || ''} ${currentQuizWord.phonetic ? `(${currentQuizWord.phonetic})` : ''}</p>
+                <p class="text-xs text-rose-700 dark:text-rose-400 pl-6">釋義：${currentQuizWord.meaning || ''} ${currentQuizWord.phonetic ? `(${currentQuizWord.phonetic})` : ''}</p>
             </div>
         `;
     }

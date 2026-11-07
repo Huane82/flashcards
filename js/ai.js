@@ -1,8 +1,8 @@
 /**
- * Gemini AI 對接與智慧單字清洗解析模組 (完整修復終極版)
+ * LZHCard - Gemini AI 對接與智慧單字清洗解析模組 (多語系 + 全繁體 + 全詞性捕捉版)
  */
 
-const GEMINI_MODEL = "gemini-3.5-flash-lite";
+const GEMINI_MODEL = "gemini-1.5-flash";
 
 function updateApiKeyStatusUI() {
     const icon = document.getElementById('apiKeyIcon');
@@ -98,25 +98,28 @@ function isFieldIncomplete(val) {
     return str === '' || str === '尚未填寫釋義' || str === '-' || str === 'N/A' || str === 'EMPTY';
 }
 
+/**
+ * 衛生化單字與詞性（支援多詞性組合，如 n. / v.）
+ */
 function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     let word = (rawWord || '').trim();
     let pos = (rawPos || '').trim();
     let meaning = (rawMeaning || '').trim();
 
-    const posRegex = /[\(\[\{]?(n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art)\.[\)\]\}]?/i;
+    const multiPosRegex = /[\(\[\{]?((?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art|名詞|動詞|他動詞|自動詞|形容詞|副詞|助詞)[\.\s\/]*)+[\)\]\}]?/gi;
 
     if (word) {
-        const match = word.match(posRegex);
-        if (match) {
-            if (!pos) pos = match[1].toLowerCase() + '.';
+        const match = word.match(multiPosRegex);
+        if (match && match[0].length < word.length) {
+            if (!pos) pos = match[0].replace(/[\(\[\{\)\]\}]/g, '').trim();
             word = word.replace(match[0], '').trim();
         }
     }
 
     if (meaning) {
-        const match = meaning.match(posRegex);
-        if (match) {
-            if (!pos) pos = match[1].toLowerCase() + '.';
+        const match = meaning.match(multiPosRegex);
+        if (match && match[0].length < meaning.length) {
+            if (!pos) pos = match[0].replace(/[\(\[\{\)\]\}]/g, '').trim();
             meaning = meaning.replace(match[0], '').trim();
         }
     }
@@ -124,6 +127,9 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     return { word, pos, meaning };
 }
 
+/**
+ * AI 單一單字自動填寫 (支援英/日雙語、全繁體中文、全詞性)
+ */
 async function autoFillWithAI(word) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
@@ -134,8 +140,32 @@ async function autoFillWithAI(word) {
 
     const cleaned = sanitizeWordAndPos(word, '', '');
     const cleanWord = cleaned.word;
+    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en'; // 'en' 或 'ja'
 
-    const prompt = 'You are a dictionary assistant. Parse the English word "' + cleanWord + '". Return ONLY a pure JSON object with keys: "phonetic", "pos", "meaning", "sentence", "translation".';
+    let langPrompt = "";
+    if (targetLang === 'ja') {
+        langPrompt = `The word is Japanese: "${cleanWord}". 
+- "phonetic": Provide Romaji and Hiragana/Katakana reading (e.g., "たべる / taberu").
+- "pos": ALL relevant parts of speech in Japanese/Traditional Chinese (e.g. "動詞 / 他動詞" or "名詞 / 形容詞").
+- "meaning": Traditional Chinese definition.
+- "sentence": Example Japanese sentence.
+- "translation": Traditional Chinese translation of the sentence.`;
+    } else {
+        langPrompt = `The word is English: "${cleanWord}".
+- "phonetic": IPA pronunciation.
+- "pos": ALL relevant parts of speech (e.g., "n. / v." if it functions as both noun and verb).
+- "meaning": Traditional Chinese definition.
+- "sentence": Example English sentence.
+- "translation": Traditional Chinese translation of the sentence.`;
+    }
+
+    const prompt = `You are an expert bilingual lexicographer. Parse the term "${cleanWord}". 
+${langPrompt}
+
+CRITICAL STRICT RULES:
+1. ALL Chinese outputs MUST be exclusively in TRADITIONAL CHINESE (繁體中文, 臺灣標準). Absolutely NEVER use Simplified Chinese (簡體中文).
+2. "pos" MUST list ALL common parts of speech for this word, separated by " / ".
+3. Return ONLY a pure valid JSON object with keys: "phonetic", "pos", "meaning", "sentence", "translation". No markdown explanations around it.`;
 
     try {
         const apiUrl = buildGeminiUrl(rawKey);
@@ -171,109 +201,9 @@ async function autoFillWithAI(word) {
     }
 }
 
-function parseBatchText(raw) {
-    let parsedList = [];
-
-    if ((raw.startsWith('[') && raw.endsWith(']')) || (raw.startsWith('{') && raw.endsWith('}'))) {
-        try {
-            const parsedJson = JSON.parse(raw);
-            const arr = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
-            arr.forEach(item => {
-                let w = '', p = '', m = '', phonetic = '', sentence = '', translation = '';
-                if (typeof item === 'string') {
-                    w = item.trim();
-                } else if (typeof item === 'object') {
-                    w = item.word || item.term || item.english || '';
-                    p = item.pos || item.partOfSpeech || item.type || '';
-                    phonetic = item.phonetic || item.pronunciation || '';
-                    m = item.meaning || item.definition || item.zh || item.ch || item.chinese || item.ch_meaning || item.trans || item.translation || '';
-                    sentence = item.sentence || item.example || '';
-                    translation = item.translation || item.exampleZh || '';
-                }
-
-                const cleanObj = sanitizeWordAndPos(w, p, m);
-                if (cleanObj.word) {
-                    parsedList.push({
-                        word: cleanObj.word,
-                        pos: cleanObj.pos,
-                        phonetic: phonetic,
-                        meaning: cleanObj.meaning,
-                        sentence: sentence,
-                        translation: translation
-                    });
-                }
-            });
-        } catch(e) {}
-    }
-
-    if (parsedList.length === 0) {
-        const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-        lines.forEach(line => {
-            let word = "", pos = "", phonetic = "", meaning = "";
-
-            const phoneticMatch = line.match(/(\/[^\/]+\/|\[[^\]]+\])/);
-            if (phoneticMatch) {
-                phonetic = phoneticMatch[1];
-                line = line.replace(phoneticMatch[1], ' ');
-            }
-
-            const posMatch = line.match(/\b(n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art)\./i);
-            if (posMatch) {
-                pos = posMatch[0];
-                line = line.replace(posMatch[0], ' ');
-            }
-
-            if (line.includes(' - ')) {
-                const parts = line.split(' - ');
-                word = parts[0].trim();
-                meaning = parts.slice(1).join(' - ').trim();
-            } else if (line.includes(':')) {
-                const parts = line.split(':');
-                word = parts[0].trim();
-                meaning = parts.slice(1).join(':').trim();
-            } else if (line.includes('\t')) {
-                const parts = line.split('\t');
-                word = parts[0].trim();
-                meaning = parts.slice(1).join(' ').trim();
-            } else {
-                const zhMatch = line.match(/[\u4e00-\u9fa5].*$/);
-                if (zhMatch) {
-                    meaning = zhMatch[0].trim();
-                    word = line.substring(0, zhMatch.index).trim();
-                } else {
-                    word = line.trim();
-                }
-            }
-
-            word = word.replace(/^[0-9]+\.\s*/, '').trim();
-
-            const cleanObj = sanitizeWordAndPos(word, pos, meaning);
-            if (cleanObj.word) {
-                parsedList.push({
-                    word: cleanObj.word,
-                    pos: cleanObj.pos,
-                    phonetic: phonetic,
-                    meaning: cleanObj.meaning,
-                    sentence: '',
-                    translation: ''
-                });
-            }
-        });
-    }
-
-    const uniqueList = [];
-    const seenWords = new Set();
-    parsedList.forEach(item => {
-        const lowerKey = item.word.toLowerCase().trim();
-        if (!seenWords.has(lowerKey)) {
-            seenWords.add(lowerKey);
-            uniqueList.push(item);
-        }
-    });
-
-    return uniqueList;
-}
-
+/**
+ * 批次 AI 欄位補齊 (全繁體 + 多詞性支援)
+ */
 async function runBatchAiAutoFill(targetList, progressCallback) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
@@ -296,6 +226,7 @@ async function runBatchAiAutoFill(targetList, progressCallback) {
         return;
     }
 
+    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
     const batchSize = 5;
     let completedCount = 0;
 
@@ -303,7 +234,23 @@ async function runBatchAiAutoFill(targetList, progressCallback) {
         const chunk = incompleteItems.slice(i, i + batchSize);
         const chunkWords = chunk.map(item => item.word);
 
-        const prompt = 'Return a JSON array of objects for these words: ' + JSON.stringify(chunkWords) + '. Format each: {"word":"...","pos":"...","phonetic":"...","meaning":"Traditional Chinese definition","sentence":"Short English sentence","translation":"Traditional Chinese sentence translation"}. Output ONLY pure JSON.';
+        const prompt = `Return a JSON array of objects for these terms: ${JSON.stringify(chunkWords)}.
+Target Language Mode: ${targetLang.toUpperCase()}.
+
+Format for each object:
+{
+  "word": "original term",
+  "pos": "ALL major parts of speech (e.g. 'n. / v.' or '名詞 / 動詞')",
+  "phonetic": "pronunciation or kana reading",
+  "meaning": "Traditional Chinese definition",
+  "sentence": "Example sentence in target language",
+  "translation": "Traditional Chinese sentence translation"
+}
+
+CRITICAL RULES:
+1. ALL Chinese outputs MUST BE EXCLUSIVELY TRADITIONAL CHINESE (繁體中文). NO Simplified Chinese allowed under any circumstances.
+2. Capture ALL common parts of speech for each word in "pos".
+3. Output ONLY pure JSON array. No extra text.`;
 
         try {
             const apiUrl = buildGeminiUrl(rawKey);
@@ -354,7 +301,7 @@ async function runBatchAiAutoFill(targetList, progressCallback) {
         }
 
         if (i + batchSize < total) {
-            await new Promise(resolve => setTimeout(resolve, 4500));
+            await new Promise(resolve => setTimeout(resolve, 4000));
         }
     }
 }
