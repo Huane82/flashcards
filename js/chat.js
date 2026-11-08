@@ -1,8 +1,8 @@
 /**
- * LZHCard - 聊天、好友與系統公告模組 (chat.js - 管理員權限修復與乾淨版)
+ * LZHCard - 聊天、好友與系統公告模組 (chat.js - 支援全域暱稱搜尋系統)
  */
 
-// 1. 初始化使用者與全域資料庫防護 (已移除 Alex 與 LZHCard 官方範例帳號)
+// 1. 初始化使用者與全域資料庫防護
 if (!window.userData) {
     window.userData = {};
 }
@@ -51,15 +51,12 @@ function isGuestUser() {
 function checkAdminPermissions() {
     const isAdmin = window.userData && window.userData.role === 'admin';
 
-    // 1. 顯示側邊欄頂部「巡視」頁籤按鈕
     const adminBtn = document.getElementById('tabAdminBtn');
     if (adminBtn) adminBtn.classList.toggle('hidden', !isAdmin);
 
-    // 2. 顯示公告頁面內的「發布官方公告」按鈕
     const noticeAction = document.getElementById('adminNoticeAction');
     if (noticeAction) noticeAction.classList.toggle('hidden', !isAdmin);
 
-    // 3. 顯示聊天室抽屜頂部的「管理員」紅底徽章
     const adminBadge = document.getElementById('adminBadge');
     if (adminBadge) adminBadge.classList.toggle('hidden', !isAdmin);
 }
@@ -78,7 +75,6 @@ function openChatDrawer() {
         drawer.classList.remove('hidden');
         if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
         
-        // 🌟 開啟抽屜時自動檢查並套用管理員權限
         checkAdminPermissions();
         switchChatTab('chats');
     }
@@ -106,16 +102,13 @@ function switchChatTab(tab) {
     const tabFriendsBtn = document.getElementById('tabFriendsBtn');
     const tabAdminBtn = document.getElementById('tabAdminBtn');
 
-    // 隱藏所有視窗
     [noticeView, chatsView, friendsView, activeChatWindow].forEach(el => el && el.classList.add('hidden'));
 
-    // 重設分頁按鈕樣式
     const defaultBtnClass = "flex-1 py-3 text-center text-slate-400 border-b-2 border-transparent font-bold text-xs transition";
     if (tabNoticeBtn) tabNoticeBtn.className = defaultBtnClass;
     if (tabChatsBtn) tabChatsBtn.className = defaultBtnClass;
     if (tabFriendsBtn) tabFriendsBtn.className = defaultBtnClass;
 
-    // 即時驗證管理員身分
     checkAdminPermissions();
     const isAdmin = window.userData && window.userData.role === 'admin';
 
@@ -143,7 +136,7 @@ function switchChatTab(tab) {
 }
 
 /**
- * 🔍 搜尋群組、好友或 Email
+ * 🔍 搜尋群組、暱稱或 Email 處理常式
  */
 function handleChatSearch() {
     const searchInput = document.getElementById('chatSearchInput');
@@ -158,56 +151,147 @@ function handleChatSearch() {
 }
 
 /**
- * 👥 渲染好友列表 (支援 Email/名稱搜尋，安全判定防禦)
+ * 👥 渲染好友列表 (支援「本地暱稱搜尋」與「雲端用戶暱稱即時搜尋」)
  */
-function renderFriendsList() {
+async function renderFriendsList() {
     const container = document.getElementById('friendsListContainer');
     if (!container) return;
 
     const friends = (window.userData && window.userData.friends) ? window.userData.friends : [];
     const query = chatSearchQuery;
 
-    const filtered = friends.filter(f => 
-        (f.username || '').toLowerCase().includes(query) || 
+    // 1. 本地好友過濾 (同時比對固定暱稱、用戶名稱與 Email)
+    const filteredFriends = friends.filter(f => 
+        (f.nickname || f.username || '').toLowerCase().includes(query) || 
         (f.email && f.email.toLowerCase().includes(query))
     );
 
     let html = '';
 
-    if (query.includes('@') && !friends.some(f => f.email && f.email.toLowerCase() === query)) {
-        html += `
-            <div onclick="addFriendByEmail('${query}')" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
-                <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-300">
-                    <i class="fa-solid fa-user-plus text-sm"></i>
-                    <span class="text-xs font-bold">按 Email 新增好友：「${query}」</span>
-                </div>
-                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">新增</span>
-            </div>
-        `;
+    // 2. 當有搜尋字串時，自動查詢 Firestore 雲端資料庫中符合該「固定暱稱」的用戶
+    if (query && typeof db !== 'undefined' && !isGuestUser()) {
+        try {
+            const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+            const snapshot = await db.collection('users').get();
+            const cloudMatches = [];
+
+            snapshot.forEach(doc => {
+                if (doc.id === currentUid) return;
+                const data = doc.data();
+                const uNickname = (data.nickname || '').toLowerCase();
+                const uEmail = (data.email || '').toLowerCase();
+
+                if (uNickname.includes(query) || uEmail.includes(query)) {
+                    const isFriend = friends.some(f => (f.email && f.email.toLowerCase() === uEmail) || f.uid === doc.id);
+                    if (!isFriend) {
+                        cloudMatches.push({
+                            uid: doc.id,
+                            username: data.nickname || (data.email ? data.email.split('@')[0] : '使用者'),
+                            nickname: data.nickname || '',
+                            email: data.email || '',
+                            avatar: data.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(doc.id)}`
+                        });
+                    }
+                }
+            });
+
+            if (cloudMatches.length > 0) {
+                html += `
+                    <div class="text-[11px] font-bold text-brand-600 dark:text-brand-400 mb-1 flex items-center space-x-1">
+                        <i class="fa-solid fa-cloud-bolt text-xs"></i>
+                        <span>雲端暱稱搜尋結果 (${cloudMatches.length})：</span>
+                    </div>
+                `;
+                html += cloudMatches.map(u => `
+                    <div class="p-3 bg-brand-50/70 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:border-brand-300 transition flex justify-between items-center mb-2">
+                        <div class="flex items-center space-x-3">
+                            <img src="${u.avatar}" class="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
+                            <div>
+                                <div class="flex items-center space-x-1">
+                                    <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${u.username}</h4>
+                                    <span class="text-[9px] px-1.5 py-0.2 bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 rounded font-bold">雲端用戶</span>
+                                </div>
+                                <p class="text-[10px] text-slate-400 font-mono">${u.email || '無電子郵件'}</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="addFriendByObject('${encodeURIComponent(JSON.stringify(u))}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>加好友</span>
+                        </button>
+                    </div>
+                `).join('');
+            }
+        } catch (e) {
+            console.warn("搜尋雲端暱稱失敗:", e);
+        }
     }
 
-    if (filtered.length === 0 && !query.includes('@')) {
-        container.innerHTML = html + `<div class="text-center text-slate-400 py-8 text-xs">查無符合條件的好友</div>`;
+    if (filteredFriends.length === 0 && !html) {
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">查無符合「${query}」的暱稱或好友</div>`;
         return;
     }
 
-    html += filtered.map(f => `
-        <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-300 transition flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <img src="${f.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(f.username)}`}" class="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
-                <div>
-                    <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${f.username}</h4>
-                    <p class="text-[10px] text-slate-400 font-mono">${f.email || '無電子郵件'}</p>
+    if (filteredFriends.length > 0) {
+        if (query) {
+            html += `<div class="text-[11px] font-bold text-slate-500 mb-1">已新增的好友：</div>`;
+        }
+        html += filteredFriends.map(f => {
+            const displayName = f.nickname || f.username;
+            return `
+                <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-300 transition flex justify-between items-center mb-2">
+                    <div class="flex items-center space-x-3">
+                        <img src="${f.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(displayName)}`}" class="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
+                        <div>
+                            <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${displayName}</h4>
+                            <p class="text-[10px] text-slate-400 font-mono">${f.email || '無電子郵件'}</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="startPrivateChat('${encodeURIComponent(displayName)}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
+                        <i class="fa-solid fa-comment-dots"></i>
+                        <span>私聊</span>
+                    </button>
                 </div>
-            </div>
-            <button type="button" onclick="startPrivateChat('${encodeURIComponent(f.username)}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
-                <i class="fa-solid fa-comment-dots"></i>
-                <span>私聊</span>
-            </button>
-        </div>
-    `).join('');
+            `;
+        }).join('');
+    }
 
     container.innerHTML = html;
+}
+
+/**
+ * ➕ 從搜尋結果一鍵新增雲端暱稱好友
+ */
+function addFriendByObject(encodedUserObjStr) {
+    if (isGuestUser()) {
+        if (typeof showToast === 'function') showToast('請先登入帳號才能新增好友！', 'warning');
+        return;
+    }
+
+    try {
+        const userObj = JSON.parse(decodeURIComponent(encodedUserUserObjStr || encodedUserObjStr));
+        if (!window.userData) window.userData = {};
+        if (!window.userData.friends) window.userData.friends = [];
+
+        const exists = window.userData.friends.some(f => (f.email && f.email.toLowerCase() === userObj.email.toLowerCase()) || f.username === userObj.username);
+        if (exists) {
+            if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
+            return;
+        }
+
+        window.userData.friends.push({
+            username: userObj.username,
+            nickname: userObj.nickname || userObj.username,
+            email: userObj.email,
+            avatar: userObj.avatar,
+            uid: userObj.uid
+        });
+
+        if (typeof saveUserData === 'function') saveUserData();
+        renderFriendsList();
+        if (typeof showToast === 'function') showToast(`成功新增固定暱稱好友「${userObj.username}」！`, 'success');
+    } catch (e) {
+        console.error("解析暱稱用戶資料失敗:", e);
+    }
 }
 
 /**
@@ -238,6 +322,7 @@ function addFriendByEmail(emailInput) {
     const username = targetEmail.split('@')[0];
     const newFriend = {
         username: username,
+        nickname: username,
         email: targetEmail,
         avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(targetEmail)}`
     };
@@ -287,7 +372,7 @@ function startPrivateChat(encodedTargetUsername) {
 }
 
 /**
- * 💬 渲染對話列表 (支援關鍵字搜尋群組/私聊)
+ * 💬 渲染對話列表 (支援關鍵字搜尋群組/私聊/成員暱稱)
  */
 function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
@@ -310,7 +395,7 @@ function renderChatThreads(isAdminInspector = false) {
     }
 
     if (threads.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">沒有找到符合的對話紀錄</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">沒有找到符合條件的對話紀錄</div>`;
         return;
     }
 
