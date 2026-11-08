@@ -342,12 +342,26 @@
                     
                     <div class="flex items-center space-x-2">
                         <select id="sortSelect" onchange="renderWordList()" class="px-2.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 outline-none cursor-pointer">
-                            <option value="default" data-i18n="sortDefault">預設排序</option>
-                            <option value="alpha-asc" data-i18n="sortAlphaAsc">字母 (A ➔ Z)</option>
-                            <option value="alpha-desc" data-i18n="sortAlphaDesc">字母 (Z ➔ A)</option>
-                            <option value="pos" data-i18n="sortPos">詞性排序</option>
-                            <option value="level-asc" data-i18n="sortLevelAsc">等級 (Lv.1 ➔ 5)</option>
-                            <option value="level-desc" data-i18n="sortLevelDesc">等級 (Lv.5 ➔ 1)</option>
+                            <optgroup label="↕️ 常用排序">
+                                <option value="default" data-i18n="sortDefault">預設排序</option>
+                                <option value="alpha-asc" data-i18n="sortAlphaAsc">字母 (A ➔ Z)</option>
+                                <option value="alpha-desc" data-i18n="sortAlphaDesc">字母 (Z ➔ A)</option>
+                                <option value="pos" data-i18n="sortPos">詞性排序</option>
+                                <option value="level-asc" data-i18n="sortLevelAsc">等級 (Lv.1 ➔ 5)</option>
+                                <option value="level-desc" data-i18n="sortLevelDesc">等級 (Lv.5 ➔ 1)</option>
+                            </optgroup>
+                            <optgroup label="⚠️ 按缺失資料排序 (優先顯示)">
+                                <option value="missing_meaning_first">缺少釋義優先</option>
+                                <option value="missing_sentence_first">缺少例句優先</option>
+                                <option value="missing_pos_first">缺少詞性優先</option>
+                                <option value="missing_phonetic_first">缺少音標優先</option>
+                            </optgroup>
+                            <optgroup label="🔍 僅篩選資料缺失單字">
+                                <option value="only_missing_meaning">僅顯示「缺少釋義」</option>
+                                <option value="only_missing_sentence">僅顯示「缺少例句」</option>
+                                <option value="only_missing_pos">僅顯示「缺少詞性」</option>
+                                <option value="only_missing_phonetic">僅顯示「缺少音標」</option>
+                            </optgroup>
                         </select>
 
                         <button type="button" onclick="openSplitDeckModal()" class="px-2.5 py-2 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-lg transition whitespace-nowrap">

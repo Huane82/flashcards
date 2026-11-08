@@ -68,44 +68,21 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 function updateCategorySelects() {
     const cats = getAllCategories();
-
     const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
     const catAllText = (typeof t === 'function') ? t('catAll') : "全部字庫";
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
-    const noMeaningText = (typeof t === 'function') ? t('noMeaning') : "未設定釋義";
     const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
     const totalPrefix = nativeLang === 'en' ? '' : (nativeLang === 'ja' ? '計 ' : '共 ');
-
-    // 🔍 計算各項缺失資料的單字數量
-    const noMeaningCount = wordList.filter(w => !w.meaning || w.meaning.trim() === '' || w.meaning === noMeaningText).length;
-    const noSentenceCount = wordList.filter(w => !w.sentence || w.sentence.trim() === '').length;
-    const noPosCount = wordList.filter(w => !w.pos || w.pos.trim() === '').length;
-    const noPhoneticCount = wordList.filter(w => !w.phonetic || w.phonetic.trim() === '').length;
-    const missingAnyCount = wordList.filter(w => 
-        !w.meaning || w.meaning.trim() === '' || w.meaning === noMeaningText ||
-        !w.sentence || w.sentence.trim() === '' ||
-        !w.pos || w.pos.trim() === '' ||
-        !w.phonetic || w.phonetic.trim() === ''
-    ).length;
 
     const filterSelect = document.getElementById('categoryFilterSelect');
     if (filterSelect) {
         const cur = filterSelect.value;
         filterSelect.innerHTML = 
             `<option value="ALL">${catAllText} (${totalPrefix}${wordList.length} ${unitText})</option>` + 
-            `<optgroup label="⚠️ 資料缺失篩選">
-                <option value="MISSING_ANY">⚠️ 包含任意缺失資料 (${missingAnyCount} ${unitText})</option>
-                <option value="MISSING_MEANING">❓ 缺少中文釋義 (${noMeaningCount} ${unitText})</option>
-                <option value="MISSING_SENTENCE">📝 缺少例句 (${noSentenceCount} ${unitText})</option>
-                <option value="MISSING_POS">🏷️ 缺少詞性 (${noPosCount} ${unitText})</option>
-                <option value="MISSING_PHONETIC">🔊 缺少音標 (${noPhoneticCount} ${unitText})</option>
-            </optgroup>` +
-            `<optgroup label="📁 一般字庫分類">` +
             cats.map(c => {
                 const count = wordList.filter(w => (w.category || defaultCatName) === c).length;
                 return `<option value="${c}">${c} (${count} ${unitText})</option>`;
-            }).join('') +
-            `</optgroup>`;
+            }).join('');
         
         filterSelect.value = cur || 'ALL';
     }
@@ -430,6 +407,11 @@ function getFilteredWords() {
     const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
     const sortBy = sortSelect ? sortSelect.value : 'default';
 
+    const isMissing = (item, field) => {
+        if (field === 'meaning') return !item.meaning || !item.meaning.trim() || item.meaning === noMeaningText;
+        return !item[field] || !String(item[field]).trim();
+    };
+
     let filtered = wordList.filter(item => {
         const matchesSearch = !search ||
             (item.word || '').toLowerCase().includes(search) ||
@@ -437,28 +419,26 @@ function getFilteredWords() {
             (item.category && item.category.toLowerCase().includes(search)) ||
             (item.pos && item.pos.toLowerCase().includes(search));
             
-        let matchesCategory = true;
-        if (selectedCategory === "MISSING_ANY") {
-            matchesCategory = !item.meaning || item.meaning.trim() === '' || item.meaning === noMeaningText ||
-                              !item.sentence || item.sentence.trim() === '' ||
-                              !item.pos || item.pos.trim() === '' ||
-                              !item.phonetic || item.phonetic.trim() === '';
-        } else if (selectedCategory === "MISSING_MEANING") {
-            matchesCategory = !item.meaning || item.meaning.trim() === '' || item.meaning === noMeaningText;
-        } else if (selectedCategory === "MISSING_SENTENCE") {
-            matchesCategory = !item.sentence || item.sentence.trim() === '';
-        } else if (selectedCategory === "MISSING_POS") {
-            matchesCategory = !item.pos || item.pos.trim() === '';
-        } else if (selectedCategory === "MISSING_PHONETIC") {
-            matchesCategory = !item.phonetic || item.phonetic.trim() === '';
-        } else if (typeof selectedCategory !== 'undefined' && selectedCategory !== "ALL") {
-            matchesCategory = (item.category || defaultCatName) === selectedCategory;
-        }
-            
+        let matchesCategory = (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") 
+            ? true 
+            : (item.category || defaultCatName) === selectedCategory;
+
+        // 🔍 僅顯示缺失欄位過濾
+        if (sortBy === 'only_missing_meaning' && !isMissing(item, 'meaning')) return false;
+        if (sortBy === 'only_missing_sentence' && !isMissing(item, 'sentence')) return false;
+        if (sortBy === 'only_missing_pos' && !isMissing(item, 'pos')) return false;
+        if (sortBy === 'only_missing_phonetic' && !isMissing(item, 'phonetic')) return false;
+
         return matchesSearch && matchesCategory;
     });
 
     filtered.sort((a, b) => {
+        // ⚠️ 缺失優先排序
+        if (sortBy === 'missing_meaning_first') return (isMissing(b, 'meaning') ? 1 : 0) - (isMissing(a, 'meaning') ? 1 : 0);
+        if (sortBy === 'missing_sentence_first') return (isMissing(b, 'sentence') ? 1 : 0) - (isMissing(a, 'sentence') ? 1 : 0);
+        if (sortBy === 'missing_pos_first') return (isMissing(b, 'pos') ? 1 : 0) - (isMissing(a, 'pos') ? 1 : 0);
+        if (sortBy === 'missing_phonetic_first') return (isMissing(b, 'phonetic') ? 1 : 0) - (isMissing(a, 'phonetic') ? 1 : 0);
+
         if (search && sortBy === 'default') {
             const wA = (a.word || '').toLowerCase();
             const wB = (b.word || '').toLowerCase();
@@ -472,24 +452,17 @@ function getFilteredWords() {
             if (aStarts && !bStarts) return -1;
             if (!aStarts && bStarts) return 1;
 
-            if (aStarts && bStarts) {
-                if (wA.length !== wB.length) {
-                    return wA.length - wB.length;
-                }
+            if (aStarts && bStarts && wA.length !== wB.length) {
+                return wA.length - wB.length;
             }
         }
 
-        if (sortBy === 'alpha-asc') {
-            return (a.word || '').localeCompare(b.word || '');
-        } else if (sortBy === 'alpha-desc') {
-            return (b.word || '').localeCompare(a.word || '');
-        } else if (sortBy === 'pos') {
-            return (a.pos || '').localeCompare(b.pos || '');
-        } else if (sortBy === 'level-asc') {
-            return (a.level || 1) - (b.level || 1);
-        } else if (sortBy === 'level-desc') {
-            return (b.level || 1) - (a.level || 1);
-        }
+        if (sortBy === 'alpha-asc') return (a.word || '').localeCompare(b.word || '');
+        if (sortBy === 'alpha-desc') return (b.word || '').localeCompare(a.word || '');
+        if (sortBy === 'pos') return (a.pos || '').localeCompare(b.pos || '');
+        if (sortBy === 'level-asc') return (a.level || 1) - (b.level || 1);
+        if (sortBy === 'level-desc') return (b.level || 1) - (a.level || 1);
+
         return 0;
     });
 
