@@ -199,7 +199,8 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     let pos = (rawPos || '').trim();
     let meaning = (rawMeaning || '').trim();
 
-    const multiPosRegex = /[\(\[\{]?((?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞)[\.\s\/]*)+[\)\]\}]?/gi;
+    // 嚴謹詞性匹配：英文字母詞性需帶句點或括號，避免將獨立羅馬拼音 "n", "v" 誤判為詞性
+    const multiPosRegex = /(?:[\(\[\{]\s*(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞)[\.\s\/]*[\)\]\}])|(?:(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art)\.)/gi;
 
     if (word) {
         const match = word.match(multiPosRegex);
