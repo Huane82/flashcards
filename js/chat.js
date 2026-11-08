@@ -1,5 +1,5 @@
 /**
- * LZHCard - 聊天、好友與系統公告模組 (chat.js - 完整修復 Email 加好友與全域暱稱搜尋版)
+ * LZHCard - 聊天、好友與系統公告模組 (chat.js - 含管理員刪除對話與訊息功能)
  */
 
 if (!window.userData) window.userData = {};
@@ -128,12 +128,15 @@ function handleChatSearch() {
     if (friendsView && !friendsView.classList.contains('hidden')) {
         renderFriendsList();
     } else {
-        renderChatThreads(false);
+        const isAdmin = window.userData && window.userData.role === 'admin';
+        const tabAdminBtn = document.getElementById('tabAdminBtn');
+        const isInspectorMode = isAdmin && tabAdminBtn && tabAdminBtn.className.includes('border-rose-600');
+        renderChatThreads(isInspectorMode);
     }
 }
 
 /**
- * 👥 渲染好友列表 (支援「本地好友」與「雲端用戶暱稱與 Email 即時搜尋」)
+ * 👥 渲染好友列表
  */
 async function renderFriendsList() {
     const container = document.getElementById('friendsListContainer');
@@ -149,7 +152,6 @@ async function renderFriendsList() {
 
     let html = '';
 
-    // 1. 若搜尋輸入包含 @ 且不在好友列表，提供直接按 Email 新增快捷按鈕
     if (query.includes('@') && !friends.some(f => f.email && f.email.toLowerCase() === query)) {
         html += `
             <div onclick="addFriendByEmail('${query}')" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
@@ -162,7 +164,6 @@ async function renderFriendsList() {
         `;
     }
 
-    // 2. 搜尋 Firestore 雲端用戶 (匹配固定暱稱或 Email)
     if (query && typeof db !== 'undefined' && !isGuestUser()) {
         try {
             const currentUid = auth.currentUser ? auth.currentUser.uid : '';
@@ -290,7 +291,7 @@ function addFriendByObject(encodedUserObjStr) {
 }
 
 /**
- * ➕ 通過電子郵件搜尋並發送加入好友請求 (修復補回)
+ * ➕ 通過電子郵件搜尋並發送加入好友請求
  */
 async function addFriendByEmail(emailInput) {
     if (isGuestUser()) {
@@ -318,7 +319,6 @@ async function addFriendByEmail(emailInput) {
     let targetNickname = targetEmail.split('@')[0];
     let targetAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(targetEmail)}`;
 
-    // 🌐 嘗試從 Firestore 雲端資料庫匹配該 Email 之用戶
     if (typeof db !== 'undefined') {
         try {
             const snapshot = await db.collection('users').where('email', '==', targetEmail).get();
@@ -388,14 +388,64 @@ async function startPrivateChat(encodedTargetUsername, targetUid = '') {
 }
 
 /**
- * 💬 渲染對話列表
+ * 🗑️ 👑 管理員刪除整個對話紀錄 (連同內部子訊息一併刪除)
+ */
+async function deleteChatThread(chatId) {
+    const isAdmin = window.userData && window.userData.role === 'admin';
+    if (!isAdmin) {
+        if (typeof showToast === 'function') showToast('只有管理員可以刪除對話！', 'error');
+        return;
+    }
+
+    if (confirm('👑 管理員警告：確定要刪除整個對話紀錄嗎？（這將永久清空所有歷史訊息）')) {
+        try {
+            const msgsSnap = await db.collection('chats').doc(chatId).collection('messages').get();
+            const batch = db.batch();
+            msgsSnap.forEach(doc => batch.delete(doc.ref));
+            batch.delete(db.collection('chats').doc(chatId));
+            await batch.commit();
+
+            const tabAdminBtn = document.getElementById('tabAdminBtn');
+            const isInspectorMode = tabAdminBtn && tabAdminBtn.className.includes('border-rose-600');
+            renderChatThreads(isInspectorMode);
+            if (typeof showToast === 'function') showToast('已成功刪除該對話！', 'info');
+        } catch (e) {
+            console.error("刪除對話失敗:", e);
+            if (typeof showToast === 'function') showToast('刪除對話失敗：' + e.message, 'error');
+        }
+    }
+}
+
+/**
+ * 🗑️ 👑 管理員刪除單一聊天訊息
+ */
+async function deleteChatMessage(chatId, msgId) {
+    const isAdmin = window.userData && window.userData.role === 'admin';
+    if (!isAdmin) {
+        if (typeof showToast === 'function') showToast('只有管理員可以刪除訊息！', 'error');
+        return;
+    }
+
+    if (confirm('👑 管理員警告：確定要刪除這條訊息嗎？')) {
+        try {
+            await db.collection('chats').doc(chatId).collection('messages').doc(msgId).delete();
+            if (typeof showToast === 'function') showToast('已成功刪除該條訊息！', 'info');
+        } catch (e) {
+            console.error("刪除訊息失敗:", e);
+            if (typeof showToast === 'function') showToast('刪除失敗：' + e.message, 'error');
+        }
+    }
+}
+
+/**
+ * 💬 渲染對話列表 (管理員可看見一鍵刪除對話按鈕)
  */
 async function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
     if (!container) return;
 
-    const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
     const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const isAdmin = window.userData && window.userData.role === 'admin';
     const query = chatSearchQuery;
 
     let threads = [];
@@ -449,13 +499,20 @@ async function renderChatThreads(isAdminInspector = false) {
                         <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${c.lastMessage || '點擊開啟即時對話'}</p>
                     </div>
                 </div>
+
+                <!-- 🗑️ 管理員專屬刪除整個對話按鈕 -->
+                ${isAdmin ? `
+                    <button type="button" onclick="event.stopPropagation(); deleteChatThread('${c.id}')" title="刪除整個對話紀錄" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition ml-2">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                ` : ''}
             </div>
         `;
     }).join('');
 }
 
 /**
- * 📖 開啟對話視窗並啟動 Firestore 即時連線 (onSnapshot)
+ * 📖 開啟對話視窗並啟動 Firestore 即時連線
  */
 function openChatWindow(chatId, encodedName = '') {
     currentActiveChatId = chatId;
@@ -480,7 +537,7 @@ function openChatWindow(chatId, encodedName = '') {
         activeChatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
             .orderBy('createdAt', 'asc')
             .onSnapshot(snapshot => {
-                const messages = snapshot.docs.map(doc => doc.data());
+                const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderMessagesList(messages);
             }, err => {
                 console.warn("即時監聽訊息失敗：", err);
@@ -498,17 +555,22 @@ function backToChatThreads() {
     }
     document.getElementById('activeChatWindow')?.classList.add('hidden');
     document.getElementById('chatsView')?.classList.remove('hidden');
-    renderChatThreads(false);
+    
+    const isAdmin = window.userData && window.userData.role === 'admin';
+    const tabAdminBtn = document.getElementById('tabAdminBtn');
+    const isInspectorMode = isAdmin && tabAdminBtn && tabAdminBtn.className.includes('border-rose-600');
+    renderChatThreads(isInspectorMode);
 }
 
 /**
- * 📩 繪製雲端傳回的即時訊息列表
+ * 📩 繪製雲端傳回的即時訊息列表 (管理員可在每條訊息旁看見刪除圖示)
  */
 function renderMessagesList(messages = []) {
     const container = document.getElementById('chatMessagesBox');
     if (!container) return;
 
     const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
+    const isAdmin = window.userData && window.userData.role === 'admin';
 
     if (messages.length === 0) {
         container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">目前暫無訊息，發送第一條訊息開始交談吧！</div>`;
@@ -528,7 +590,15 @@ function renderMessagesList(messages = []) {
         const isMe = msg.sender === currentUser;
         return `
             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 my-1.5">
-                <span class="text-[10px] text-slate-400 px-1">${msg.sender}</span>
+                <div class="flex items-center space-x-1">
+                    <span class="text-[10px] text-slate-400 px-1">${msg.sender}</span>
+                    <!-- 🗑️ 管理員可直接刪除單條訊息 -->
+                    ${isAdmin && msg.id ? `
+                        <button type="button" onclick="deleteChatMessage('${currentActiveChatId}', '${msg.id}')" title="刪除此訊息" class="text-rose-500 hover:text-rose-700 text-[10px] p-0.5 transition">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    ` : ''}
+                </div>
                 <div class="max-w-[80%] px-3 py-2 rounded-2xl text-xs ${isMe ? 'bg-brand-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none'} shadow-2xs">
                     ${msg.text}
                 </div>
