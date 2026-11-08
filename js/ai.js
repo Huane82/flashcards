@@ -2,10 +2,8 @@
  * LZHCard - Gemini AI 萬能多語系解析模組 (Gemini 3.x 現役版)
  */
 
-// 強制清空全域舊快取
 window.cachedWorkingModel = null;
 
-// 採用 Gemini 3.x 系列現役模型
 const GEMINI_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.6-flash",
@@ -41,13 +39,9 @@ function getValidApiKey() {
     return rawKey.trim();
 }
 
-/**
- * 萬能 API 呼叫器
- */
 async function callGeminiApi(apiKey, promptText) {
     const cleanKey = apiKey.trim();
 
-    // 若已有測試通過的 3.x 快取模型，優先使用
     if (window.cachedWorkingModel) {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${window.cachedWorkingModel}:generateContent?key=${encodeURIComponent(cleanKey)}`;
         try {
@@ -70,7 +64,6 @@ async function callGeminiApi(apiKey, promptText) {
         }
     }
 
-    // 依序輪詢現役 Gemini 3.x 模型
     for (const model of GEMINI_MODELS) {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`;
         try {
@@ -83,18 +76,18 @@ async function callGeminiApi(apiKey, promptText) {
             if (res.ok) {
                 const data = await res.json();
                 window.cachedWorkingModel = model;
-                console.log(`[AI Engine] 成功連線並鎖定現役模型：${model}`);
+                console.log(`[AI Engine] 成功連線模型：${model}`);
                 return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
             }
 
             if (res.status === 401 || res.status === 403) {
                 localStorage.removeItem('flashcard_gemini_key_v1');
                 updateApiKeyStatusUI();
-                if (typeof showToast === 'function') showToast("⚠️ API Key 無效，請重新設定 Key！", "error");
+                if (typeof showToast === 'function') showToast(t('toastInvalidApiKey'), "error");
                 if (typeof openModal === 'function') openModal('keyModal');
                 return null;
             } else if (res.status === 429) {
-                if (typeof showToast === 'function') showToast("⚠️ 觸發 API 頻率限制，請稍後再試！", "warning");
+                if (typeof showToast === 'function') showToast(t('toastRateLimit'), "warning");
                 return null;
             }
         } catch (e) {
@@ -102,7 +95,7 @@ async function callGeminiApi(apiKey, promptText) {
         }
     }
 
-    if (typeof showToast === 'function') showToast("⚠️ 無法連線至 Gemini 3.x API 端點，請確認 API Key 權限！", "error");
+    if (typeof showToast === 'function') showToast(t('toastApiConnError'), "error");
     return null;
 }
 
@@ -209,13 +202,10 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     return { word, pos, meaning };
 }
 
-/**
- * AI 單一單字自動填寫
- */
 async function autoFillWithAI(word) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
-        if (typeof showToast === 'function') showToast("尚未設定 API Key，請先設定！", "warning");
+        if (typeof showToast === 'function') showToast(t('toastNoApiKey'), "warning");
         if (typeof openModal === 'function') openModal('keyModal');
         return null;
     }
@@ -240,13 +230,10 @@ Return ONLY raw JSON with:
     return safeParseJSON(rawResponse);
 }
 
-/**
- * 批次 AI 欄位補充
- */
 async function runBatchAiAutoFill(targetList, progressCallback) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
-        if (typeof showToast === 'function') showToast("尚未設定 Gemini API Key！請先設定 Key。", "warning");
+        if (typeof showToast === 'function') showToast(t('toastNoApiKey'), "warning");
         if (typeof openModal === 'function') openModal('keyModal');
         return;
     }

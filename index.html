@@ -23,7 +23,7 @@
     <!-- 電腦分頁圖示 (Favicon) 設定 -->
     <link rel="icon" type="image/png" href="images/logo.png">
 
-        <!-- Tailwind CSS & Icons -->
+    <!-- Tailwind CSS & Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -294,14 +294,13 @@
                         <label for="selectAllCheckbox" class="font-bold cursor-pointer" data-i18n="lblSelectAll">全選</label>
                         <span id="selectedCountBadge" class="hidden px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 font-bold text-[11px]">0 筆</span>
                     </div>
-
+                        <!-- 🏷️ 重命名字庫按鈕 (支援多語系) -->
                     <div class="flex items-center space-x-1.5">
+                        <button type="button" onclick="handleRenameCategory()" class="px-2.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold rounded-lg transition" data-i18n="btnRenameDeck">重命名字庫</button>
                         <button type="button" onclick="handleBatchChangeCategory()" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold rounded-lg transition" data-i18n="btnBatchMove">移動字庫</button>
                         <button type="button" onclick="handleBatchAiFillLibraryWords()" class="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition shadow-xs" data-i18n="btnBatchAi">✨ AI 補齊</button>
                         <button type="button" onclick="handleBatchDeleteWords()" class="px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-lg transition" data-i18n="btnBatchDelete">刪除</button>
                     </div>
-                </div>
-
                 <!-- AI 進度條 -->
                 <div id="libAiProgressContainer" class="hidden space-y-1 pt-2 border-t border-purple-100 dark:border-purple-900">
                     <div class="flex justify-between text-xs text-purple-700 dark:text-purple-300 font-bold">
@@ -412,12 +411,12 @@
                         </div>
                         <div class="flex flex-col items-end space-y-1">
                             <select id="targetLangSelect" onchange="handleTargetLangChange(this.value)" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold rounded-lg text-xs outline-none cursor-pointer">
-                                <option value="en">🇺🇸 英文 (English)</option>
-                                <option value="ja">🇯🇵 日文 (日本語)</option>
-                                <option value="zh-TW">🇹🇼 中文 (Traditional Chinese)</option>
-                                <option value="custom">✏️ 自訂語言...</option>
+                                <option value="en">🇺🇸 English</option>
+                                <option value="ja">🇯🇵 日本語</option>
+                                <option value="zh-TW">🇹🇼 中文</option>
+                                <option value="custom" data-i18n="optCustomLang">✏️ 自訂語言...</option>
                             </select>
-                            <input type="text" id="customTargetInput" onchange="handleCustomLangChange('target', this.value)" placeholder="輸入自訂目標語言" class="hidden px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                            <input type="text" id="customTargetInput" onchange="handleCustomLangChange('target', this.value)" data-i18n-placeholder="customTargetPlaceholder" placeholder="輸入自訂目標語言" class="hidden px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                         </div>
                     </div>
 
@@ -456,7 +455,7 @@
                     </div>
                     <button type="button" onclick="openModal('keyModal')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition shadow-xs flex items-center space-x-1">
                         <i class="fa-solid fa-key"></i>
-                        <span>設定 Key</span>
+                        <span data-i18n="btnSetKey">設定 Key</span>
                     </button>
                 </div>
             </div>
@@ -501,13 +500,13 @@
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormCategory">歸屬字庫/分類名稱</label>
-                    <input type="text" id="formCategory" placeholder="例如: 預設字庫 / 核心單字" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-semibold">
+                    <input type="text" id="formCategory" data-i18n-placeholder="phFormCategory" placeholder="例如: 預設字庫 / 核心單字" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-semibold">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1"><span data-i18n="lblFormWord">目標語言單字 / 詞彙</span> <span class="text-rose-500">*</span></label>
                     <div class="flex space-x-2">
-                        <input type="text" id="formWord" required placeholder="例如: resilient / 食べる" class="flex-1 px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-semibold">
+                        <input type="text" id="formWord" required data-i18n-placeholder="phFormWord" placeholder="例如: resilient / 食べる" class="flex-1 px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-semibold">
                         <button type="button" onclick="handleAiSingleFill()" id="aiGenerateBtn" class="px-3.5 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-medium text-xs flex items-center space-x-1 shadow-sm transition">
                             <i class="fa-solid fa-wand-magic-sparkles"></i>
                             <span data-i18n="btnAiFill">AI 自動帶入</span>
@@ -518,27 +517,27 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormPos">詞性 (POS)</label>
-                        <input type="text" id="formPos" placeholder="例如: adj. / 動詞" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm">
+                        <input type="text" id="formPos" data-i18n-placeholder="phFormPos" placeholder="例如: adj. / 動詞" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormPhonetic">音標 / 讀音 (Phonetic)</label>
-                        <input type="text" id="formPhonetic" placeholder="例如: /rɪˈzɪl.jənt/ 或 たべる" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-mono">
+                        <input type="text" id="formPhonetic" data-i18n-placeholder="phFormPhonetic" placeholder="例如: /rɪˈzɪl.jənt/ 或 たべる" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-mono">
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1"><span data-i18n="lblFormMeaning">母語釋義 / 翻譯</span></label>
-                    <input type="text" id="formMeaning" placeholder="例如: 有彈性的 / 吃 (可留空，交由 AI 自動補充)" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-medium">
+                    <input type="text" id="formMeaning" data-i18n-placeholder="phFormMeaning" placeholder="例如: 有彈性的 / 吃 (可留空，交由 AI 自動補充)" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-medium">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormSentence">目標語言例句</label>
-                    <textarea id="formSentence" rows="2" placeholder="例如: She is resilient enough to bounce back from failure." class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm"></textarea>
+                    <textarea id="formSentence" rows="2" data-i18n-placeholder="phFormSentence" placeholder="例如: She is resilient enough to bounce back from failure." class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm"></textarea>
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormTranslation">例句母語翻譯</label>
-                    <textarea id="formTranslation" rows="2" placeholder="例如: 她很有韌性，能從失敗中迅速振作起來。" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm"></textarea>
+                    <textarea id="formTranslation" rows="2" data-i18n-placeholder="phFormTranslation" placeholder="例如: 她很有韌性，能從失敗中迅速振作起來。" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm"></textarea>
                 </div>
 
                 <div class="pt-2 flex justify-end space-x-2">
@@ -570,27 +569,23 @@
                         <span data-i18n="batchPresetTitle">一鍵載入高中 7000 單字庫 (大考中心 / 108 課綱分級)</span>
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                        <button type="button" onclick="handleLoadPreset(1)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 1 (基礎)</button>
-                        <button type="button" onclick="handleLoadPreset(2)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 2 (初級)</button>
-                        <button type="button" onclick="handleLoadPreset(3)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 3 (中級)</button>
-                        <button type="button" onclick="handleLoadPreset(4)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 4 (中高)</button>
-                        <button type="button" onclick="handleLoadPreset(5)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 5 (高級)</button>
-                        <button type="button" onclick="handleLoadPreset(6)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 6 (挑戰)</button>
+                        <button type="button" onclick="handleLoadPreset(1)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 1</button>
+                        <button type="button" onclick="handleLoadPreset(2)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 2</button>
+                        <button type="button" onclick="handleLoadPreset(3)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 3</button>
+                        <button type="button" onclick="handleLoadPreset(4)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 4</button>
+                        <button type="button" onclick="handleLoadPreset(5)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level 5</button>
+                        <button type="button" onclick="handleLoadPreset(6)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-10OTH hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-2００ dark:border-slate-6００ text-xs font-bold rounded-lg transition shadow-2xs">Level 6</button>
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblBatchCategory">匯入至此字庫名稱：</label>
-                    <input type="text" id="batchTargetCategory" value="預設字庫" placeholder="例如: 高中 7000 單 L1" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none font-semibold">
+                    <input type="text" id="batchTargetCategory" data-i18n-placeholder="phBatchCategory" value="Default" placeholder="例如: 高中 7000 單 L1" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none font-semibold">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblBatchRaw">貼上原始文字庫資料：</label>
-                    <textarea id="batchRawInput" rows="5" placeholder="請在此貼上單字內容...
-
-例如：
-apple n. 蘋果
-resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none"></textarea>
+                    <textarea id="batchRawInput" rows="5" data-i18n-placeholder="phBatchRaw" placeholder="請在此貼上單字內容..." class="w-full p-3 font-mono text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none"></textarea>
                 </div>
 
                 <div class="flex space-x-2">
@@ -613,7 +608,7 @@ resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono 
                     <!-- 進度條 -->
                     <div id="batchProgressContainer" class="hidden space-y-1">
                         <div class="flex justify-between text-xs text-slate-600 dark:text-slate-300">
-                            <span id="batchProgressText">AI 自動補齊中...</span>
+                            <span id="batchProgressText" data-i18n="libAiProgressText">AI 自動補齊中...</span>
                             <span id="batchProgressPercent">0%</span>
                         </div>
                         <div class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -766,7 +761,7 @@ resilient /rɪˈzɪl.jənt/ [adj.] 很有韌性的" class="w-full p-3 font-mono 
             </p>
 
             <div>
-                <textarea id="quickAddInput" rows="3" placeholder="例如: resilient, fragile" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold"></textarea>
+                <textarea id="quickAddInput" rows="3" data-i18n-placeholder="phQuickAddInput" placeholder="例如: resilient, fragile" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold"></textarea>
             </div>
 
             <div class="flex justify-end space-x-2">
