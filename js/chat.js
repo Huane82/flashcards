@@ -1,5 +1,5 @@
 /**
- * LZHCard - 聊天、好友與系統公告模組 (chat.js - 含管理員刪除對話與訊息功能)
+ * LZHCard - 聊天、好友與系統公告模組 (chat.js - 升級公告 Firestore 雲端即時同步版)
  */
 
 if (!window.userData) window.userData = {};
@@ -388,7 +388,7 @@ async function startPrivateChat(encodedTargetUsername, targetUid = '') {
 }
 
 /**
- * 🗑️ 👑 管理員刪除整個對話紀錄 (連同內部子訊息一併刪除)
+ * 🗑️ 👑 管理員刪除整個對話紀錄
  */
 async function deleteChatThread(chatId) {
     const isAdmin = window.userData && window.userData.role === 'admin';
@@ -438,7 +438,7 @@ async function deleteChatMessage(chatId, msgId) {
 }
 
 /**
- * 💬 渲染對話列表 (管理員可看見一鍵刪除對話按鈕)
+ * 💬 渲染對話列表
  */
 async function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
@@ -500,7 +500,6 @@ async function renderChatThreads(isAdminInspector = false) {
                     </div>
                 </div>
 
-                <!-- 🗑️ 管理員專屬刪除整個對話按鈕 -->
                 ${isAdmin ? `
                     <button type="button" onclick="event.stopPropagation(); deleteChatThread('${c.id}')" title="刪除整個對話紀錄" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition ml-2">
                         <i class="fa-solid fa-trash-can text-xs"></i>
@@ -563,7 +562,7 @@ function backToChatThreads() {
 }
 
 /**
- * 📩 繪製雲端傳回的即時訊息列表 (管理員可在每條訊息旁看見刪除圖示)
+ * 📩 繪製雲端傳回的即時訊息列表
  */
 function renderMessagesList(messages = []) {
     const container = document.getElementById('chatMessagesBox');
@@ -592,7 +591,6 @@ function renderMessagesList(messages = []) {
             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 my-1.5">
                 <div class="flex items-center space-x-1">
                     <span class="text-[10px] text-slate-400 px-1">${msg.sender}</span>
-                    <!-- 🗑️ 管理員可直接刪除單條訊息 -->
                     ${isAdmin && msg.id ? `
                         <button type="button" onclick="deleteChatMessage('${currentActiveChatId}', '${msg.id}')" title="刪除此訊息" class="text-rose-500 hover:text-rose-700 text-[10px] p-0.5 transition">
                             <i class="fa-solid fa-trash-can"></i>
@@ -611,7 +609,7 @@ function renderMessagesList(messages = []) {
 }
 
 /**
- * 📤 發送訊息至雲端 Firestore (對方會即時接收)
+ * 📤 發送訊息至雲端 Firestore
  */
 async function handleSendMessage(e) {
     if (e) e.preventDefault();
@@ -655,14 +653,26 @@ async function handleSendMessage(e) {
 }
 
 /**
- * 📢 渲染公告列表
+ * 📢 渲染公告列表 (即時從 Firestore 雲端讀取)
  */
-function renderAnnouncements() {
+async function renderAnnouncements() {
     const container = document.getElementById('noticeList');
     if (!container) return;
 
-    const annList = window.appAnnouncements || [];
     const isAdmin = window.userData ? window.userData.role === 'admin' : false;
+    let annList = window.appAnnouncements || [];
+
+    if (typeof db !== 'undefined') {
+        try {
+            const snapshot = await db.collection('announcements').orderBy('createdAt', 'desc').get();
+            if (!snapshot.empty) {
+                annList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.appAnnouncements = annList;
+            }
+        } catch (e) {
+            console.warn("無法從雲端讀取公告：", e);
+        }
+    }
 
     if (annList.length === 0) {
         container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">目前無系統公告</div>`;
@@ -674,7 +684,7 @@ function renderAnnouncements() {
             <div class="flex justify-between items-center">
                 <span class="font-bold text-xs text-brand-600 dark:text-brand-400">${ann.title}</span>
                 <div class="flex items-center space-x-2">
-                    <span class="text-[10px] text-slate-400">${ann.time}</span>
+                    <span class="text-[10px] text-slate-400">${ann.time || ''}</span>
                     ${isAdmin ? `
                         <button type="button" onclick="deleteAnnouncement('${ann.id}')" title="刪除公告" class="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 rounded transition">
                             <i class="fa-solid fa-trash-can text-xs"></i>
@@ -683,43 +693,50 @@ function renderAnnouncements() {
                 </div>
             </div>
             <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${ann.content}</p>
-            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">發布者：${ann.author}</div>
+            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">發布者：${ann.author || '管理員'}</div>
         </div>
     `).join('');
 }
 
 /**
- * 🗑️ 管理員刪除公告
+ * 🗑️ 管理員刪除公告 (支援雲端刪除)
  */
-function deleteAnnouncement(annId) {
+async function deleteAnnouncement(annId) {
     if (!window.userData || window.userData.role !== 'admin') {
         if (typeof showToast === 'function') showToast('只有管理員可以刪除公告！', 'error');
         return;
     }
 
-    if (!window.appAnnouncements) window.appAnnouncements = [];
-    const ann = window.appAnnouncements.find(a => a.id === annId);
-    if (!ann) return;
-
-    if (confirm(`👑 管理員警告：確定要刪除公告「${ann.title}」嗎？`)) {
-        window.appAnnouncements = window.appAnnouncements.filter(a => a.id !== annId);
-        if (typeof saveUserData === 'function') saveUserData();
+    if (confirm('👑 管理員警告：確定要刪除該公告嗎？')) {
+        if (typeof db !== 'undefined' && annId) {
+            try {
+                await db.collection('announcements').doc(annId).delete();
+            } catch (e) {
+                console.warn("雲端刪除公告失敗：", e);
+            }
+        }
+        if (window.appAnnouncements) {
+            window.appAnnouncements = window.appAnnouncements.filter(a => a.id !== annId);
+        }
         renderAnnouncements();
         if (typeof showToast === 'function') showToast('管理員已成功刪除該公告！', 'info');
     }
 }
 
 /**
- * 📢 管理員提交公告
+ * 📢 管理員提交公告 (同步寫入雲端 Firestore 庫)
  */
-function submitAnnouncement() {
+async function submitAnnouncement() {
     if (!window.userData || window.userData.role !== 'admin') {
         if (typeof showToast === 'function') showToast('只有管理員可以發布公告！', 'error');
         return;
     }
 
-    const title = (document.getElementById('annTitle')?.value || '').trim();
-    const content = (document.getElementById('annContent')?.value || '').trim();
+    const titleInput = document.getElementById('annTitle');
+    const contentInput = document.getElementById('annContent');
+
+    const title = (titleInput?.value || '').trim();
+    const content = (contentInput?.value || '').trim();
 
     if (!title || !content) {
         if (typeof showToast === 'function') showToast('請填寫完整公告內容！', 'warning');
@@ -729,17 +746,33 @@ function submitAnnouncement() {
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-    if (!window.appAnnouncements) window.appAnnouncements = [];
-    window.appAnnouncements.unshift({
-        id: 'ann_' + Date.now(),
+    const newAnn = {
         title: title,
         content: content,
         author: window.userData.username || '管理員',
-        time: dateStr
-    });
+        time: dateStr,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
 
-    if (typeof saveUserData === 'function') saveUserData();
+    if (typeof db !== 'undefined') {
+        try {
+            const docRef = await db.collection('announcements').add(newAnn);
+            newAnn.id = docRef.id;
+        } catch (e) {
+            console.error("寫入雲端公告失敗：", e);
+            newAnn.id = 'ann_' + Date.now();
+        }
+    } else {
+        newAnn.id = 'ann_' + Date.now();
+    }
+
+    if (!window.appAnnouncements) window.appAnnouncements = [];
+    window.appAnnouncements.unshift(newAnn);
+
+    if (titleInput) titleInput.value = '';
+    if (contentInput) contentInput.value = '';
+
     if (typeof closeModal === 'function') closeModal('announceModal');
     renderAnnouncements();
-    if (typeof showToast === 'function') showToast('官方公告已成功發布！', 'success');
+    if (typeof showToast === 'function') showToast('官方公告已成功發布並同步至雲端！', 'success');
 }
