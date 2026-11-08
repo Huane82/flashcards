@@ -17,6 +17,16 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// 🌐 解決 WebChannel 串流連線失敗 (404 Not Found) 問題
+try {
+  db.settings({
+    experimentalForceLongPolling: true,
+    useFetchStreams: false
+  });
+} catch (e) {
+  console.warn("Firestore settings 已初始化過：", e);
+}
+
 // 1. Google 一鍵登入 (加入強制帳號選擇選單與自動載入雲端資料)
 async function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -82,9 +92,88 @@ async function logoutUser() {
   }
 }
 
-// 4. 監聽帳號狀態切換，自動載入對應帳號的資料
+// 4. 🏷️ 儲存固定個人暱稱至 Firestore (綁定 User ID 防止冒用)
+async function handleSaveNickname() {
+  const input = document.getElementById('settingsNicknameInput');
+  const newNickname = (input?.value || '').trim();
+
+  if (!newNickname) {
+    if (typeof showToast === 'function') showToast('暱稱不能為空！', 'warning');
+    return;
+  }
+
+  if (!auth.currentUser) {
+    if (typeof showToast === 'function') showToast('訪客模式無法設定固定暱稱，請先登入帳號！', 'warning');
+    return;
+  }
+
+  try {
+    await db.collection('users').doc(auth.currentUser.uid).set({
+      nickname: newNickname,
+      email: auth.currentUser.email,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    if (!window.userData) window.userData = {};
+    window.userData.nickname = newNickname;
+
+    if (typeof showToast === 'function') showToast(`固定暱稱已成功更新為「${newNickname}」！`, 'success');
+  } catch (err) {
+    console.error("更新暱稱失敗:", err);
+    if (typeof showToast === 'function') showToast("更新暱稱失敗：" + err.message, "error");
+  }
+}
+
+// 5. 監聽帳號狀態切換，自動更新設定 UI 與載入對應帳號資料與個人暱稱
 auth.onAuthStateChanged(async (user) => {
+  const emailEl = document.getElementById('settings-email');
+  const subtextEl = document.getElementById('settings-subtext');
+  const avatarEl = document.getElementById('settings-avatar');
+  const navAvatarEl = document.getElementById('nav-avatar');
+  const loggedOutEl = document.getElementById('settings-logged-out');
+  const loggedInEl = document.getElementById('settings-logged-in');
+
+  if (user) {
+    // 預設名稱
+    let userNickname = user.displayName || (user.email ? user.email.split('@')[0] : '使用者');
+    
+    try {
+      // 從 Firestore users 集合拉取雲端儲存的固定暱稱
+      const userDoc = await db.collection('users').doc(user.uid).get();
+      if (userDoc.exists && userDoc.data().nickname) {
+        userNickname = userDoc.data().nickname;
+      }
+    } catch (e) {
+      console.warn("無法從雲端讀取暱稱資料：", e);
+    }
+
+    if (!window.userData) window.userData = {};
+    window.userData.nickname = userNickname;
+    window.userData.username = userNickname;
+
+    const nicknameInput = document.getElementById('settingsNicknameInput');
+    if (nicknameInput) nicknameInput.value = userNickname;
+
+    if (emailEl) emailEl.innerText = userNickname;
+    if (subtextEl) subtextEl.innerText = user.email ? `已連結：${user.email}` : "已連結 Google 帳號";
+    if (avatarEl) avatarEl.src = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+    if (navAvatarEl) navAvatarEl.src = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+    if (loggedOutEl) loggedOutEl.style.display = 'none';
+    if (loggedInEl) loggedInEl.style.display = 'block';
+  } else {
+    if (emailEl) emailEl.innerText = "訪客模式";
+    if (subtextEl) subtextEl.innerText = "目前未連結 Google 帳號";
+    if (avatarEl) avatarEl.src = "https://api.dicebear.com/7.x/bottts/svg?seed=user";
+    if (navAvatarEl) navAvatarEl.src = "https://api.dicebear.com/7.x/bottts/svg?seed=user";
+    if (loggedOutEl) loggedOutEl.style.display = 'block';
+    if (loggedInEl) loggedInEl.style.display = 'none';
+  }
+
   if (typeof loadStorage === 'function') {
     await loadStorage();
+  }
+
+  if (typeof renderStore === 'function') {
+    renderStore();
   }
 });
