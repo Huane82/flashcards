@@ -1,5 +1,5 @@
 /**
- * LZHCard - 聊天、好友與系統公告模組 (chat.js - 雲端 Firestore 即時雙向通訊版)
+ * LZHCard - 聊天、好友與系統公告模組 (chat.js - 完整修復 Email 加好友與全域暱稱搜尋版)
  */
 
 if (!window.userData) window.userData = {};
@@ -133,7 +133,7 @@ function handleChatSearch() {
 }
 
 /**
- * 👥 渲染好友列表 (支援雲端暱稱即時搜尋)
+ * 👥 渲染好友列表 (支援「本地好友」與「雲端用戶暱稱與 Email 即時搜尋」)
  */
 async function renderFriendsList() {
     const container = document.getElementById('friendsListContainer');
@@ -149,6 +149,20 @@ async function renderFriendsList() {
 
     let html = '';
 
+    // 1. 若搜尋輸入包含 @ 且不在好友列表，提供直接按 Email 新增快捷按鈕
+    if (query.includes('@') && !friends.some(f => f.email && f.email.toLowerCase() === query)) {
+        html += `
+            <div onclick="addFriendByEmail('${query}')" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
+                <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-300">
+                    <i class="fa-solid fa-user-plus text-sm"></i>
+                    <span class="text-xs font-bold">按 Email 新增好友：「${query}」</span>
+                </div>
+                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">新增</span>
+            </div>
+        `;
+    }
+
+    // 2. 搜尋 Firestore 雲端用戶 (匹配固定暱稱或 Email)
     if (query && typeof db !== 'undefined' && !isGuestUser()) {
         try {
             const currentUid = auth.currentUser ? auth.currentUser.uid : '';
@@ -161,7 +175,7 @@ async function renderFriendsList() {
                 const uNickname = (data.nickname || '').toLowerCase();
                 const uEmail = (data.email || '').toLowerCase();
 
-                if (uNickname.includes(query) || uEmail.includes(query)) {
+                if ((uNickname && uNickname.includes(query)) || (uEmail && uEmail.includes(query))) {
                     const isFriend = friends.some(f => (f.email && f.email.toLowerCase() === uEmail) || f.uid === doc.id);
                     if (!isFriend) {
                         cloudMatches.push({
@@ -179,7 +193,7 @@ async function renderFriendsList() {
                 html += `
                     <div class="text-[11px] font-bold text-brand-600 dark:text-brand-400 mb-1 flex items-center space-x-1">
                         <i class="fa-solid fa-cloud-bolt text-xs"></i>
-                        <span>雲端暱稱搜尋結果 (${cloudMatches.length})：</span>
+                        <span>雲端搜尋結果 (${cloudMatches.length})：</span>
                     </div>
                 `;
                 html += cloudMatches.map(u => `
@@ -239,7 +253,7 @@ async function renderFriendsList() {
 }
 
 /**
- * ➕ 從搜尋結果一鍵新增雲端暱稱好友
+ * ➕ 從搜尋結果一鍵新增雲端用戶為好友
  */
 function addFriendByObject(encodedUserObjStr) {
     if (isGuestUser()) {
@@ -252,7 +266,7 @@ function addFriendByObject(encodedUserObjStr) {
         if (!window.userData) window.userData = {};
         if (!window.userData.friends) window.userData.friends = [];
 
-        const exists = window.userData.friends.some(f => (f.email && f.email.toLowerCase() === userObj.email.toLowerCase()) || f.username === userObj.username);
+        const exists = window.userData.friends.some(f => (f.email && f.email.toLowerCase() === userObj.email.toLowerCase()) || (f.uid && f.uid === userObj.uid));
         if (exists) {
             if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
             return;
@@ -267,11 +281,73 @@ function addFriendByObject(encodedUserObjStr) {
         });
 
         if (typeof saveUserData === 'function') saveUserData();
+        if (typeof saveStorage === 'function') saveStorage();
         renderFriendsList();
         if (typeof showToast === 'function') showToast(`成功新增固定暱稱好友「${userObj.username}」！`, 'success');
     } catch (e) {
         console.error("解析暱稱用戶資料失敗:", e);
     }
+}
+
+/**
+ * ➕ 通過電子郵件搜尋並發送加入好友請求 (修復補回)
+ */
+async function addFriendByEmail(emailInput) {
+    if (isGuestUser()) {
+        if (typeof showToast === 'function') showToast('請先登入帳號才能新增好友！', 'warning');
+        return;
+    }
+
+    const targetEmail = (emailInput || prompt('請輸入對方的電子郵件 (Email)：') || '').trim().toLowerCase();
+    
+    if (!targetEmail || !targetEmail.includes('@')) {
+        if (targetEmail && typeof showToast === 'function') showToast('請輸入有效的電子郵件格式！', 'warning');
+        return;
+    }
+
+    if (!window.userData) window.userData = {};
+    if (!window.userData.friends) window.userData.friends = [];
+
+    const exists = window.userData.friends.some(f => f.email && f.email.toLowerCase() === targetEmail);
+    if (exists) {
+        if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
+        return;
+    }
+
+    let targetUid = '';
+    let targetNickname = targetEmail.split('@')[0];
+    let targetAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(targetEmail)}`;
+
+    // 🌐 嘗試從 Firestore 雲端資料庫匹配該 Email 之用戶
+    if (typeof db !== 'undefined') {
+        try {
+            const snapshot = await db.collection('users').where('email', '==', targetEmail).get();
+            if (!snapshot.empty) {
+                const doc = snapshot.docs[0];
+                targetUid = doc.id;
+                const data = doc.data();
+                if (data.nickname) targetNickname = data.nickname;
+                if (data.photoURL) targetAvatar = data.photoURL;
+            }
+        } catch (e) {
+            console.warn("查詢雲端 Email 失敗:", e);
+        }
+    }
+
+    const newFriend = {
+        username: targetNickname,
+        nickname: targetNickname,
+        email: targetEmail,
+        avatar: targetAvatar,
+        uid: targetUid
+    };
+
+    window.userData.friends.push(newFriend);
+    if (typeof saveUserData === 'function') saveUserData();
+    if (typeof saveStorage === 'function') saveStorage();
+
+    renderFriendsList();
+    if (typeof showToast === 'function') showToast(`成功新增好友「${targetNickname}」！`, 'success');
 }
 
 /**
@@ -285,8 +361,12 @@ async function startPrivateChat(encodedTargetUsername, targetUid = '') {
 
     const targetUser = decodeURIComponent(encodedTargetUsername);
     const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+
+    if (!targetUid && window.userData && window.userData.friends) {
+        const found = window.userData.friends.find(f => (f.nickname || f.username) === targetUser);
+        if (found && found.uid) targetUid = found.uid;
+    }
     
-    // 生成固定且唯一的 chatId
     const chatId = (currentUid && targetUid) 
         ? [currentUid, targetUid].sort().join('_') 
         : 'chat_private_' + encodeURIComponent(targetUser);
@@ -329,7 +409,6 @@ async function renderChatThreads(isAdminInspector = false) {
         }
     }
 
-    // 預設全站公開討論區
     if (!threads.some(t => t.id === 'chat_group_public')) {
         threads.unshift({
             id: 'chat_group_public',
@@ -392,13 +471,11 @@ function openChatWindow(chatId, encodedName = '') {
     const titleEl = document.getElementById('activeChatTitle');
     if (titleEl) titleEl.textContent = displayName;
 
-    // 清除先前的連線監聽
     if (activeChatUnsubscribe) {
         activeChatUnsubscribe();
         activeChatUnsubscribe = null;
     }
 
-    // 🌐 啟動雲端 Firestore 即時雙向連線監聽
     if (typeof db !== 'undefined' && chatId) {
         activeChatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
             .orderBy('createdAt', 'asc')
@@ -494,10 +571,8 @@ async function handleSendMessage(e) {
     };
 
     try {
-        // 🌐 寫入雲端 Firestore 子集合
         await db.collection('chats').doc(currentActiveChatId).collection('messages').add(newMsg);
         
-        // 更新對話外層最後一條訊息紀錄
         await db.collection('chats').doc(currentActiveChatId).set({
             lastMessage: `${currentUser}: ${text}`,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
