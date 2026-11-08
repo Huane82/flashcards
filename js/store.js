@@ -205,6 +205,10 @@ async function submitPublishDeck() {
     const title = (document.getElementById('pubTitle').value || '').trim();
     const desc = (document.getElementById('pubDesc').value || '').trim();
 
+    // 🪙 1. 新增：讀取輸入的金幣價格 (若未輸入或小於 0 則預設為 0)
+    const priceInput = document.getElementById('pubPrice');
+    const price = Math.max(0, parseInt(priceInput?.value, 10) || 0);
+
     if (!title) {
         if (typeof showToast === 'function') showToast('請填寫字庫名稱！', 'warning');
         return;
@@ -230,7 +234,7 @@ async function submitPublishDeck() {
             author: authorNickname,
             authorId: currentUser.uid,
             authorAvatar: currentUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(authorNickname)}`,
-            price: 0,
+            price: price, // 🪙 2. 修改：將 price: 0 改為動態讀取的 price
             words: targetWords.map(w => ({
                 word: w.word,
                 pos: w.pos || '',

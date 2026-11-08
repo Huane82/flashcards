@@ -1,17 +1,14 @@
 /**
- * LZHCard - 聊天、好友與系統公告模組 (chat.js)
+ * LZHCard - 聊天、好友與系統公告模組 (chat.js - 管理員權限修復與乾淨版)
  */
 
-// 1. 初始化使用者與全域資料庫防護 (防止未初始化導致 TypeError 崩潰)
+// 1. 初始化使用者與全域資料庫防護 (已移除 Alex 與 LZHCard 官方範例帳號)
 if (!window.userData) {
     window.userData = {};
 }
 
 if (!window.userData.friends) {
-    window.userData.friends = [
-        { username: 'Alex', email: 'alex@example.com', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Alex' },
-        { username: 'LZHCard 官方', email: 'official@lzhcard.com', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=official' }
-    ];
+    window.userData.friends = [];
 }
 
 if (!window.appChats) {
@@ -20,7 +17,7 @@ if (!window.appChats) {
             id: 'chat_group_public',
             type: 'group',
             name: '全站公開討論區',
-            members: ['Alex', 'LZHCard 官方', '訪客玩家'],
+            members: ['訪客玩家'],
             messages: [
                 { sender: '系統提示', text: '歡迎來到 LZHCard 交流聊天室！', time: '00:00' }
             ]
@@ -49,6 +46,25 @@ function isGuestUser() {
 }
 
 /**
+ * 👑 檢查管理員身分並即時切換 UI 顯示狀態
+ */
+function checkAdminPermissions() {
+    const isAdmin = window.userData && window.userData.role === 'admin';
+
+    // 1. 顯示側邊欄頂部「巡視」頁籤按鈕
+    const adminBtn = document.getElementById('tabAdminBtn');
+    if (adminBtn) adminBtn.classList.toggle('hidden', !isAdmin);
+
+    // 2. 顯示公告頁面內的「發布官方公告」按鈕
+    const noticeAction = document.getElementById('adminNoticeAction');
+    if (noticeAction) noticeAction.classList.toggle('hidden', !isAdmin);
+
+    // 3. 顯示聊天室抽屜頂部的「管理員」紅底徽章
+    const adminBadge = document.getElementById('adminBadge');
+    if (adminBadge) adminBadge.classList.toggle('hidden', !isAdmin);
+}
+
+/**
  * 💬 開啟聊天抽屜/視窗 (訪客禁止使用)
  */
 function openChatDrawer() {
@@ -61,6 +77,9 @@ function openChatDrawer() {
     if (drawer) {
         drawer.classList.remove('hidden');
         if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
+        
+        // 🌟 開啟抽屜時自動檢查並套用管理員權限
+        checkAdminPermissions();
         switchChatTab('chats');
     }
 }
@@ -96,10 +115,9 @@ function switchChatTab(tab) {
     if (tabChatsBtn) tabChatsBtn.className = defaultBtnClass;
     if (tabFriendsBtn) tabFriendsBtn.className = defaultBtnClass;
 
+    // 即時驗證管理員身分
+    checkAdminPermissions();
     const isAdmin = window.userData && window.userData.role === 'admin';
-    if (tabAdminBtn) {
-        tabAdminBtn.className = `${isAdmin ? '' : 'hidden '}flex-1 py-3 text-center text-rose-500 border-b-2 border-transparent font-bold text-xs transition`;
-    }
 
     if (tab === 'notice') {
         if (noticeView) noticeView.classList.remove('hidden');

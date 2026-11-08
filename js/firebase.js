@@ -116,6 +116,7 @@ async function handleSaveNickname() {
 
     if (!window.userData) window.userData = {};
     window.userData.nickname = newNickname;
+    window.userData.username = newNickname;
 
     if (typeof showToast === 'function') showToast(`固定暱稱已成功更新為「${newNickname}」！`, 'success');
   } catch (err) {
@@ -124,7 +125,7 @@ async function handleSaveNickname() {
   }
 }
 
-// 5. 監聽帳號狀態切換，自動更新設定 UI 與載入對應帳號資料與個人暱稱
+// 5. 監聽帳號狀態切換，自動更新設定 UI 與載入對應帳號資料與個人暱稱、管理員身分
 auth.onAuthStateChanged(async (user) => {
   const emailEl = document.getElementById('settings-email');
   const subtextEl = document.getElementById('settings-subtext');
@@ -134,22 +135,26 @@ auth.onAuthStateChanged(async (user) => {
   const loggedInEl = document.getElementById('settings-logged-in');
 
   if (user) {
-    // 預設名稱
+    // 預設名稱與權限身分
     let userNickname = user.displayName || (user.email ? user.email.split('@')[0] : '使用者');
+    let userRole = 'user';
     
     try {
-      // 從 Firestore users 集合拉取雲端儲存的固定暱稱
+      // 從 Firestore users 集合拉取雲端儲存的固定暱稱與身分權限
       const userDoc = await db.collection('users').doc(user.uid).get();
-      if (userDoc.exists && userDoc.data().nickname) {
-        userNickname = userDoc.data().nickname;
+      if (userDoc.exists) {
+        const data = userDoc.data();
+        if (data.nickname) userNickname = data.nickname;
+        if (data.role) userRole = data.role;
       }
     } catch (e) {
-      console.warn("無法從雲端讀取暱稱資料：", e);
+      console.warn("無法從雲端讀取暱稱與權限資料：", e);
     }
 
     if (!window.userData) window.userData = {};
     window.userData.nickname = userNickname;
     window.userData.username = userNickname;
+    window.userData.role = userRole; // 👑 正確注入雲端的角色身分 (例如 'admin')
 
     const nicknameInput = document.getElementById('settingsNicknameInput');
     if (nicknameInput) nicknameInput.value = userNickname;
@@ -161,6 +166,10 @@ auth.onAuthStateChanged(async (user) => {
     if (loggedOutEl) loggedOutEl.style.display = 'none';
     if (loggedInEl) loggedInEl.style.display = 'block';
   } else {
+    if (!window.userData) window.userData = {};
+    window.userData.username = '訪客玩家';
+    window.userData.role = 'user';
+
     if (emailEl) emailEl.innerText = "訪客模式";
     if (subtextEl) subtextEl.innerText = "目前未連結 Google 帳號";
     if (avatarEl) avatarEl.src = "https://api.dicebear.com/7.x/bottts/svg?seed=user";
@@ -175,5 +184,10 @@ auth.onAuthStateChanged(async (user) => {
 
   if (typeof renderStore === 'function') {
     renderStore();
+  }
+
+  // 若聊天室抽屜有開啟，更新管理員 UI 狀態
+  if (typeof checkAdminPermissions === 'function') {
+    checkAdminPermissions();
   }
 });
