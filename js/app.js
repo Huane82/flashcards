@@ -931,13 +931,16 @@ async function handleLoadPreset(levelNum) {
 }
 
 /**
- * 批量貼上文字解析器
+ * 🌐 批量貼上文字解析器（已修正：支援英、日、中單字與日文假名/詞性）
  */
 function parseBatchText(text) {
     if (!text || typeof text !== 'string') return [];
 
     const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
     const results = [];
+
+    // 支援英 / 中 / 日文常見詞性標籤
+    const posRegex = /(?:\[|\()?\b(adj|adv|v|n|prep|conj|pron|vt|vi|num|art|phr|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)[\.\s\/]*?(?:\]|\))?/i;
 
     lines.forEach(line => {
         let tempLine = line;
@@ -946,29 +949,38 @@ function parseBatchText(text) {
         let phonetic = '';
         let meaning = '';
 
+        // 1. 提取斜線內的音標 / 讀音 (例如: /rɪˈzɪl.jənt/ 或 /たべる/)
         const slashPhonetic = tempLine.match(/\/([^\/]+)\//);
         if (slashPhonetic) {
             phonetic = '/' + slashPhonetic[1] + '/';
             tempLine = tempLine.replace(slashPhonetic[0], ' ');
         }
 
-        const posMatch = tempLine.match(/(?:\[)?\b(adj|adv|v|n|prep|conj|pron|vt|vi|num|art)\.?(?:\])?/i);
+        // 2. 提取括號內的詞性 (例如: [adj.], [動詞], (n.))
+        const posMatch = tempLine.match(posRegex);
         if (posMatch) {
-            pos = posMatch[1].toLowerCase() + '.';
+            pos = posMatch[0].replace(/[\(\[\{\)\]\}]/g, '').trim();
             tempLine = tempLine.replace(posMatch[0], ' ');
         }
 
-        const chineseMatch = tempLine.match(/[\u4e00-\u9fa5].*/);
-        if (chineseMatch) {
-            meaning = chineseMatch[0].trim();
-            word = tempLine.substring(0, tempLine.indexOf(meaning)).replace(/[-:=]/g, '').trim();
+        // 3. 拆分單字與母語釋義（移除原先僅限中文漢字的強制綁定，改用彈性符號/空格切分）
+        let splitParts = [];
+        if (/\t|:|=| - | -- |. - /.test(tempLine)) {
+            splitParts = tempLine.split(/\t|:|=| - | -- /).map(s => s.trim()).filter(Boolean);
         } else {
-            const parts = tempLine.trim().split(/\s+/);
-            word = parts[0] || '';
-            meaning = parts.slice(1).join(' ').trim();
+            splitParts = tempLine.split(/\s+/).map(s => s.trim()).filter(Boolean);
+        }
+
+        if (splitParts.length >= 2) {
+            word = splitParts[0];
+            meaning = splitParts.slice(1).join(' ');
+        } else if (splitParts.length === 1) {
+            word = splitParts[0];
+            meaning = '';
         }
 
         word = word.trim();
+        meaning = meaning.trim();
 
         if (word) {
             results.push({

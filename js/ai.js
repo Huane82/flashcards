@@ -1,5 +1,5 @@
 /**
- * LZHCard - Gemini AI 萬能多語系解析模組 (Gemini 3.x 現役版)
+ * LZHCard - Gemini AI 萬能多語系解析模組 (全語言自動識別與解析版)
  */
 
 window.cachedWorkingModel = null;
@@ -151,17 +151,30 @@ function safeParseJSON(rawText) {
     return null;
 }
 
+/**
+ * 🔍 判斷單字欄位是否需要 AI 自動補充（模糊比對版）
+ */
 function isFieldIncomplete(val) {
     if (!val) return true;
     const str = String(val).trim();
-    return str === '' || str === '尚未填寫釋義' || str === 'AI 自動解析中...' || str === '-' || str === 'N/A' || str === 'EMPTY';
+    if (str === '' || str === '-' || str === 'N/A' || str === 'EMPTY') return true;
+
+    const pendingKeywords = [
+        '解析中', 'parsing', '尚未填寫', '未入力', '待補齊', 
+        'no definition', 'pending', '自動解析'
+    ];
+
+    return pendingKeywords.some(keyword => str.toLowerCase().includes(keyword.toLowerCase()));
 }
 
+/**
+ * 🌐 取得語言設定（當選擇自訂且留空時，啟動自動辨識機制）
+ */
 function getLanguageConfig() {
     const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
     const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
-    const customTarget = localStorage.getItem('lzhcard_custom_target') || 'Custom Target Language';
-    const customNative = localStorage.getItem('lzhcard_custom_native') || 'Custom Native Language';
+    const customTarget = (localStorage.getItem('lzhcard_custom_target') || '').trim();
+    const customNative = (localStorage.getItem('lzhcard_custom_native') || '').trim();
 
     const langNameMap = {
         'en': 'English',
@@ -170,8 +183,13 @@ function getLanguageConfig() {
         'custom': ''
     };
 
-    const targetName = targetLang === 'custom' ? customTarget : (langNameMap[targetLang] || 'English');
-    const nativeName = nativeLang === 'custom' ? customNative : (langNameMap[nativeLang] || 'Traditional Chinese (繁體中文)');
+    const targetName = targetLang === 'custom' 
+        ? (customTarget || 'Auto-Detect Language (自動識別單字語種)') 
+        : (langNameMap[targetLang] || 'English');
+
+    const nativeName = nativeLang === 'custom' 
+        ? (customNative || 'Auto-Detect Native Language (自動識別母語)') 
+        : (langNameMap[nativeLang] || 'Traditional Chinese (繁體中文)');
 
     return { targetLang, nativeLang, targetName, nativeName };
 }
@@ -181,7 +199,7 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     let pos = (rawPos || '').trim();
     let meaning = (rawMeaning || '').trim();
 
-    const multiPosRegex = /[\(\[\{]?((?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art|名詞|動詞|他動詞|自動詞|形容詞|副詞|助詞)[\.\s\/]*)+[\)\]\}]?/gi;
+    const multiPosRegex = /[\(\[\{]?((?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞)[\.\s\/]*)+[\)\]\}]?/gi;
 
     if (word) {
         const match = word.match(multiPosRegex);
@@ -202,6 +220,9 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     return { word, pos, meaning };
 }
 
+/**
+ * 🤖 AI 單一單字自動填寫 (支援自訂語言自動識別語種)
+ */
 async function autoFillWithAI(word) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
@@ -214,22 +235,33 @@ async function autoFillWithAI(word) {
     const cleanWord = cleaned.word;
     const { targetName, nativeName } = getLanguageConfig();
 
-    const prompt = `You are a professional lexicographer. 
-Analyze term: "${cleanWord}"
-Target Language: ${targetName}
-Native Language: ${nativeName}
+    const prompt = `You are an expert multilingual lexicographer.
+Input term: "${cleanWord}"
+Target Language instruction: ${targetName}
+User Native Language instruction: ${nativeName}
 
-Return ONLY raw JSON with:
-1. "phonetic": Pronunciation guide
-2. "pos": Parts of speech in ${nativeName}
-3. "meaning": Definition in ${nativeName}
-4. "sentence": Example sentence in ${targetName}
-5. "translation": Sentence translation in ${nativeName}`;
+CRITICAL AUTO-DETECTION RULES:
+1. If Target Language or User Native Language is set to "Auto-Detect" or Custom, AUTOMATICALLY IDENTIFY the source language of "${cleanWord}" (e.g. French, German, Spanish, Japanese, Korean, Italian, Russian, English, Chinese, etc.).
+2. Generate phonetics/pronunciation appropriate for the identified target language.
+3. Translate definitions ("meaning") and sentence translations ("translation") into the User Native Language (${nativeName}).
+
+Return ONLY a valid raw JSON object with:
+{
+  "word": "Clean term formatted in its original language",
+  "phonetic": "Pronunciation (IPA / Kana / Pinyin / Romaji)",
+  "pos": "Parts of speech expressed in User Native Language (${nativeName})",
+  "meaning": "Definition expressed in User Native Language (${nativeName})",
+  "sentence": "Natural example sentence in the identified target language",
+  "translation": "Sentence translation expressed in User Native Language (${nativeName})"
+}`;
 
     const rawResponse = await callGeminiApi(rawKey, prompt);
     return safeParseJSON(rawResponse);
 }
 
+/**
+ * 🤖 批次 AI 欄位補充 (支援自訂語言自動識別語種)
+ */
 async function runBatchAiAutoFill(targetList, progressCallback) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
@@ -257,19 +289,24 @@ async function runBatchAiAutoFill(targetList, progressCallback) {
         const chunk = incompleteItems.slice(i, i + batchSize);
         const chunkWords = chunk.map(item => item.word);
 
-        const prompt = `Analyze terms: ${JSON.stringify(chunkWords)}.
-Target Language: ${targetName}
-Native Language: ${nativeName}
+        const prompt = `You are an expert multilingual lexicographer.
+Analyze input terms: ${JSON.stringify(chunkWords)}.
+Target Language instruction: ${targetName}
+User Native Language instruction: ${nativeName}
 
-Return pure JSON array:
+CRITICAL AUTO-DETECTION RULES:
+- If Target Language or User Native Language is Auto-Detect or Custom, AUTOMATICALLY IDENTIFY the source language of each term.
+- Generate phonetics, POS, definitions, and sentence translations in User Native Language (${nativeName}).
+
+Return ONLY a pure JSON array matching the input order:
 [
   {
-    "word": "original term",
-    "pos": "pos in ${nativeName}",
-    "phonetic": "Pronunciation",
-    "meaning": "Definition in ${nativeName}",
-    "sentence": "Example sentence",
-    "translation": "Translation in ${nativeName}"
+    "word": "original input term cleaned",
+    "pos": "parts of speech expressed in ${nativeName}",
+    "phonetic": "Pronunciation (IPA / Kana / Romaji / Pinyin)",
+    "meaning": "Definition in User Native Language (${nativeName})",
+    "sentence": "Example sentence in target language",
+    "translation": "Example sentence translation in User Native Language (${nativeName})"
   }
 ]`;
 

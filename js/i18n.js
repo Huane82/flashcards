@@ -30,7 +30,7 @@ const I18N_DICTIONARY = {
         lblApiKey: "Gemini AI Key",
         descApiKey: "用於自動帶入音標與例句",
         btnExit: "退出模式",
-        btnQuickAdd: "快速記生字",
+        btnQuickAdd: "快速填入",
         stockCount: "當前庫存:",
         flipHintFront: "點擊卡片翻面",
         flipHintBack: "點擊翻回正面",
@@ -59,6 +59,8 @@ const I18N_DICTIONARY = {
         optTargetFront: "🔤 目標語言在正面，母語在背面",
         optNativeFront: "🇹🇼 母語在正面，目標語言在背面",
         optBothFront: "✨ 正面同時顯示 (雙語對照)",
+        optCustomLang: "✏️ 自訂 / 自動識別語言...",
+        customTargetPlaceholder: "輸入語言名稱（或留空由 AI 自動識別）",
         
         guestMode: "訪客模式",
         notLinkedGoogle: "目前未連結 Google 帳號",
@@ -305,6 +307,8 @@ const I18N_DICTIONARY = {
         optTargetFront: "🔤 Target Front, Native Back",
         optNativeFront: "🇹🇼 Native Front, Target Back",
         optBothFront: "✨ Both Front (Bilingual)",
+        optCustomLang: "✏️ Custom / Auto-Detect...",
+        customTargetPlaceholder: "Enter language (or leave blank for AI Auto-Detect)",
         
         guestMode: "Guest Mode",
         notLinkedGoogle: "Google Account not linked",
@@ -548,6 +552,8 @@ const I18N_DICTIONARY = {
         optTargetFront: "🔤 表面：学習言語 / 裏面：母国語",
         optNativeFront: "🇹🇼 表面：母国語 / 裏面：学習言語",
         optBothFront: "✨ 表面：両方表示 (二言語対照)",
+        optCustomLang: "✏️ カスタム / 自動判別...",
+        customTargetPlaceholder: "言語名を入力（空欄でAI自動識別）",
 
         guestMode: "ゲストモード",
         notLinkedGoogle: "Googleアカウント未連携",
