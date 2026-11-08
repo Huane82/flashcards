@@ -1,39 +1,13 @@
 /**
- * LZHCard - 聊天、好友與系統公告模組 (chat.js - 支援全域暱稱搜尋系統)
+ * LZHCard - 聊天、好友與系統公告模組 (chat.js - 雲端 Firestore 即時雙向通訊版)
  */
 
-// 1. 初始化使用者與全域資料庫防護
-if (!window.userData) {
-    window.userData = {};
-}
+if (!window.userData) window.userData = {};
+if (!window.userData.friends) window.userData.friends = [];
 
-if (!window.userData.friends) {
-    window.userData.friends = [];
-}
-
-if (!window.appChats) {
-    window.appChats = [
-        {
-            id: 'chat_group_public',
-            type: 'group',
-            name: '全站公開討論區',
-            members: ['訪客玩家'],
-            messages: [
-                { sender: '系統提示', text: '歡迎來到 LZHCard 交流聊天室！', time: '00:00' }
-            ]
-        }
-    ];
-}
-
-if (!window.appAnnouncements) {
-    window.appAnnouncements = [
-        { id: 'ann_1', title: '歡迎使用 LZHCard！', content: '單字卡大師已經全新升級社群與雲端功能。', author: 'LZHCard 官方', time: '2026-01-01 10:00' }
-    ];
-}
-
-// 2. 當前選取的對話 ID 與搜尋關鍵字
 let currentActiveChatId = null;
 let chatSearchQuery = '';
+let activeChatUnsubscribe = null; // Firestore 即時監聽解鎖器
 
 /**
  * 🔒 判斷當前是否為訪客身分
@@ -62,7 +36,7 @@ function checkAdminPermissions() {
 }
 
 /**
- * 💬 開啟聊天抽屜/視窗 (訪客禁止使用)
+ * 💬 開啟聊天抽屜/視窗
  */
 function openChatDrawer() {
     if (isGuestUser()) {
@@ -74,7 +48,6 @@ function openChatDrawer() {
     if (drawer) {
         drawer.classList.remove('hidden');
         if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
-        
         checkAdminPermissions();
         switchChatTab('chats');
     }
@@ -84,14 +57,23 @@ function openChatDrawer() {
  * ❌ 關閉聊天抽屜
  */
 function closeChatDrawer() {
+    if (activeChatUnsubscribe) {
+        activeChatUnsubscribe();
+        activeChatUnsubscribe = null;
+    }
     const drawer = document.getElementById('chatDrawer');
     if (drawer) drawer.classList.add('hidden');
 }
 
 /**
- * 🔄 切換聊天側欄 Tab (公告 / 聊天對話 / 好友列表 / 管理員)
+ * 🔄 切換聊天側欄 Tab
  */
 function switchChatTab(tab) {
+    if (activeChatUnsubscribe) {
+        activeChatUnsubscribe();
+        activeChatUnsubscribe = null;
+    }
+
     const noticeView = document.getElementById('noticeView');
     const chatsView = document.getElementById('chatsView');
     const friendsView = document.getElementById('friendsView');
@@ -136,7 +118,7 @@ function switchChatTab(tab) {
 }
 
 /**
- * 🔍 搜尋群組、暱稱或 Email 處理常式
+ * 🔍 搜尋對話與好友處理
  */
 function handleChatSearch() {
     const searchInput = document.getElementById('chatSearchInput');
@@ -151,7 +133,7 @@ function handleChatSearch() {
 }
 
 /**
- * 👥 渲染好友列表 (支援「本地暱稱搜尋」與「雲端用戶暱稱即時搜尋」)
+ * 👥 渲染好友列表 (支援雲端暱稱即時搜尋)
  */
 async function renderFriendsList() {
     const container = document.getElementById('friendsListContainer');
@@ -160,7 +142,6 @@ async function renderFriendsList() {
     const friends = (window.userData && window.userData.friends) ? window.userData.friends : [];
     const query = chatSearchQuery;
 
-    // 1. 本地好友過濾 (同時比對固定暱稱、用戶名稱與 Email)
     const filteredFriends = friends.filter(f => 
         (f.nickname || f.username || '').toLowerCase().includes(query) || 
         (f.email && f.email.toLowerCase().includes(query))
@@ -168,7 +149,6 @@ async function renderFriendsList() {
 
     let html = '';
 
-    // 2. 當有搜尋字串時，自動查詢 Firestore 雲端資料庫中符合該「固定暱稱」的用戶
     if (query && typeof db !== 'undefined' && !isGuestUser()) {
         try {
             const currentUid = auth.currentUser ? auth.currentUser.uid : '';
@@ -246,7 +226,7 @@ async function renderFriendsList() {
                             <p class="text-[10px] text-slate-400 font-mono">${f.email || '無電子郵件'}</p>
                         </div>
                     </div>
-                    <button type="button" onclick="startPrivateChat('${encodeURIComponent(displayName)}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
+                    <button type="button" onclick="startPrivateChat('${encodeURIComponent(displayName)}', '${f.uid || ''}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
                         <i class="fa-solid fa-comment-dots"></i>
                         <span>私聊</span>
                     </button>
@@ -268,7 +248,7 @@ function addFriendByObject(encodedUserObjStr) {
     }
 
     try {
-        const userObj = JSON.parse(decodeURIComponent(encodedUserUserObjStr || encodedUserObjStr));
+        const userObj = JSON.parse(decodeURIComponent(encodedUserObjStr));
         if (!window.userData) window.userData = {};
         if (!window.userData.friends) window.userData.friends = [];
 
@@ -295,103 +275,75 @@ function addFriendByObject(encodedUserObjStr) {
 }
 
 /**
- * ➕ 通過電子郵件搜尋並發送加入好友請求
+ * 💬 發起/開啟 1對1 雲端私聊
  */
-function addFriendByEmail(emailInput) {
-    if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能新增好友！', 'warning');
-        return;
-    }
-
-    const targetEmail = (emailInput || prompt('請輸入對方的電子郵件 (Email)：') || '').trim().toLowerCase();
-    
-    if (!targetEmail || !targetEmail.includes('@')) {
-        if (targetEmail && typeof showToast === 'function') showToast('請輸入有效的電子郵件格式！', 'warning');
-        return;
-    }
-
-    if (!window.userData) window.userData = {};
-    if (!window.userData.friends) window.userData.friends = [];
-
-    const exists = window.userData.friends.some(f => f.email && f.email.toLowerCase() === targetEmail);
-    if (exists) {
-        if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
-        return;
-    }
-
-    const username = targetEmail.split('@')[0];
-    const newFriend = {
-        username: username,
-        nickname: username,
-        email: targetEmail,
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(targetEmail)}`
-    };
-
-    window.userData.friends.push(newFriend);
-    if (typeof saveUserData === 'function') saveUserData();
-
-    renderFriendsList();
-    if (typeof showToast === 'function') showToast(`成功新增好友「${username}」！`, 'success');
-}
-
-/**
- * 💬 發起/開啟 1對1 私聊
- */
-function startPrivateChat(encodedTargetUsername) {
+async function startPrivateChat(encodedTargetUsername, targetUid = '') {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用私聊！', 'warning');
         return;
     }
 
     const targetUser = decodeURIComponent(encodedTargetUsername);
-    const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
+    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    
+    // 生成固定且唯一的 chatId
+    const chatId = (currentUid && targetUid) 
+        ? [currentUid, targetUid].sort().join('_') 
+        : 'chat_private_' + encodeURIComponent(targetUser);
 
-    if (!window.appChats) window.appChats = [];
-
-    let chat = window.appChats.find(c => 
-        c.type === 'private' && 
-        c.members && c.members.includes(currentUser) && 
-        c.members.includes(targetUser)
-    );
-
-    if (!chat) {
-        chat = {
-            id: 'chat_private_' + Date.now(),
-            type: 'private',
-            name: targetUser,
-            members: [currentUser, targetUser],
-            messages: [
-                { sender: '系統提示', text: `您已與 ${targetUser} 建立私聊對話。`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-            ]
-        };
-        window.appChats.unshift(chat);
-        if (typeof saveUserData === 'function') saveUserData();
+    if (typeof db !== 'undefined') {
+        try {
+            await db.collection('chats').doc(chatId).set({
+                type: 'private',
+                name: targetUser,
+                members: [currentUid, targetUid].filter(Boolean),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (e) {
+            console.warn("初始化雲端對話失敗:", e);
+        }
     }
 
-    openChatWindow(chat.id);
+    openChatWindow(chatId, targetUser);
 }
 
 /**
- * 💬 渲染對話列表 (支援關鍵字搜尋群組/私聊/成員暱稱)
+ * 💬 渲染對話列表
  */
-function renderChatThreads(isAdminInspector = false) {
+async function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
     if (!container) return;
 
     const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
+    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
     const query = chatSearchQuery;
 
-    if (!window.appChats) window.appChats = [];
+    let threads = [];
 
-    let threads = isAdminInspector 
-        ? window.appChats 
-        : window.appChats.filter(c => c.members && c.members.includes(currentUser));
+    if (typeof db !== 'undefined') {
+        try {
+            const snapshot = await db.collection('chats').get();
+            threads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (e) {
+            console.warn("無法從雲端拉取對話列表：", e);
+        }
+    }
+
+    // 預設全站公開討論區
+    if (!threads.some(t => t.id === 'chat_group_public')) {
+        threads.unshift({
+            id: 'chat_group_public',
+            type: 'group',
+            name: '全站公開討論區'
+        });
+    }
+
+    if (!isAdminInspector) {
+        threads = threads.filter(c => c.id === 'chat_group_public' || (c.members && c.members.includes(currentUid)));
+    }
 
     if (query) {
-        threads = threads.filter(c => 
-            (c.name || '').toLowerCase().includes(query) ||
-            (c.members && c.members.some(m => m.toLowerCase().includes(query)))
-        );
+        threads = threads.filter(c => (c.name || '').toLowerCase().includes(query));
     }
 
     if (threads.length === 0) {
@@ -400,13 +352,12 @@ function renderChatThreads(isAdminInspector = false) {
     }
 
     container.innerHTML = threads.map(c => {
-        const lastMsg = c.messages ? c.messages[c.messages.length - 1] : null;
         const isGroup = c.type === 'group';
         const icon = isGroup ? 'fa-users text-purple-500' : 'fa-user-lock text-emerald-500';
-        const displayName = isGroup ? c.name : ((c.members && c.members.find(m => m !== currentUser)) || c.name);
+        const displayName = c.name || '對話';
 
         return `
-            <div onclick="openChatWindow('${c.id}')" class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-300 transition cursor-pointer flex justify-between items-center">
+            <div onclick="openChatWindow('${c.id}', '${encodeURIComponent(displayName)}')" class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-300 transition cursor-pointer flex justify-between items-center">
                 <div class="flex items-center space-x-3">
                     <div class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">
                         <i class="fa-solid ${icon}"></i>
@@ -416,26 +367,21 @@ function renderChatThreads(isAdminInspector = false) {
                             <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${displayName}</h4>
                             <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? '群組' : '私聊'}</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${lastMsg ? `${lastMsg.sender}:${lastMsg.text}` : '尚未有訊息'}</p>
+                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${c.lastMessage || '點擊開啟即時對話'}</p>
                     </div>
                 </div>
-                <span class="text-[10px] text-slate-400">${lastMsg ? lastMsg.time : ''}</span>
             </div>
         `;
     }).join('');
 }
 
 /**
- * 📖 開啟對話視窗
+ * 📖 開啟對話視窗並啟動 Firestore 即時連線 (onSnapshot)
  */
-function openChatWindow(chatId) {
+function openChatWindow(chatId, encodedName = '') {
     currentActiveChatId = chatId;
-    if (!window.appChats) window.appChats = [];
-    const chat = window.appChats.find(c => c.id === chatId);
-    if (!chat) return;
 
-    const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
-    const displayName = chat.type === 'group' ? chat.name : ((chat.members && chat.members.find(m => m !== currentUser)) || chat.name);
+    const displayName = encodedName ? decodeURIComponent(encodedName) : '對話';
 
     document.getElementById('chatsView')?.classList.add('hidden');
     document.getElementById('friendsView')?.classList.add('hidden');
@@ -446,30 +392,53 @@ function openChatWindow(chatId) {
     const titleEl = document.getElementById('activeChatTitle');
     if (titleEl) titleEl.textContent = displayName;
 
-    renderMessages();
+    // 清除先前的連線監聽
+    if (activeChatUnsubscribe) {
+        activeChatUnsubscribe();
+        activeChatUnsubscribe = null;
+    }
+
+    // 🌐 啟動雲端 Firestore 即時雙向連線監聽
+    if (typeof db !== 'undefined' && chatId) {
+        activeChatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
+            .orderBy('createdAt', 'asc')
+            .onSnapshot(snapshot => {
+                const messages = snapshot.docs.map(doc => doc.data());
+                renderMessagesList(messages);
+            }, err => {
+                console.warn("即時監聽訊息失敗：", err);
+            });
+    }
 }
 
 /**
  * ⬅️ 返回對話列表
  */
 function backToChatThreads() {
+    if (activeChatUnsubscribe) {
+        activeChatUnsubscribe();
+        activeChatUnsubscribe = null;
+    }
     document.getElementById('activeChatWindow')?.classList.add('hidden');
     document.getElementById('chatsView')?.classList.remove('hidden');
     renderChatThreads(false);
 }
 
 /**
- * 📩 渲染當前視窗的聊天訊息
+ * 📩 繪製雲端傳回的即時訊息列表
  */
-function renderMessages() {
+function renderMessagesList(messages = []) {
     const container = document.getElementById('chatMessagesBox');
-    if (!window.appChats) window.appChats = [];
-    const chat = window.appChats.find(c => c.id === currentActiveChatId);
-    if (!container || !chat) return;
+    if (!container) return;
 
     const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
 
-    container.innerHTML = (chat.messages || []).map(msg => {
+    if (messages.length === 0) {
+        container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">目前暫無訊息，發送第一條訊息開始交談吧！</div>`;
+        return;
+    }
+
+    container.innerHTML = messages.map(msg => {
         const isSystem = msg.sender === '系統提示';
         if (isSystem) {
             return `
@@ -481,12 +450,12 @@ function renderMessages() {
 
         const isMe = msg.sender === currentUser;
         return `
-            <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1">
+            <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 my-1.5">
                 <span class="text-[10px] text-slate-400 px-1">${msg.sender}</span>
                 <div class="max-w-[80%] px-3 py-2 rounded-2xl text-xs ${isMe ? 'bg-brand-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none'} shadow-2xs">
                     ${msg.text}
                 </div>
-                <span class="text-[9px] text-slate-400 px-1">${msg.time}</span>
+                <span class="text-[9px] text-slate-400 px-1">${msg.time || ''}</span>
             </div>
         `;
     }).join('');
@@ -495,9 +464,9 @@ function renderMessages() {
 }
 
 /**
- * 📤 發送訊息 (群組與私聊通用)
+ * 📤 發送訊息至雲端 Firestore (對方會即時接收)
  */
-function handleSendMessage(e) {
+async function handleSendMessage(e) {
     if (e) e.preventDefault();
 
     if (isGuestUser()) {
@@ -509,27 +478,39 @@ function handleSendMessage(e) {
     const text = (input?.value || '').trim();
     if (!text || !currentActiveChatId) return;
 
-    if (!window.appChats) window.appChats = [];
-    const chat = window.appChats.find(c => c.id === currentActiveChatId);
-    if (chat) {
-        const now = new Date();
-        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        
-        if (!chat.messages) chat.messages = [];
-        chat.messages.push({
-            sender: (window.userData && window.userData.username) ? window.userData.username : '訪客玩家',
-            text: text,
-            time: timeStr
-        });
+    const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
+    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-        if (typeof saveUserData === 'function') saveUserData();
-        renderMessages();
-        if (input) input.value = '';
+    if (input) input.value = '';
+
+    const newMsg = {
+        sender: currentUser,
+        senderUid: currentUid,
+        text: text,
+        time: timeStr,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+        // 🌐 寫入雲端 Firestore 子集合
+        await db.collection('chats').doc(currentActiveChatId).collection('messages').add(newMsg);
+        
+        // 更新對話外層最後一條訊息紀錄
+        await db.collection('chats').doc(currentActiveChatId).set({
+            lastMessage: `${currentUser}: ${text}`,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+    } catch (err) {
+        console.error("雲端發送訊息失敗:", err);
+        if (typeof showToast === 'function') showToast('發送失敗：' + err.message, 'error');
     }
 }
 
 /**
- * 📢 渲染公告列表 (包含管理員刪除權限判定)
+ * 📢 渲染公告列表
  */
 function renderAnnouncements() {
     const container = document.getElementById('noticeList');

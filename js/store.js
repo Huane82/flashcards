@@ -1,5 +1,5 @@
 /**
- * LZHCard - 社群字庫商店系統模組 (store.js - 雲端版 + 單字內容預覽 + 防冒用暱稱)
+ * LZHCard - 社群字庫商店系統模組 (store.js - 雲端交易與金幣入帳版)
  */
 
 window.storeDecks = [];
@@ -205,7 +205,7 @@ async function submitPublishDeck() {
     const title = (document.getElementById('pubTitle').value || '').trim();
     const desc = (document.getElementById('pubDesc').value || '').trim();
 
-    // 🪙 1. 新增：讀取輸入的金幣價格 (若未輸入或小於 0 則預設為 0)
+    // 🪙 讀取輸入的金幣價格
     const priceInput = document.getElementById('pubPrice');
     const price = Math.max(0, parseInt(priceInput?.value, 10) || 0);
 
@@ -234,7 +234,7 @@ async function submitPublishDeck() {
             author: authorNickname,
             authorId: currentUser.uid,
             authorAvatar: currentUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(authorNickname)}`,
-            price: price, // 🪙 2. 修改：將 price: 0 改為動態讀取的 price
+            price: price,
             words: targetWords.map(w => ({
                 word: w.word,
                 pos: w.pos || '',
@@ -284,8 +284,8 @@ function openAuthorProfile(encodedAuthor) {
                     <button type="button" onclick="openStoreDeckPreview('${deck.id}')" class="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg transition">
                         預覽
                     </button>
-                    <button type="button" onclick="importStoreDeck('${deck.id}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg shadow-sm transition">
-                        取得
+                    <button type="button" onclick="${deck.price > 0 ? `purchaseStoreDeck('${deck.id}')` : `importStoreDeck('${deck.id}')`}" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg shadow-sm transition">
+                        ${deck.price > 0 ? `${deck.price} 金幣` : '取得'}
                     </button>
                 </div>
             </div>
@@ -313,7 +313,7 @@ function shareDeck(deckId) {
 }
 
 /**
- * 📥 下載/匯入商店字庫 (訪客禁止使用)
+ * 📥 下載/匯入免費商店字庫 (訪客禁止使用)
  */
 function importStoreDeck(deckId) {
     if (isGuestUser()) {
@@ -351,9 +351,12 @@ function importStoreDeck(deckId) {
 }
 
 /**
- * 🪙 花費金幣購買商店字庫
+ * 🪙 花費金幣購買商店字庫 (含買家扣款與賣家雲端自動入帳)
  */
-function purchaseStoreDeck(deckId) {
+/**
+ * 🪙 花費金幣購買商店字庫 (含買家扣款、平台 30% 抽成與賣家 70% 入帳)
+ */
+async function purchaseStoreDeck(deckId) {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用商城功能！', 'warning');
         return;
@@ -363,42 +366,73 @@ function purchaseStoreDeck(deckId) {
     if (!deck) return;
 
     const price = deck.price || 0;
-    const userCoins = window.userData ? window.userData.coins : 0;
+    const buyerUid = auth.currentUser ? auth.currentUser.uid : '';
+    const userCoins = window.userData ? (window.userData.coins || 0) : 0;
+
+    // 防止重複購買自己的作品
+    if (deck.authorId && deck.authorId === buyerUid) {
+        if (typeof showToast === 'function') showToast('這是您發布的字庫，無需花費金幣即可直接取得！', 'info');
+        importStoreDeck(deckId);
+        return;
+    }
 
     if (userCoins < price) {
         if (typeof showToast === 'function') showToast(`金幣不足！需要 ${price} 金幣，您目前有 ${userCoins} 金幣`, 'error');
         return;
     }
 
+    // 🪙 計算 30% 平台抽成，賣家實得 70%
+    const sellerEarnings = Math.floor(price * 0.7);
+
     if (confirm(`確認花費 ${price} 金幣購買「${deck.title}」？`)) {
-        if (window.userData) window.userData.coins -= price;
-
-        let addedCount = 0;
-        (deck.words || []).forEach(w => {
-            const exists = wordList.some(item => item.word.toLowerCase() === w.word.toLowerCase() && item.category === deck.title);
-            if (!exists) {
-                wordList.push({
-                    id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                    category: deck.title,
-                    word: w.word,
-                    pos: w.pos || '',
-                    phonetic: w.phonetic || '',
-                    meaning: w.meaning || '',
-                    sentence: w.sentence || '',
-                    translation: w.translation || '',
-                    level: 1,
-                    knowStreak: 0,
-                    updatedAt: Date.now()
-                });
-                addedCount++;
+        try {
+            // 1. 買家扣除全額金幣 (本地 + 雲端同步)
+            if (window.userData) window.userData.coins -= price;
+            if (typeof db !== 'undefined' && buyerUid) {
+                await db.collection('users').doc(buyerUid).set({
+                    coins: firebase.firestore.FieldValue.increment(-price)
+                }, { merge: true });
             }
-        });
 
-        if (typeof saveUserData === 'function') saveUserData();
-        if (typeof saveStorage === 'function') saveStorage();
-        if (typeof updateCategorySelects === 'function') updateCategorySelects();
-        renderStore();
-        if (typeof showToast === 'function') showToast(`成功花費 ${price} 金幣取得「${deck.title}」（已自動匯入 ${addedCount} 個單字）`, 'success');
+            // 2. 賣家雲端自動進帳 70% (扣除 30% 平台手續費)
+            if (typeof db !== 'undefined' && deck.authorId && sellerEarnings > 0) {
+                await db.collection('users').doc(deck.authorId).set({
+                    coins: firebase.firestore.FieldValue.increment(sellerEarnings)
+                }, { merge: true });
+            }
+
+            // 3. 自動匯入單字至買家字庫
+            let addedCount = 0;
+            (deck.words || []).forEach(w => {
+                const exists = wordList.some(item => item.word.toLowerCase() === w.word.toLowerCase() && item.category === deck.title);
+                if (!exists) {
+                    wordList.push({
+                        id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        category: deck.title,
+                        word: w.word,
+                        pos: w.pos || '',
+                        phonetic: w.phonetic || '',
+                        meaning: w.meaning || '',
+                        sentence: w.sentence || '',
+                        translation: w.translation || '',
+                        level: 1,
+                        knowStreak: 0,
+                        updatedAt: Date.now()
+                    });
+                    addedCount++;
+                }
+            });
+
+            if (typeof saveUserData === 'function') saveUserData();
+            if (typeof saveStorage === 'function') saveStorage();
+            if (typeof updateCategorySelects === 'function') updateCategorySelects();
+            renderStore();
+
+            if (typeof showToast === 'function') showToast(`成功花費 ${price} 金幣購買「${deck.title}」！賣家已收到 ${sellerEarnings} 金幣 (已扣除 30% 手續費)。`, 'success');
+        } catch (err) {
+            console.error("交易失敗:", err);
+            if (typeof showToast === 'function') showToast('交易失敗：' + err.message, 'error');
+        }
     }
 }
 

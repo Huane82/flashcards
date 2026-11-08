@@ -27,17 +27,15 @@ try {
   console.warn("Firestore settings 已初始化過：", e);
 }
 
-// 1. Google 一鍵登入 (加入強制帳號選擇選單與自動載入雲端資料)
+// 1. Google 一鍵登入
 async function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
-  // 🌟 強制 Google 每次彈出帳號選擇畫面，解決無法切換帳號的問題
   provider.setCustomParameters({ prompt: 'select_account' });
 
   try {
     const result = await auth.signInWithPopup(provider);
     console.log("Google 登入成功:", result.user);
 
-    // 登入成功後即時拉取該帳號在雲端的字庫與 API Key
     if (typeof loadStorage === 'function') {
       await loadStorage();
     }
@@ -82,7 +80,6 @@ async function logoutUser() {
   try {
     await auth.signOut();
     console.log("已成功登出");
-    // 登出後重新載入本機快取的字庫
     if (typeof loadStorage === 'function') {
       await loadStorage();
     }
@@ -92,7 +89,7 @@ async function logoutUser() {
   }
 }
 
-// 4. 🏷️ 儲存固定個人暱稱至 Firestore (綁定 User ID 防止冒用)
+// 4. 🏷️ 儲存固定個人暱稱至 Firestore
 async function handleSaveNickname() {
   const input = document.getElementById('settingsNicknameInput');
   const newNickname = (input?.value || '').trim();
@@ -125,7 +122,7 @@ async function handleSaveNickname() {
   }
 }
 
-// 5. 監聽帳號狀態切換，自動更新設定 UI 與載入對應帳號資料與個人暱稱、管理員身分
+// 5. 監聽帳號狀態切換，自動同步雲端暱稱、權限身分與金幣數量
 auth.onAuthStateChanged(async (user) => {
   const emailEl = document.getElementById('settings-email');
   const subtextEl = document.getElementById('settings-subtext');
@@ -135,26 +132,28 @@ auth.onAuthStateChanged(async (user) => {
   const loggedInEl = document.getElementById('settings-logged-in');
 
   if (user) {
-    // 預設名稱與權限身分
     let userNickname = user.displayName || (user.email ? user.email.split('@')[0] : '使用者');
     let userRole = 'user';
+    let userCoins = 500; // 預設值
     
     try {
-      // 從 Firestore users 集合拉取雲端儲存的固定暱稱與身分權限
+      // 🌟 從 Firestore 讀取暱稱、角色與真正的金幣數值 (coins)
       const userDoc = await db.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         const data = userDoc.data();
         if (data.nickname) userNickname = data.nickname;
         if (data.role) userRole = data.role;
+        if (typeof data.coins === 'number') userCoins = data.coins;
       }
     } catch (e) {
-      console.warn("無法從雲端讀取暱稱與權限資料：", e);
+      console.warn("無法從雲端讀取使用者資料：", e);
     }
 
     if (!window.userData) window.userData = {};
     window.userData.nickname = userNickname;
     window.userData.username = userNickname;
-    window.userData.role = userRole; // 👑 正確注入雲端的角色身分 (例如 'admin')
+    window.userData.role = userRole;
+    window.userData.coins = userCoins; // 🪙 同步至本地 window.userData
 
     const nicknameInput = document.getElementById('settingsNicknameInput');
     if (nicknameInput) nicknameInput.value = userNickname;
@@ -169,6 +168,7 @@ auth.onAuthStateChanged(async (user) => {
     if (!window.userData) window.userData = {};
     window.userData.username = '訪客玩家';
     window.userData.role = 'user';
+    window.userData.coins = 0;
 
     if (emailEl) emailEl.innerText = "訪客模式";
     if (subtextEl) subtextEl.innerText = "目前未連結 Google 帳號";
@@ -186,7 +186,11 @@ auth.onAuthStateChanged(async (user) => {
     renderStore();
   }
 
-  // 若聊天室抽屜有開啟，更新管理員 UI 狀態
+  // 🪙 即時刷新畫面上顯示的金幣數字 UI
+  if (typeof updateUserCoinsUI === 'function') {
+    updateUserCoinsUI();
+  }
+
   if (typeof checkAdminPermissions === 'function') {
     checkAdminPermissions();
   }

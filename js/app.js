@@ -1,5 +1,5 @@
 /**
- * LZHCard - 主程式交互控制器 (app.js)
+ * LZHCard - 主程式交互控制器 (app.js - 修正金幣 UI 即時同步)
  */
 let selectedCategory = 'ALL';
 let currentCard = null;
@@ -45,6 +45,17 @@ function showToast(message, type = 'success') {
 }
 
 /**
+ * 🪙 即時更新頁面上的金幣顯示數字
+ */
+function updateUserCoinsUI() {
+    const el = document.getElementById('userCoinsDisplay');
+    if (el) {
+        const coins = (window.userData && typeof window.userData.coins === 'number') ? window.userData.coins : 0;
+        el.innerText = coins;
+    }
+}
+
+/**
  * 取得所有字庫類別名稱
  */
 function getAllCategories() {
@@ -64,6 +75,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (typeof loadStorage === 'function') {
         await loadStorage();
     }
+    updateUserCoinsUI();
 });
 
 function updateCategorySelects() {
@@ -128,8 +140,8 @@ function updateUI() {
     const cardCountDisplayElem = document.getElementById('cardCountDisplay');
     if (cardCountDisplayElem) cardCountDisplayElem.innerText = count;
 
-    // 🌟 呼叫提示狀態控制
     updateEmptyNoticeState();
+    updateUserCoinsUI();
 
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     renderWordList();
@@ -151,7 +163,6 @@ function updateEmptyNoticeState() {
     const emptyNotice = document.getElementById('emptyNotice');
 
     if (emptyNotice) {
-        // 僅在學習/管理相關頁面 (home, list, flashcard, quiz) 且該字庫無單字時才顯示提示
         const showOnTabs = ['home', 'list', 'flashcard', 'quiz'];
         if (count === 0 && showOnTabs.includes(currentTab)) {
             emptyNotice.classList.remove('hidden');
@@ -278,7 +289,7 @@ function speakWord() {
 }
 
 function switchTab(tab) {
-    currentTab = tab; // 🌟 紀錄當前 Tab
+    currentTab = tab;
 
     const secHome = document.getElementById('sec-home');
     const secFlashcard = document.getElementById('sec-flashcard');
@@ -294,7 +305,6 @@ function switchTab(tab) {
     const bnavSettings = document.getElementById('bnav-settings');
     const bnavStats = document.getElementById('bnav-stats');
 
-    // 🌟 控制頂部字庫選擇器：在「商店」、「設定」與「統計」頁面時自動隱藏
     const catSelector = document.getElementById('headerCategorySelector');
     if (catSelector) {
         if (tab === 'store' || tab === 'settings' || tab === 'stats') {
@@ -304,10 +314,8 @@ function switchTab(tab) {
         }
     }
 
-    // 隱藏所有分頁區塊
     [secHome, secFlashcard, secQuiz, secList, secStore, secSettings, secStats].forEach(el => el && el.classList.add('hidden'));
 
-    // 重設所有導覽列按鈕樣式
     [bnavHome, bnavList, bnavStore, bnavSettings, bnavStats].forEach(el => {
         if (el) el.className = "flex flex-col items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 space-y-1 transition";
     });
@@ -328,6 +336,7 @@ function switchTab(tab) {
         if (secStore) secStore.classList.remove('hidden');
         if (bnavStore) bnavStore.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
         if (typeof renderStore === 'function') renderStore();
+        updateUserCoinsUI();
     } else if (tab === 'settings') {
         if (secSettings) secSettings.classList.remove('hidden');
         if (bnavSettings) bnavSettings.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
@@ -337,12 +346,11 @@ function switchTab(tab) {
         if (typeof renderStats === 'function') renderStats();
     }
 
-    // 🌟 切換頁面時同步更新空字庫提示狀態
     updateEmptyNoticeState();
 }
 
 function startFocusMode(mode) {
-    currentTab = mode; // 🌟 紀錄模式 (flashcard 或 quiz)
+    currentTab = mode;
     const header = document.getElementById('main-header');
     const bottomNav = document.getElementById('bottom-nav');
 
@@ -362,7 +370,6 @@ function startFocusMode(mode) {
         if (typeof nextQuizQuestion === 'function') nextQuizQuestion();
     }
 
-    // 🌟 同步更新提示狀態
     updateEmptyNoticeState();
 }
 
@@ -394,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (avatarImg) avatarImg.src = avatarUrl;
         if (navAvatar) navAvatar.src = avatarUrl;
       }
+      updateUserCoinsUI();
     });
   }
 });
@@ -423,7 +431,6 @@ function getFilteredWords() {
             ? true 
             : (item.category || defaultCatName) === selectedCategory;
 
-        // 🔍 僅顯示缺失欄位過濾
         if (sortBy === 'only_missing_meaning' && !isMissing(item, 'meaning')) return false;
         if (sortBy === 'only_missing_sentence' && !isMissing(item, 'sentence')) return false;
         if (sortBy === 'only_missing_pos' && !isMissing(item, 'pos')) return false;
@@ -433,7 +440,6 @@ function getFilteredWords() {
     });
 
     filtered.sort((a, b) => {
-        // ⚠️ 缺失優先排序
         if (sortBy === 'missing_meaning_first') return (isMissing(b, 'meaning') ? 1 : 0) - (isMissing(a, 'meaning') ? 1 : 0);
         if (sortBy === 'missing_sentence_first') return (isMissing(b, 'sentence') ? 1 : 0) - (isMissing(a, 'sentence') ? 1 : 0);
         if (sortBy === 'missing_pos_first') return (isMissing(b, 'pos') ? 1 : 0) - (isMissing(a, 'pos') ? 1 : 0);
@@ -571,9 +577,6 @@ function updateBatchBadgeUI() {
     }
 }
 
-/**
- * 🏷️ 重新命名字庫功能
- */
 function handleRenameCategory() {
     let targetCat = typeof selectedCategory !== 'undefined' ? selectedCategory : 'ALL';
     const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
