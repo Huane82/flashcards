@@ -931,7 +931,7 @@ async function handleLoadPreset(levelNum) {
 }
 
 /**
- * 🌐 批量貼上文字解析器（已修正：支援日文假名/漢字 + 羅馬拼音發音自動識別）
+ * 🌐 批量貼上文字解析器（已修復：支援多單字片語完整識別、日文假名/漢字 + 羅馬拼音發音）
  */
 function parseBatchText(text) {
     if (!text || typeof text !== 'string') return [];
@@ -939,11 +939,11 @@ function parseBatchText(text) {
     const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
     const results = [];
 
-    // 🌟 1. 嚴謹詞性匹配：單個英文字母詞性需帶點 (n., v.) 或括號 ([n])，避免將羅馬拼音 n, v 誤判為詞性
+    // 嚴謹詞性匹配：英文字母詞性需帶點 (n., v.) 或括號 ([n])，避免將羅馬拼音 n, v 誤判為詞性
     const strictPosRegex = /(?:\[|\()\s*(adj|adv|v|n|prep|conj|pron|vt|vi|num|art|phr|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞)\.?\s*(?:\]|\))|\b(adj|adv|v|n|prep|conj|pron|vt|vi|num|art|phr)\.|\b(名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)\b/i;
 
-    // 日文字元判斷（平假名、片假名、日文漢字）
-    const jpRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+    // 日文字元判斷（平假名、片假名）
+    const jpRegex = /[\u3040-\u309F\u30A0-\u30FF]/;
 
     lines.forEach(line => {
         let tempLine = line;
@@ -952,14 +952,14 @@ function parseBatchText(text) {
         let phonetic = '';
         let meaning = '';
 
-        // 提取斜線內的音標 / 讀音 (例如: /rɪˈzɪl.jənt/)
+        // 1. 提取斜線內的音標 / 讀音 (例如: /rɪˈzɪl.jənt/)
         const slashPhonetic = tempLine.match(/\/([^\/]+)\//);
         if (slashPhonetic) {
             phonetic = '/' + slashPhonetic[1] + '/';
             tempLine = tempLine.replace(slashPhonetic[0], ' ');
         }
 
-        // 提取詞性 (僅比對帶點或帶括號的顯式詞性標籤)
+        // 2. 提取詞性 (僅比對帶點或帶括號的顯式詞性標籤)
         const posMatch = tempLine.match(strictPosRegex);
         if (posMatch) {
             pos = (posMatch[1] || posMatch[2] || posMatch[3]).trim();
@@ -969,28 +969,35 @@ function parseBatchText(text) {
             tempLine = tempLine.replace(posMatch[0], ' ');
         }
 
-        // 拆分欄位 (支援 Tab, 冒號, 等號, 破折號, 或空格)
-        let splitParts = [];
-        if (/\t|:|=| - | -- |. - /.test(tempLine)) {
-            splitParts = tempLine.split(/\t|:|=| - | -- /).map(s => s.trim()).filter(Boolean);
+        // 3. 智慧拆分「單字/片語」與「母語釋義」
+        const delimRegex = /\t|:|＝|=| - | -- | — | – /;
+
+        if (delimRegex.test(tempLine)) {
+            // 情況 A：有明確分隔符號 (Tab, 冒號, 等號, 破折號)
+            const parts = tempLine.split(delimRegex).map(s => s.trim()).filter(Boolean);
+            word = parts[0] || '';
+            meaning = parts.slice(1).join(' ');
         } else {
-            splitParts = tempLine.split(/\s+/).map(s => s.trim()).filter(Boolean);
-        }
+            // 情況 B：無明確分隔符號時的智慧分析
+            const spaceParts = tempLine.split(/\s+/).map(s => s.trim()).filter(Boolean);
 
-        if (splitParts.length >= 1) {
-            word = splitParts[0];
-
-            // 🌟 2. 關鍵處理：第一個詞為日文、第二個詞為純羅馬拼音（例如 "ン n" 或 "たべる taberu"）時，
-            // 若目前無音標，自動將第二詞判定為發音 (phonetic)
-            if (splitParts.length >= 2) {
-                const secondPart = splitParts[1];
-                const isSecondRomaji = /^[a-zA-Z\s\-\.\'\`]+$/.test(secondPart);
-
-                if (jpRegex.test(word) && isSecondRomaji && !phonetic) {
-                    phonetic = secondPart;
-                    meaning = splitParts.slice(2).join(' ');
+            // 判斷是否為日文假名 + 羅馬拼音 (例如: "ン n" 或 "たべる taberu")
+            if (spaceParts.length >= 2 && jpRegex.test(spaceParts[0]) && /^[a-zA-Z\s\-\.\'\`]+$/.test(spaceParts[1]) && !phonetic) {
+                word = spaceParts[0];
+                phonetic = spaceParts[1];
+                meaning = spaceParts.slice(2).join(' ');
+            } else {
+                // 檢查是否含有中文母語釋義邊界 (例如: "keep up with 跟上進度")
+                const zhMatch = tempLine.match(/[\u4e00-\u9fa5]/);
+                if (zhMatch) {
+                    const idx = tempLine.indexOf(zhMatch[0]);
+                    word = tempLine.substring(0, idx).trim();
+                    meaning = tempLine.substring(idx).trim();
                 } else {
-                    meaning = splitParts.slice(1).join(' ');
+                    // 情況 C：全外文片語 (例如輸入 "keep up with" 或 "look forward to")
+                    // 整行完整保留為片語，釋義留空讓 AI 自動補齊
+                    word = tempLine.trim();
+                    meaning = '';
                 }
             }
         }
