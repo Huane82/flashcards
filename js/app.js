@@ -475,35 +475,6 @@ function exitFocusMode() {
     switchTab('home');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof firebase !== 'undefined' && firebase.auth) {
-    firebase.auth().onAuthStateChanged(async (user) => {
-      const loggedOutBox = document.getElementById('settings-logged-out');
-      const loggedInBox = document.getElementById('settings-logged-in');
-      const emailSpan = document.getElementById('settings-email');
-      const avatarImg = document.getElementById('settings-avatar');
-      const navAvatar = document.getElementById('nav-avatar');
-
-      if (user) {
-        if (loggedOutBox) loggedOutBox.style.display = 'none';
-        if (loggedInBox) loggedInBox.style.display = 'block';
-        if (emailSpan) emailSpan.textContent = user.displayName || user.email;
-        const avatarUrl = user.photoURL || 'https://api.dicebear.com/7.x/bottts/svg?seed=user';
-        if (avatarImg) avatarImg.src = avatarUrl;
-        if (navAvatar) navAvatar.src = avatarUrl;
-      } else {
-        if (loggedOutBox) loggedOutBox.style.display = 'block';
-        if (loggedInBox) loggedInBox.style.display = 'none';
-        if (emailSpan) emailSpan.textContent = typeof t === 'function' ? t('guestMode') : '訪客模式';
-        const avatarUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=user';
-        if (avatarImg) avatarImg.src = avatarUrl;
-        if (navAvatar) navAvatar.src = avatarUrl;
-      }
-      updateUserCoinsUI();
-    });
-  }
-});
-
 function getFilteredWords() {
     const searchInput = document.getElementById('searchInput');
     const sortSelect = document.getElementById('sortSelect');

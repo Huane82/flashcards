@@ -114,6 +114,9 @@ async function handleSaveNickname() {
     window.userData.nickname = newNickname;
     window.userData.username = newNickname;
 
+    const emailEl = document.getElementById('settings-email');
+    if (emailEl) emailEl.innerText = newNickname;
+
     if (typeof showToast === 'function') showToast(`固定暱稱已成功更新為「${newNickname}」！`, 'success');
   } catch (err) {
     console.error("更新暱稱失敗:", err);
@@ -179,14 +182,12 @@ auth.onAuthStateChanged(async (user) => {
         if (typeof data.coins === 'number') userCoins = data.coins;
         if (Array.isArray(data.friends)) userFriends = data.friends;
 
-        // 自動載入帳號上記錄的多選字庫
         if (Array.isArray(data.selectedCategories) && data.selectedCategories.length > 0) {
           window.selectedCategories = data.selectedCategories;
           localStorage.setItem('lzhcard_selected_categories', JSON.stringify(data.selectedCategories));
         }
       }
 
-      // 🌟 自動維護雲端 Users 集合，確保 Email 與頭像索引存在（方便好友搜尋）
       await userRef.set({
         email: user.email || '',
         photoURL: user.photoURL || '',
@@ -208,14 +209,24 @@ auth.onAuthStateChanged(async (user) => {
     const nicknameInput = document.getElementById('settingsNicknameInput');
     if (nicknameInput) nicknameInput.value = userNickname;
 
-    if (emailEl) emailEl.innerText = userNickname;
-    if (subtextEl) subtextEl.innerText = user.email ? `已連結：${user.email}` : "已連結 Google 帳號";
-    if (avatarEl) avatarEl.src = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
-    if (navAvatarEl) navAvatarEl.src = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+    // 🌟 核心修改：登入時移除 data-i18n 屬性，防止多語系引擎將暱稱重覆蓋為「訪客模式」
+    if (emailEl) {
+      emailEl.removeAttribute('data-i18n');
+      emailEl.innerText = userNickname;
+    }
+    if (subtextEl) {
+      subtextEl.removeAttribute('data-i18n');
+      subtextEl.innerText = user.email ? `已連結：${user.email}` : "已連結 Google 帳號";
+    }
+
+    const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+    const userPhoto = user.photoURL || defaultAvatar;
+
+    if (avatarEl) avatarEl.src = userPhoto;
+    if (navAvatarEl) navAvatarEl.src = userPhoto;
     if (loggedOutEl) loggedOutEl.style.display = 'none';
     if (loggedInEl) loggedInEl.style.display = 'block';
 
-    // 🌟 初始化聊天與好友申請即時監聽器
     if (typeof initChatRealtimeListeners === 'function') {
       initChatRealtimeListeners();
     }
@@ -226,10 +237,19 @@ auth.onAuthStateChanged(async (user) => {
     window.userData.coins = 0;
     window.userData.friends = [];
 
-    if (emailEl) emailEl.innerText = "訪客模式";
-    if (subtextEl) subtextEl.innerText = "目前未連結 Google 帳號";
-    if (avatarEl) avatarEl.src = "https://api.dicebear.com/7.x/bottts/svg?seed=user";
-    if (navAvatarEl) navAvatarEl.src = "https://api.dicebear.com/7.x/bottts/svg?seed=user";
+    // 未登入時還原 data-i18n 屬性以支援多語系
+    if (emailEl) {
+      emailEl.setAttribute('data-i18n', 'guestMode');
+      emailEl.innerText = (typeof t === 'function') ? t('guestMode') : "訪客模式";
+    }
+    if (subtextEl) {
+      subtextEl.setAttribute('data-i18n', 'notLinkedGoogle');
+      subtextEl.innerText = (typeof t === 'function') ? t('notLinkedGoogle') : "目前未連結 Google 帳號";
+    }
+
+    const guestAvatar = "https://api.dicebear.com/7.x/bottts/svg?seed=user";
+    if (avatarEl) avatarEl.src = guestAvatar;
+    if (navAvatarEl) navAvatarEl.src = guestAvatar;
     if (loggedOutEl) loggedOutEl.style.display = 'block';
     if (loggedInEl) loggedInEl.style.display = 'none';
   }
