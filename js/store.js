@@ -1,34 +1,25 @@
 /**
- * LZHCard - 社群字庫商店系統模組 (store.js - 雲端交易與金幣入帳版)
+ * LZHCard - 社群字庫商店系統模組 (已補齊金幣交易 UI 即時刷新機制)
  */
 
 window.storeDecks = [];
 
-/**
- * 🔒 判斷當前是否為訪客身分
- */
 function isGuestUser() {
     const isGuestMode = localStorage.getItem('lzhcard_guest_mode') === 'true';
     const isFirebaseUser = typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser;
     return isGuestMode || !isFirebaseUser;
 }
 
-/**
- * 🛍️ 渲染商店清單 (點擊字庫標題或預覽按鈕可即時查看詳細單字)
- */
 async function renderStore() {
     const container = document.getElementById('storeContainer');
     if (!container) return;
 
     const query = (document.getElementById('storeSearchInput')?.value || '').trim().toLowerCase();
-    
-    // 取得當前登入者身分與權限
     const currentUser = (typeof auth !== 'undefined' && auth.currentUser) ? auth.currentUser : null;
     const currentUid = currentUser ? currentUser.uid : '';
     const isAdmin = window.userData ? window.userData.role === 'admin' : false;
 
     try {
-        // 從 Firestore 讀取所有發布的商店字庫
         if (typeof db !== 'undefined') {
             const snapshot = await db.collection('storeDecks').orderBy('createdAt', 'desc').get();
             window.storeDecks = snapshot.docs.map(doc => ({
@@ -40,7 +31,6 @@ async function renderStore() {
         console.warn("無法從雲端拉取商店資料，嘗試讀取快取：", err);
     }
 
-    // 關鍵字過濾
     const filtered = window.storeDecks.filter(deck => 
         (deck.title || '').toLowerCase().includes(query) ||
         (deck.desc || '').toLowerCase().includes(query) ||
@@ -68,7 +58,6 @@ async function renderStore() {
                         ${deck.badge ? `<span class="px-2 py-0.5 text-[10px] font-extrabold bg-amber-500 text-white rounded-full">${deck.badge}</span>` : ''}
                     </div>
 
-                    <!-- 🔍 點擊字庫標題觸發內容預覽 Modal -->
                     <h3 onclick="openStoreDeckPreview('${deck.id}')" class="font-bold text-slate-900 dark:text-white text-base hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer transition flex items-center justify-between group">
                         <span>${deck.title}</span>
                         <i class="fa-solid fa-eye text-xs text-slate-400 group-hover:text-brand-500 transition"></i>
@@ -77,31 +66,26 @@ async function renderStore() {
                 </div>
                 
                 <div class="pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                    <!-- 👤 點擊作者頭像/名稱 -->
                     <button type="button" onclick="openAuthorProfile('${encodeURIComponent(deck.author || '匿名')}')" class="flex items-center space-x-2 text-left group">
                         <img src="${deck.authorAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(deck.author || 'user')}`}" class="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-600 object-cover">
                         <span class="text-xs font-semibold text-slate-600 dark:text-slate-300 group-hover:text-brand-600 transition">${deck.author || '匿名'}</span>
                     </button>
 
                     <div class="flex items-center space-x-1.5">
-                        <!-- 👁️ 瀏覽內容按鈕 -->
                         <button type="button" onclick="openStoreDeckPreview('${deck.id}')" title="預覽字庫內容" class="p-1.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
                             <i class="fa-solid fa-list text-sm"></i>
                         </button>
 
-                        <!-- 🗑️ 下架按鈕 -->
                         ${canDelete ? `
                             <button type="button" onclick="deleteStoreDeck('${deck.id}')" title="${isAdmin && !isAuthor ? '管理員強制下架' : '下架自己的字庫'}" class="p-1.5 text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition">
                                 <i class="fa-solid fa-trash-can text-sm"></i>
                             </button>
                         ` : ''}
 
-                        <!-- 🔗 複製分享連結 -->
                         <button type="button" onclick="shareDeck('${deck.id}')" title="複製分享連結" class="p-1.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
                             <i class="fa-solid fa-share-nodes text-sm"></i>
                         </button>
 
-                        <!-- 📥 下載匯入字庫 / 花費金幣購買 -->
                         <button type="button" onclick="${deck.price > 0 ? `purchaseStoreDeck('${deck.id}')` : `importStoreDeck('${deck.id}')`}" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center space-x-1">
                             <i class="fa-solid fa-download"></i>
                             <span>${deck.price > 0 ? `${deck.price} 金幣` : `取得 (${wordCount})`}</span>
@@ -113,9 +97,6 @@ async function renderStore() {
     }).join('');
 }
 
-/**
- * 👁️ 開啟字庫單字內容預覽 Modal
- */
 function openStoreDeckPreview(deckId) {
     const deck = window.storeDecks.find(d => d.id === deckId);
     if (!deck) return;
@@ -159,9 +140,6 @@ function openStoreDeckPreview(deckId) {
     if (typeof openModal === 'function') openModal('storePreviewModal');
 }
 
-/**
- * 🚀 打開發布 Modal (強制顯示固定暱稱)
- */
 function openPublishModal() {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用商城功能！', 'warning');
@@ -179,7 +157,6 @@ function openPublishModal() {
 
     select.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
     
-    // 顯示鎖定的個人固定暱稱
     const pubAuthorDisplay = document.getElementById('pubAuthorDisplay');
     const fixedNickname = (window.userData && window.userData.nickname) 
         ? window.userData.nickname 
@@ -192,9 +169,6 @@ function openPublishModal() {
     if (typeof openModal === 'function') openModal('publishModal');
 }
 
-/**
- * 📤 提交發布上架 (使用帳號固定暱稱，防止偽造冒用)
- */
 async function submitPublishDeck() {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用商城功能！', 'warning');
@@ -205,7 +179,6 @@ async function submitPublishDeck() {
     const title = (document.getElementById('pubTitle').value || '').trim();
     const desc = (document.getElementById('pubDesc').value || '').trim();
 
-    // 🪙 讀取輸入的金幣價格
     const priceInput = document.getElementById('pubPrice');
     const price = Math.max(0, parseInt(priceInput?.value, 10) || 0);
 
@@ -215,7 +188,6 @@ async function submitPublishDeck() {
     }
 
     const currentUser = auth.currentUser;
-    // 強制帶入帳號固定暱稱
     const authorNickname = (window.userData && window.userData.nickname) 
         ? window.userData.nickname 
         : (currentUser.displayName || currentUser.email.split('@')[0]);
@@ -257,9 +229,6 @@ async function submitPublishDeck() {
     }
 }
 
-/**
- * 👤 開啟作者作品集 Modal
- */
 function openAuthorProfile(encodedAuthor) {
     const authorName = decodeURIComponent(encodedAuthor);
     const authorDecks = window.storeDecks.filter(d => (d.author || '').toLowerCase() === authorName.toLowerCase());
@@ -295,9 +264,6 @@ function openAuthorProfile(encodedAuthor) {
     if (typeof openModal === 'function') openModal('authorModal');
 }
 
-/**
- * 🔗 複製分享連結
- */
 function shareDeck(deckId) {
     const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encodeURIComponent(deckId)}`;
     
@@ -312,9 +278,6 @@ function shareDeck(deckId) {
     }
 }
 
-/**
- * 📥 下載/匯入免費商店字庫 (訪客禁止使用)
- */
 function importStoreDeck(deckId) {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用商城功能！', 'warning');
@@ -347,15 +310,10 @@ function importStoreDeck(deckId) {
 
     if (typeof saveStorage === 'function') saveStorage();
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
+    if (typeof updateUI === 'function') updateUI();
     if (typeof showToast === 'function') showToast(`成功匯入「${deck.title}」（共 ${addedCount} 個單字）`, 'success');
 }
 
-/**
- * 🪙 花費金幣購買商店字庫 (含買家扣款與賣家雲端自動入帳)
- */
-/**
- * 🪙 花費金幣購買商店字庫 (含買家扣款、平台 30% 抽成與賣家 70% 入帳)
- */
 async function purchaseStoreDeck(deckId) {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用商城功能！', 'warning');
@@ -369,7 +327,6 @@ async function purchaseStoreDeck(deckId) {
     const buyerUid = auth.currentUser ? auth.currentUser.uid : '';
     const userCoins = window.userData ? (window.userData.coins || 0) : 0;
 
-    // 防止重複購買自己的作品
     if (deck.authorId && deck.authorId === buyerUid) {
         if (typeof showToast === 'function') showToast('這是您發布的字庫，無需花費金幣即可直接取得！', 'info');
         importStoreDeck(deckId);
@@ -381,27 +338,24 @@ async function purchaseStoreDeck(deckId) {
         return;
     }
 
-    // 🪙 計算 30% 平台抽成，賣家實得 70%
     const sellerEarnings = Math.floor(price * 0.7);
 
     if (confirm(`確認花費 ${price} 金幣購買「${deck.title}」？`)) {
         try {
-            // 1. 買家扣除全額金幣 (本地 + 雲端同步)
             if (window.userData) window.userData.coins -= price;
+            
             if (typeof db !== 'undefined' && buyerUid) {
                 await db.collection('users').doc(buyerUid).set({
                     coins: firebase.firestore.FieldValue.increment(-price)
                 }, { merge: true });
             }
 
-            // 2. 賣家雲端自動進帳 70% (扣除 30% 平台手續費)
             if (typeof db !== 'undefined' && deck.authorId && sellerEarnings > 0) {
                 await db.collection('users').doc(deck.authorId).set({
                     coins: firebase.firestore.FieldValue.increment(sellerEarnings)
                 }, { merge: true });
             }
 
-            // 3. 自動匯入單字至買家字庫
             let addedCount = 0;
             (deck.words || []).forEach(w => {
                 const exists = wordList.some(item => item.word.toLowerCase() === w.word.toLowerCase() && item.category === deck.title);
@@ -426,9 +380,12 @@ async function purchaseStoreDeck(deckId) {
             if (typeof saveUserData === 'function') saveUserData();
             if (typeof saveStorage === 'function') saveStorage();
             if (typeof updateCategorySelects === 'function') updateCategorySelects();
+            if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
+            if (typeof updateUI === 'function') updateUI();
+            
             renderStore();
 
-            if (typeof showToast === 'function') showToast(`成功花費 ${price} 金幣購買「${deck.title}」！賣家已收到 ${sellerEarnings} 金幣 (已扣除 30% 手續費)。`, 'success');
+            if (typeof showToast === 'function') showToast(`成功花費 ${price} 金幣購買「${deck.title}」！`, 'success');
         } catch (err) {
             console.error("交易失敗:", err);
             if (typeof showToast === 'function') showToast('交易失敗：' + err.message, 'error');
@@ -436,9 +393,6 @@ async function purchaseStoreDeck(deckId) {
     }
 }
 
-/**
- * 🗑️ 下架商店字庫 (從 Firebase Firestore 刪除)
- */
 async function deleteStoreDeck(deckId) {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用商城功能！', 'warning');
@@ -475,9 +429,6 @@ async function deleteStoreDeck(deckId) {
     }
 }
 
-/**
- * 🌐 開頁與 URL Hash 自動觸發監聽
- */
 document.addEventListener('DOMContentLoaded', () => {
     renderStore();
 

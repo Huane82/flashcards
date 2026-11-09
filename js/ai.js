@@ -1,14 +1,31 @@
 /**
- * LZHCard - Gemini AI 萬能多語系解析模組 (全語言自動識別與解析版)
+ * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine)
  */
 
 window.cachedWorkingModel = null;
 
 const GEMINI_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash-lite"
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b"
 ];
+
+// 🛡️ 安全翻譯輔助函式：防止 t() 未定義時造成 JS 執行階段崩潰
+function safeT(key, params, fallbackStr) {
+    if (typeof t === 'function') {
+        try {
+            return t(key, params);
+        } catch (e) {}
+    }
+    if (!fallbackStr) fallbackStr = key;
+    if (params && typeof params === 'object') {
+        Object.keys(params).forEach(k => {
+            fallbackStr = fallbackStr.replace(new RegExp(`{\\s*${k}\\s*}`, 'g'), params[k]);
+        });
+    }
+    return fallbackStr;
+}
 
 function updateApiKeyStatusUI() {
     const icon = document.getElementById('apiKeyIcon');
@@ -83,11 +100,11 @@ async function callGeminiApi(apiKey, promptText) {
             if (res.status === 401 || res.status === 403) {
                 localStorage.removeItem('flashcard_gemini_key_v1');
                 updateApiKeyStatusUI();
-                if (typeof showToast === 'function') showToast(t('toastInvalidApiKey'), "error");
+                if (typeof showToast === 'function') showToast(safeT('toastInvalidApiKey', null, 'Gemini API Key 無效，請重新設定'), "error");
                 if (typeof openModal === 'function') openModal('keyModal');
                 return null;
             } else if (res.status === 429) {
-                if (typeof showToast === 'function') showToast(t('toastRateLimit'), "warning");
+                if (typeof showToast === 'function') showToast(safeT('toastRateLimit', null, 'API 請求過於頻繁，請稍後再試'), "warning");
                 return null;
             }
         } catch (e) {
@@ -95,7 +112,7 @@ async function callGeminiApi(apiKey, promptText) {
         }
     }
 
-    if (typeof showToast === 'function') showToast(t('toastApiConnError'), "error");
+    if (typeof showToast === 'function') showToast(safeT('toastApiConnError', null, '無法連線至 AI 伺服器'), "error");
     return null;
 }
 
@@ -151,9 +168,6 @@ function safeParseJSON(rawText) {
     return null;
 }
 
-/**
- * 🔍 判斷單字欄位是否需要 AI 自動補充（模糊比對版）
- */
 function isFieldIncomplete(val) {
     if (!val) return true;
     const str = String(val).trim();
@@ -167,9 +181,6 @@ function isFieldIncomplete(val) {
     return pendingKeywords.some(keyword => str.toLowerCase().includes(keyword.toLowerCase()));
 }
 
-/**
- * 🌐 取得語言設定（當選擇自訂且留空時，啟動自動辨識機制）
- */
 function getLanguageConfig() {
     const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
     const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
@@ -184,11 +195,11 @@ function getLanguageConfig() {
     };
 
     const targetName = targetLang === 'custom' 
-        ? (customTarget || 'Auto-Detect Language (自動識別單字語種)') 
+        ? (customTarget || 'Auto-Detect Target Language') 
         : (langNameMap[targetLang] || 'English');
 
     const nativeName = nativeLang === 'custom' 
-        ? (customNative || 'Auto-Detect Native Language (自動識別母語)') 
+        ? (customNative || 'Auto-Detect Native Language') 
         : (langNameMap[nativeLang] || 'Traditional Chinese (繁體中文)');
 
     return { targetLang, nativeLang, targetName, nativeName };
@@ -199,8 +210,13 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     let pos = (rawPos || '').trim();
     let meaning = (rawMeaning || '').trim();
 
-    // 嚴謹詞性匹配：英文字母詞性需帶句點或括號，避免將獨立羅馬拼音 "n", "v" 誤判為詞性
-    const multiPosRegex = /(?:[\(\[\{]\s*(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞)[\.\s\/]*[\)\]\}])|(?:(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|phr|art)\.)/gi;
+    const posUnit = '(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|art|phr|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)';
+    const multiPosRegex = new RegExp(
+        `(?:[\\(\\[\\{]\\s*${posUnit}(?:[\\s\\.\\,\\/\\\\&|]+${posUnit})*[\\.\\s]*[\\)\\]\\}])` +
+        `|(?:\\b${posUnit}\\.(?:[\\s\\,\\/\\\\&|]*${posUnit}\\.)*)` +
+        `|(?:\\b(?:名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)(?:[\\s\\,\\/\\\\&|]+(?:名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞))*\\b)`,
+        'gi'
+    );
 
     if (word) {
         const match = word.match(multiPosRegex);
@@ -221,13 +237,10 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     return { word, pos, meaning };
 }
 
-/**
- * 🤖 AI 單一單字自動填寫 (支援自訂語言自動識別語種)
- */
 async function autoFillWithAI(word) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
-        if (typeof showToast === 'function') showToast(t('toastNoApiKey'), "warning");
+        if (typeof showToast === 'function') showToast(safeT('toastNoApiKey', null, '請設定 Gemini API Key'), "warning");
         if (typeof openModal === 'function') openModal('keyModal');
         return null;
     }
@@ -236,24 +249,27 @@ async function autoFillWithAI(word) {
     const cleanWord = cleaned.word;
     const { targetName, nativeName } = getLanguageConfig();
 
-    const prompt = `You are an expert multilingual lexicographer.
-Input term: "${cleanWord}"
-Target Language instruction: ${targetName}
-User Native Language instruction: ${nativeName}
+    const prompt = `You are a professional lexicographer.
+Input Term: "${cleanWord}"
+Target Language: ${targetName}
+User Native Language: ${nativeName}
 
-CRITICAL AUTO-DETECTION RULES:
-1. If Target Language or User Native Language is set to "Auto-Detect" or Custom, AUTOMATICALLY IDENTIFY the source language of "${cleanWord}" (e.g. French, German, Spanish, Japanese, Korean, Italian, Russian, English, Chinese, etc.).
-2. Generate phonetics/pronunciation appropriate for the identified target language.
-3. Translate definitions ("meaning") and sentence translations ("translation") into the User Native Language (${nativeName}).
+LANGUAGE INSTRUCTIONS:
+1. "word": The clean term in Target Language (${targetName}).
+2. "phonetic": Pronunciation guide (IPA / Kana / Pinyin / Romaji).
+3. "pos": Parts of speech translated in User Native Language (${nativeName}).
+4. "meaning": Precise definition translated in User Native Language (${nativeName}).
+5. "sentence": A natural example sentence strictly written in Target Language (${targetName}).
+6. "translation": Sentence translation strictly written in User Native Language (${nativeName}).
 
-Return ONLY a valid raw JSON object with:
+Return ONLY a valid raw JSON object:
 {
-  "word": "Clean term formatted in its original language",
-  "phonetic": "Pronunciation (IPA / Kana / Pinyin / Romaji)",
-  "pos": "Parts of speech expressed in User Native Language (${nativeName})",
-  "meaning": "Definition expressed in User Native Language (${nativeName})",
-  "sentence": "Natural example sentence in the identified target language",
-  "translation": "Sentence translation expressed in User Native Language (${nativeName})"
+  "word": "${cleanWord}",
+  "phonetic": "Pronunciation",
+  "pos": "POS in ${nativeName}",
+  "meaning": "Definition in ${nativeName}",
+  "sentence": "Example sentence in ${targetName}",
+  "translation": "Translation in ${nativeName}"
 }`;
 
     const rawResponse = await callGeminiApi(rawKey, prompt);
@@ -261,17 +277,17 @@ Return ONLY a valid raw JSON object with:
 }
 
 /**
- * 🤖 批次 AI 欄位補充 (支援自訂語言自動識別語種)
+ * 🤖 批次 AI 欄位補充與錯植語言修復核心邏輯
  */
-async function runBatchAiAutoFill(targetList, progressCallback) {
+async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
     const rawKey = getValidApiKey();
     if (!rawKey) {
-        if (typeof showToast === 'function') showToast(t('toastNoApiKey'), "warning");
+        if (typeof showToast === 'function') showToast(safeT('toastNoApiKey', null, '請設定 Gemini API Key'), "warning");
         if (typeof openModal === 'function') openModal('keyModal');
         return;
     }
 
-    const incompleteItems = targetList.filter(item => 
+    const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
         isFieldIncomplete(item.meaning) || 
         isFieldIncomplete(item.pos) || 
         isFieldIncomplete(item.sentence) || 
@@ -279,35 +295,35 @@ async function runBatchAiAutoFill(targetList, progressCallback) {
         isFieldIncomplete(item.phonetic)
     );
 
-    const total = incompleteItems.length;
+    const total = targetItems.length;
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 5;
+    const batchSize = 10;
     let completedCount = 0;
 
     for (let i = 0; i < total; i += batchSize) {
-        const chunk = incompleteItems.slice(i, i + batchSize);
+        const chunk = targetItems.slice(i, i + batchSize);
         const chunkWords = chunk.map(item => item.word);
 
-        const prompt = `You are an expert multilingual lexicographer.
-Analyze input terms: ${JSON.stringify(chunkWords)}.
-Target Language instruction: ${targetName}
-User Native Language instruction: ${nativeName}
+        const prompt = `Lexicographer assistant.
+Input Terms: ${JSON.stringify(chunkWords)}
+Target Language: ${targetName}
+User Native Language: ${nativeName}
 
-CRITICAL AUTO-DETECTION RULES:
-- If Target Language or User Native Language is Auto-Detect or Custom, AUTOMATICALLY IDENTIFY the source language of each term.
-- Generate phonetics, POS, definitions, and sentence translations in User Native Language (${nativeName}).
+LANGUAGE INSTRUCTIONS:
+- Example "sentence" MUST be written strictly in Target Language (${targetName}).
+- "pos", "meaning", and "translation" MUST be written strictly in User Native Language (${nativeName}).
 
 Return ONLY a pure JSON array matching the input order:
 [
   {
-    "word": "original input term cleaned",
-    "pos": "parts of speech expressed in ${nativeName}",
-    "phonetic": "Pronunciation (IPA / Kana / Romaji / Pinyin)",
-    "meaning": "Definition in User Native Language (${nativeName})",
-    "sentence": "Example sentence in target language",
-    "translation": "Example sentence translation in User Native Language (${nativeName})"
+    "word": "original term",
+    "pos": "POS in ${nativeName}",
+    "phonetic": "phonetic",
+    "meaning": "definition in ${nativeName}",
+    "sentence": "example sentence in ${targetName}",
+    "translation": "translation in ${nativeName}"
   }
 ]`;
 
@@ -317,13 +333,13 @@ Return ONLY a pure JSON array matching the input order:
             if (Array.isArray(results)) {
                 results.forEach(resItem => {
                     if (!resItem || !resItem.word) return;
-                    const target = targetList.find(p => p.word.toLowerCase() === resItem.word.toLowerCase());
+                    const target = targetList.find(p => p.word.trim().toLowerCase() === resItem.word.trim().toLowerCase());
                     if (target) {
-                        if (isFieldIncomplete(target.pos) && resItem.pos) target.pos = resItem.pos;
-                        if (isFieldIncomplete(target.phonetic) && resItem.phonetic) target.phonetic = resItem.phonetic;
-                        if (isFieldIncomplete(target.meaning) && resItem.meaning) target.meaning = resItem.meaning;
-                        if (isFieldIncomplete(target.sentence) && resItem.sentence) target.sentence = resItem.sentence;
-                        if (isFieldIncomplete(target.translation) && resItem.translation) target.translation = resItem.translation;
+                        if ((forceOverwrite || isFieldIncomplete(target.pos)) && resItem.pos) target.pos = resItem.pos;
+                        if ((forceOverwrite || isFieldIncomplete(target.phonetic)) && resItem.phonetic) target.phonetic = resItem.phonetic;
+                        if ((forceOverwrite || isFieldIncomplete(target.meaning)) && resItem.meaning) target.meaning = resItem.meaning;
+                        if ((forceOverwrite || isFieldIncomplete(target.sentence)) && resItem.sentence) target.sentence = resItem.sentence;
+                        if ((forceOverwrite || isFieldIncomplete(target.translation)) && resItem.translation) target.translation = resItem.translation;
                         target.updatedAt = Date.now();
                     }
                 });
@@ -336,7 +352,7 @@ Return ONLY a pure JSON array matching the input order:
         }
 
         if (i + batchSize < total) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
     }
 }

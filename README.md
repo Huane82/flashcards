@@ -1,1 +1,205 @@
-# huane82.io-flashcards
+# 🎴 LZHCard — 智慧艾賓浩斯單字卡與社群學習系統
+
+> 結合 **Gemini AI 智慧單字補齊**、**艾賓浩斯間隔重複記憶演算法**、**多元隨堂測驗** 與 **雲端社群金幣商店** 的全方位單字學習 Web 應用程式。
+
+---
+
+## 🌟 核心特色
+
+### 🧠 1. 艾賓浩斯間隔重複演算法 (`algorithm.js`)
+
+
+
+* **5 階段記憶等級 (Lv.1 ~ Lv.5)**：根據使用者的熟練程度自動動態調整出現機率。
+
+
+* **動態焦點池**：限制低等級單字（Lv.1 集中池最多 6 字、Lv.2 最多 4 字）進行強化複習。
+
+
+* **嚴格防重複與權重隨機抽出**：防止同一張單字卡連續重複出現，配合過往歷史權重衰減機制，確保複習效率極大化。
+
+
+
+### 🤖 2. Gemini AI 智慧輔助 (`ai.js`)
+
+* **單字自動解析補齊**：輸入外文單字後，AI 自動填寫詞性 (POS)、IPA/音標、繁體中文釋義、實用例句及例句翻譯。
+* **錯植重新解析與一鍵覆蓋**：支援自訂學習目標語言與母語，自動修正非目標語言的錯植資料。
+
+### 📝 3. 多元隨堂測驗機制 (`quiz.js`)
+
+
+
+* **模式 1：純英文上下文聯想** — 題目隱藏關鍵單字首尾字母，透過例句填空進行聯想記憶。
+
+
+* **模式 2：詞性與繁中釋義對照** — 結合詞性提示與中文意義的快答練習。
+
+
+* **模式 3：🎯 句意對照挖空** — 中英文雙語對照加上句子挖空測驗。
+
+
+* **即時演算法連動**：測驗答對時自動增加升級連續答對次數（`knowStreak`），答錯則自動降級。
+
+
+
+### 🛒 4. 社群字庫商店與金幣經濟 (`store.js`)
+
+
+
+* **雲端字庫發布與下架**：使用者可將自製字庫作品設定簡介與金幣價格發布至社群。
+
+
+* **金幣交易分潤機制**：買家花費金幣購買，平台抽成 30%，賣家實得 70% 金幣收益並自動入帳。
+
+
+* **字庫預覽與分享**：支援點擊預覽單字內容、作者作品集展演，以及 URL Hash 深度連結（`#share=deckId`）分享。
+
+
+
+### 💬 5. 即時社群與雲端好友 (`chat.js` / `firebase.js`)
+
+
+
+* **Firebase Auth 多重登入**：支援 Google 一鍵快速登入、Email 註冊與訪客模式。
+
+
+* **Firestore 即時對話**：提供全站公開討論區 (`chat_group_public`) 與 1-on-1 好友雲端私聊。
+
+
+* **好友搜尋系統**：支援使用 Email 或固定暱稱搜尋雲端用戶並添加好友。
+
+
+* **官方公告與管理員權限**：管理員（Admin）具備發布全站公告、強制下架商店字庫及刪除對話紀錄之權限。
+
+
+
+### 📊 6. 多維度學習統計 (`stats.js`)
+
+
+
+* **數據儀表板**：即時統計總單字量、熟練率（Lv.4 + Lv.5 佔比）。
+
+
+* **艾賓浩斯層級分佈**：視覺化進度條呈現 Lv.1 ~ Lv.5 單字熟練度。
+
+
+* **字庫分類統計**：動態過濾並比較不同字庫的掌握率與等級結構。
+
+
+
+### ⚙️ 7. 雙軌儲存與彈性偏好 (`storage.js` / `settings.js`)
+
+
+
+* **離線與雲端雙軌引擎 (`StorageEngine`)**：登入時自動與 Firestore 雙向同步字庫與設定，離線或訪客狀態下自動降級至 LocalStorage 運作。
+
+
+* **個人化設定**：支援深色/淺色/跟隨系統主題切換、卡片正面顯示模式（外文/繁中/雙語）及音標顯示位置。
+
+
+
+---
+
+## 🛠️ 技術棧 (Tech Stack)
+
+| 領域 | 技術 / 工具 | 說明 |
+| --- | --- | --- |
+| **前端架構** | HTML5, JavaScript (ES6+), Tailwind CSS | 純 JS 模組化開發，免編譯打包工具，響應式 UI 設計 |
+| **圖示庫** | FontAwesome 6 | 提供全站 UI 圖示 |
+| **後端與雲端** | Firebase Firestore, Firebase Auth | 即時資料庫同步、使用者驗證與雲端儲存
+
+ |
+| **AI 介接** | Google Gemini API | 進行單字解析、詞性標記、例句翻譯生成 |
+| **演算法** | 艾賓浩斯記憶曲線 (Ebbinghaus Forgetting Curve) | 動態隨機抽卡與等級升降機制
+
+ |
+
+---
+
+## 📂 專案檔案架構
+
+```text
+├── index.html            # 主程式 HTML 佈局與 Modal 視窗結構
+├── algorithm.js          # 艾賓浩斯間隔重複抽卡演算法[cite: 13]
+├── ai.js                 # Gemini API 自動化單字解析與 UI 翻譯模組
+├── app_2.js              # 主控制邏輯、卡片輪播、單字表單與 Toast 系統[cite: 14]
+├── batch.js              # 批量單字處理 (貼上解析、拆分、JSON 匯入匯出)
+├── chat_2.js             # 聊天室、好友搜尋與系統公告模組[cite: 15]
+├── firebase.js           # Firebase Auth 登入與 Firestore 狀態監聽[cite: 16]
+├── quiz.js               # 三大模式隨堂測驗控制邏輯[cite: 17]
+├── settings.js           # 系統語言、主題深淺色與偏好設定控制[cite: 18]
+├── stats.js              # 學習進度與艾賓浩斯分佈統計圖表[cite: 19]
+├── storage.js            # LocalStorage 與 Firestore 雙軌備援儲存引擎[cite: 20]
+└── store.js              # 社群商店、金幣交易與作品分享[cite: 21]
+
+```
+
+---
+
+## 🚀 快速開始
+
+### 1. 取得原始碼
+
+複製本專案至本機電腦：
+
+```bash
+git clone https://github.com/your-username/LZHCard.git
+cd LZHCard
+
+```
+
+### 2. 設定 Firebase
+
+1. 前往 [Firebase Console](https://console.firebase.google.com/) 建立專案。
+2. 啟用 **Authentication**（開啟 Google 與 Email 登入方式）。
+3. 啟用 **Cloud Firestore Database**。
+4. 將專案中的 `firebase.js` 設定檔替換為您的 Firebase 配置：
+
+
+
+```javascript
+const firebaseConfig = {
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.firebasestorage.app",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+```
+
+### 3. 設定 Gemini API Key
+
+1. 前往 [Google AI Studio](https://aistudio.google.com/) 申請 Gemini API Key。
+2. 開啟 LZHCard 系統後，點擊右上方「設定 (Settings) ⚙️」或 AI 按鈕。
+3. 將 API Key 貼入輸入框中儲存，即可啟用單字 AI 補齊功能。
+
+
+
+### 4. 運行專案
+
+本專案為純前端應用，直接使用瀏覽器開啟 `index.html`，或搭配 Live Server 伺服器即可運作：
+
+```bash
+# 使用 npx http-server 快速啟動測試
+npx http-server .
+
+```
+
+---
+
+## 📜 權限與安全說明
+
+* **訪客權限限制**：訪客可體驗卡片學習、測驗與本機儲存，但社交聊天、商店購買/發布及雲端備份功能需先登入帳號。
+
+
+* **管理員權限 (Admin)**：在 Firestore `users/{uid}` 中將 `role` 欄位設定為 `"admin"`，即可啟用公告發布、聊天訊息與商店作品管理權限。
+
+
+
+---
+
+## 📄 授權條款 (License)
+
+本專案採用 [MIT License](https://www.google.com/search?q=LICENSE) 條款開源。歡迎自由 Fork、修改與商業/非商業擴充使用。

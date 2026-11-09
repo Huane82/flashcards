@@ -17,7 +17,6 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// 🌐 解決 WebChannel 串流連線失敗 (404 Not Found) 問題
 try {
   db.settings({
     experimentalForceLongPolling: true,
@@ -122,7 +121,26 @@ async function handleSaveNickname() {
   }
 }
 
-// 5. 監聽帳號狀態切換，自動同步雲端暱稱、權限身分與金幣數量
+// 🌐 5. 儲存多選字庫組合至雲端與 LocalStorage
+async function saveSelectedCategoriesToCloud(categories) {
+  if (!Array.isArray(categories)) return;
+  
+  localStorage.setItem('lzhcard_selected_categories', JSON.stringify(categories));
+  window.selectedCategories = categories;
+
+  if (auth.currentUser) {
+    try {
+      await db.collection('users').doc(auth.currentUser.uid).set({
+        selectedCategories: categories,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (e) {
+      console.warn("同步多選字庫至雲端失敗：", e);
+    }
+  }
+}
+
+// 6. 監聽帳號狀態切換，同步雲端資料與字庫記憶
 auth.onAuthStateChanged(async (user) => {
   const emailEl = document.getElementById('settings-email');
   const subtextEl = document.getElementById('settings-subtext');
@@ -134,16 +152,27 @@ auth.onAuthStateChanged(async (user) => {
   if (user) {
     let userNickname = user.displayName || (user.email ? user.email.split('@')[0] : '使用者');
     let userRole = 'user';
-    let userCoins = 500; // 預設值
+    let userCoins = 500;
     
     try {
-      // 🌟 從 Firestore 讀取暱稱、角色與真正的金幣數值 (coins)
       const userDoc = await db.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         const data = userDoc.data();
         if (data.nickname) userNickname = data.nickname;
         if (data.role) userRole = data.role;
         if (typeof data.coins === 'number') userCoins = data.coins;
+        
+        // 自動載入帳號上記錄的多選字庫
+        if (Array.isArray(data.selectedCategories) && data.selectedCategories.length > 0) {
+          window.selectedCategories = data.selectedCategories;
+          localStorage.setItem('lzhcard_selected_categories', JSON.stringify(data.selectedCategories));
+        }
+
+        // 自動載入好友列表
+        if (Array.isArray(data.friends)) {
+          if (!window.userData) window.userData = {};
+          window.userData.friends = data.friends;
+        }
       }
     } catch (e) {
       console.warn("無法從雲端讀取使用者資料：", e);
@@ -153,7 +182,7 @@ auth.onAuthStateChanged(async (user) => {
     window.userData.nickname = userNickname;
     window.userData.username = userNickname;
     window.userData.role = userRole;
-    window.userData.coins = userCoins; // 🪙 同步至本地 window.userData
+    window.userData.coins = userCoins;
 
     const nicknameInput = document.getElementById('settingsNicknameInput');
     if (nicknameInput) nicknameInput.value = userNickname;
@@ -164,6 +193,11 @@ auth.onAuthStateChanged(async (user) => {
     if (navAvatarEl) navAvatarEl.src = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
     if (loggedOutEl) loggedOutEl.style.display = 'none';
     if (loggedInEl) loggedInEl.style.display = 'block';
+
+    // 🌟 初始化聊天與好友申請即時監聽器
+    if (typeof initChatRealtimeListeners === 'function') {
+      initChatRealtimeListeners();
+    }
   } else {
     if (!window.userData) window.userData = {};
     window.userData.username = '訪客玩家';
@@ -182,11 +216,14 @@ auth.onAuthStateChanged(async (user) => {
     await loadStorage();
   }
 
+  if (typeof updateUI === 'function') {
+    updateUI();
+  }
+
   if (typeof renderStore === 'function') {
     renderStore();
   }
 
-  // 🪙 即時刷新畫面上顯示的金幣數字 UI
   if (typeof updateUserCoinsUI === 'function') {
     updateUserCoinsUI();
   }

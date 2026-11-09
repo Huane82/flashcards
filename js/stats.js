@@ -3,6 +3,18 @@
  */
 
 /**
+ * 🔍 取得當前勾選字庫的單字清單（用於統計計算）
+ */
+function getStatsFilteredWords() {
+    const activeCats = window.selectedCategories || ['ALL'];
+    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+    if (!wordList || !Array.isArray(wordList)) return [];
+
+    if (activeCats.includes("ALL")) return wordList;
+    return wordList.filter(w => activeCats.includes(w.category || defaultCatName));
+}
+
+/**
  * 📊 渲染統計成果面板 (根據使用者勾選項目動態產生卡片)
  */
 function renderStats() {
@@ -15,7 +27,9 @@ function renderStats() {
     const showCatLevel = document.getElementById('chkShowCatLevel')?.checked ?? true;
 
     const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
-    const currentWordList = (typeof wordList !== 'undefined' && Array.isArray(wordList)) ? wordList : [];
+
+    // ✅ 改為取得過濾後的單字清單
+    const currentWordList = getStatsFilteredWords();
     const totalWords = currentWordList.length;
 
     // 1. 統計總體記憶等級分佈 (Lv.1~5)

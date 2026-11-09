@@ -1,7 +1,19 @@
 /**
- * LZHCard - 主程式交互控制器 (app.js - 修正金幣 UI 即時同步)
+ * LZHCard - 主程式交互控制器 (純化精簡版)
  */
-let selectedCategory = 'ALL';
+
+function getSavedCategories() {
+    try {
+        const saved = localStorage.getItem('lzhcard_selected_categories');
+        if (saved !== null) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return parsed;
+        }
+    } catch(e) {}
+    return ['ALL'];
+}
+
+window.selectedCategories = getSavedCategories();
 let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
@@ -71,32 +83,68 @@ function getAllCategories() {
     return Array.from(categories);
 }
 
-window.addEventListener('DOMContentLoaded', async () => {
-    if (typeof loadStorage === 'function') {
-        await loadStorage();
+document.addEventListener('click', (e) => {
+    const selector = document.getElementById('headerCategorySelector');
+    const menu = document.getElementById('categoryDropdownMenu');
+    if (selector && menu && !selector.contains(e.target)) {
+        menu.classList.add('hidden');
     }
-    updateUserCoinsUI();
 });
 
+function toggleCategoryDropdown(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('categoryDropdownMenu');
+    if (menu) menu.classList.toggle('hidden');
+}
+
+/**
+ * 🔄 更新字庫多選選單 (渲染 Checkbox UI 與按鈕文字)
+ */
 function updateCategorySelects() {
     const cats = getAllCategories();
     const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
     const catAllText = (typeof t === 'function') ? t('catAll') : "全部字庫";
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
     const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
-    const totalPrefix = nativeLang === 'en' ? '' : (nativeLang === 'ja' ? '計 ' : '共 ');
 
-    const filterSelect = document.getElementById('categoryFilterSelect');
-    if (filterSelect) {
-        const cur = filterSelect.value;
-        filterSelect.innerHTML = 
-            `<option value="ALL">${catAllText} (${totalPrefix}${wordList.length} ${unitText})</option>` + 
-            cats.map(c => {
-                const count = wordList.filter(w => (w.category || defaultCatName) === c).length;
-                return `<option value="${c}">${c} (${count} ${unitText})</option>`;
-            }).join('');
-        
-        filterSelect.value = cur || 'ALL';
+    let activeCats = window.selectedCategories || ['ALL'];
+    const menu = document.getElementById('categoryDropdownMenu');
+    const btnText = document.getElementById('categoryDropdownBtnText');
+
+    const isAllChecked = activeCats.includes('ALL') || (cats.length > 0 && cats.every(c => activeCats.includes(c)));
+
+    if (menu) {
+        let html = `
+            <label class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer font-bold text-slate-800 dark:text-slate-100">
+                <input type="checkbox" value="ALL" ${isAllChecked ? 'checked' : ''} onchange="handleCategoryCheckboxChange(this)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                <span>${catAllText} (${wordList.length} ${unitText})</span>
+            </label>
+            <div class="border-t border-slate-100 dark:border-slate-700 my-1"></div>
+        `;
+
+        cats.forEach(c => {
+            const count = wordList.filter(w => (w.category || defaultCatName) === c).length;
+            const isChecked = isAllChecked || activeCats.includes(c);
+            html += `
+                <label class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-slate-700 dark:text-slate-200">
+                    <input type="checkbox" value="${c}" ${isChecked ? 'checked' : ''} onchange="handleCategoryCheckboxChange(this)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                    <span class="truncate">${c} (${count} ${unitText})</span>
+                </label>
+            `;
+        });
+        menu.innerHTML = html;
+    }
+
+    if (btnText) {
+        if (isAllChecked) {
+            btnText.innerText = catAllText;
+        } else if (activeCats.length === 0) {
+            btnText.innerText = '未選取字庫';
+        } else if (activeCats.length === 1) {
+            btnText.innerText = activeCats[0];
+        } else {
+            btnText.innerText = `已選 ${activeCats.length} 個字庫`;
+        }
     }
 
     const exportSelect = document.getElementById('exportCategorySelect');
@@ -115,22 +163,60 @@ function updateCategorySelects() {
     }
 }
 
-function handleCategoryFilterChange() {
-    const filterSelect = document.getElementById('categoryFilterSelect');
-    if (filterSelect) {
-        selectedCategory = filterSelect.value;
+/**
+ * 🎯 勾選/取消字庫事件
+ */
+function handleCategoryCheckboxChange(checkbox) {
+    const val = checkbox.value;
+    const cats = getAllCategories();
+    let activeCats = [...(window.selectedCategories || [])];
+
+    let currentSubCats = activeCats.filter(c => c !== 'ALL');
+
+    if (val === 'ALL') {
+        if (checkbox.checked) {
+            activeCats = ['ALL', ...cats];
+        } else {
+            activeCats = [];
+        }
+    } else {
+        if (checkbox.checked) {
+            if (!currentSubCats.includes(val)) currentSubCats.push(val);
+            if (cats.length > 0 && cats.every(c => currentSubCats.includes(c))) {
+                activeCats = ['ALL', ...currentSubCats];
+            } else {
+                activeCats = [...currentSubCats];
+            }
+        } else {
+            currentSubCats = currentSubCats.filter(c => c !== val);
+            activeCats = [...currentSubCats];
+        }
     }
+
+    window.selectedCategories = activeCats;
+    if (typeof saveSelectedCategoriesToCloud === 'function') {
+        saveSelectedCategoriesToCloud(activeCats);
+    }
+
     selectedWordIds.clear();
     updateUI();
     nextCard();
 }
 
+window.addEventListener('DOMContentLoaded', async () => {
+    if (typeof loadStorage === 'function') {
+        await loadStorage();
+    }
+    updateUserCoinsUI();
+});
+
 function updateUI() {
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
+    const activeCats = window.selectedCategories || [];
 
     const filteredList = wordList.filter(w => {
-        if (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") return true;
-        return (w.category || defaultCatName) === selectedCategory;
+        if (activeCats.includes("ALL")) return true;
+        return activeCats.includes(w.category || defaultCatName);
     });
 
     const count = filteredList.length;
@@ -145,18 +231,18 @@ function updateUI() {
 
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     renderWordList();
+    if (currentTab === 'stats' && typeof renderStats === 'function') renderStats();
     if (typeof updateBatchBadgeUI === 'function') updateBatchBadgeUI();
     if (typeof applyLanguageUI === 'function') applyLanguageUI();
 }
 
-/**
- * 🌟 智慧控制「無單字提示框」的顯示狀態
- */
 function updateEmptyNoticeState() {
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
+    const activeCats = window.selectedCategories || [];
+
     const filteredList = (typeof wordList !== 'undefined' && Array.isArray(wordList)) ? wordList.filter(w => {
-        if (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") return true;
-        return (w.category || defaultCatName) === selectedCategory;
+        if (activeCats.includes("ALL")) return true;
+        return activeCats.includes(w.category || defaultCatName);
     }) : [];
 
     const count = filteredList.length;
@@ -188,6 +274,7 @@ function nextCard() {
     if (!currentCard) {
         if (document.getElementById('cardWord')) document.getElementById('cardWord').innerText = t('noWordAvailable');
         if (document.getElementById('cardPhonetic')) document.getElementById('cardPhonetic').innerText = "/---/";
+        if (document.getElementById('cardPhoneticBack')) document.getElementById('cardPhoneticBack').innerText = "";
         if (document.getElementById('cardPosFront')) document.getElementById('cardPosFront').innerText = "EMPTY";
         if (document.getElementById('cardPosBack')) document.getElementById('cardPosBack').innerText = "EMPTY";
         if (document.getElementById('cardMeaning')) document.getElementById('cardMeaning').innerText = t('selectOtherDeck');
@@ -200,7 +287,7 @@ function nextCard() {
     const streak = currentCard.knowStreak || 0;
 
     const streakTextElem = document.getElementById('knowStreakText');
-    if (streakTextElem) streakTextElem.innerText = `${streak}/3`;
+    if (streakTextElem) streakTextElem.innerText = `${streak}/2`;
 
     const displayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
     const wordText = currentCard.word || '';
@@ -220,7 +307,18 @@ function nextCard() {
         if (backMeaningElem) backMeaningElem.innerText = meaningText;
     }
 
-    if (document.getElementById('cardPhonetic')) document.getElementById('cardPhonetic').innerText = currentCard.phonetic || '/---/';
+    const phoneticPos = localStorage.getItem('lzhcard_phonetic_pos') || 'front';
+    const frontPhonetic = document.getElementById('cardPhonetic');
+    const backPhonetic = document.getElementById('cardPhoneticBack');
+
+    if (phoneticPos === 'back') {
+        if (frontPhonetic) frontPhonetic.innerText = '';
+        if (backPhonetic) backPhonetic.innerText = currentCard.phonetic ? `[ ${currentCard.phonetic} ]` : '';
+    } else {
+        if (frontPhonetic) frontPhonetic.innerText = currentCard.phonetic || '/---/';
+        if (backPhonetic) backPhonetic.innerText = '';
+    }
+
     if (document.getElementById('cardPosFront')) document.getElementById('cardPosFront').innerText = currentCard.pos || 'N/A';
     
     const levelFront = document.getElementById('cardLevelFront');
@@ -259,12 +357,12 @@ function handleKnow() {
         if (!card.level) card.level = 1;
         card.knowStreak = (card.knowStreak || 0) + 1;
 
-        if (card.knowStreak >= 3) {
+        if (card.knowStreak >= 2) {
             if (card.level < 5) {
                 card.level += 1;
                 card.knowStreak = 0;
             } else {
-                card.knowStreak = 3;
+                card.knowStreak = 2;
             }
         }
         saveStorage();
@@ -307,7 +405,7 @@ function switchTab(tab) {
 
     const catSelector = document.getElementById('headerCategorySelector');
     if (catSelector) {
-        if (tab === 'store' || tab === 'settings' || tab === 'stats') {
+        if (tab === 'store' || tab === 'settings') {
             catSelector.classList.add('hidden');
         } else {
             catSelector.classList.remove('hidden');
@@ -414,6 +512,7 @@ function getFilteredWords() {
 
     const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
     const sortBy = sortSelect ? sortSelect.value : 'default';
+    const activeCats = window.selectedCategories || [];
 
     const isMissing = (item, field) => {
         if (field === 'meaning') return !item.meaning || !item.meaning.trim() || item.meaning === noMeaningText;
@@ -427,9 +526,8 @@ function getFilteredWords() {
             (item.category && item.category.toLowerCase().includes(search)) ||
             (item.pos && item.pos.toLowerCase().includes(search));
             
-        let matchesCategory = (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") 
-            ? true 
-            : (item.category || defaultCatName) === selectedCategory;
+        const itemCat = item.category || defaultCatName;
+        let matchesCategory = activeCats.includes("ALL") || activeCats.includes(itemCat);
 
         if (sortBy === 'only_missing_meaning' && !isMissing(item, 'meaning')) return false;
         if (sortBy === 'only_missing_sentence' && !isMissing(item, 'sentence')) return false;
@@ -577,45 +675,9 @@ function updateBatchBadgeUI() {
     }
 }
 
-function handleRenameCategory() {
-    let targetCat = typeof selectedCategory !== 'undefined' ? selectedCategory : 'ALL';
-    const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
-
-    if (targetCat === 'ALL') {
-        const cats = getAllCategories();
-        const inputCat = prompt(t('promptSelectRenameDeck', { list: cats.join('、 ') }));
-        if (!inputCat || !inputCat.trim()) return;
-        targetCat = inputCat.trim();
-        
-        if (!cats.includes(targetCat)) {
-            showToast(t('toastCategoryNotFound', { name: targetCat }), 'warning');
-            return;
-        }
-    }
-
-    const newName = prompt(t('promptNewDeckName', { name: targetCat }), targetCat);
-    if (!newName || !newName.trim() || newName.trim() === targetCat) return;
-
-    const cleanNewName = newName.trim();
-    let updatedCount = 0;
-
-    wordList.forEach(item => {
-        const currentCat = item.category || defaultCatName;
-        if (currentCat === targetCat) {
-            item.category = cleanNewName;
-            updatedCount++;
-        }
-    });
-
-    if (selectedCategory === targetCat) {
-        selectedCategory = cleanNewName;
-    }
-
-    saveStorage();
-    updateCategorySelects();
-    updateUI();
-    showToast(t('toastRenameSuccess', { oldName: targetCat, newName: cleanNewName, count: updatedCount }), 'success');
-}
+/* ==========================================================================
+   ✏️ 單字新增與編輯表單控制
+   ========================================================================== */
 
 function editCard(id) {
     const item = wordList.find(w => w.id === id);
@@ -742,14 +804,16 @@ async function handleAiSingleFill() {
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>${typeof t === 'function' ? t('progressAiParsing') : 'AI 解析中...'}</span>`;
 
-    const result = await autoFillWithAI(word);
-    if (result) {
-        if (result.pos) document.getElementById('formPos').value = result.pos;
-        if (result.phonetic) document.getElementById('formPhonetic').value = result.phonetic;
-        if (result.meaning) document.getElementById('formMeaning').value = result.meaning;
-        if (result.sentence) document.getElementById('formSentence').value = result.sentence;
-        if (result.translation) document.getElementById('formTranslation').value = result.translation;
-        showToast(typeof t === 'function' ? t('toastAiSingleSuccess') : 'AI 自動補齊成功！', 'success');
+    if (typeof autoFillWithAI === 'function') {
+        const result = await autoFillWithAI(word);
+        if (result) {
+            if (result.pos) document.getElementById('formPos').value = result.pos;
+            if (result.phonetic) document.getElementById('formPhonetic').value = result.phonetic;
+            if (result.meaning) document.getElementById('formMeaning').value = result.meaning;
+            if (result.sentence) document.getElementById('formSentence').value = result.sentence;
+            if (result.translation) document.getElementById('formTranslation').value = result.translation;
+            showToast(typeof t === 'function' ? t('toastAiSingleSuccess') : 'AI 自動補齊成功！', 'success');
+        }
     }
 
     btn.disabled = false;
@@ -761,6 +825,12 @@ function openModal(id) {
     if (!modal) return;
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+
+    if (id === 'batchModal' || id === 'quickAddModal') {
+        if (typeof updateBatchPlaceholders === 'function') {
+            updateBatchPlaceholders();
+        }
+    }
 
     if (typeof applyLanguageUI === 'function') {
         applyLanguageUI();

@@ -43,6 +43,7 @@ function syncSettingsUI() {
     const customNative = localStorage.getItem('lzhcard_custom_native') || '';
     const customTarget = localStorage.getItem('lzhcard_custom_target') || '';
     const savedDisplayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
+    const savedPhoneticPos = localStorage.getItem('lzhcard_phonetic_pos') || 'front';
     const savedTheme = localStorage.getItem('theme_preference') || 'system';
 
     const nativeSelect = document.getElementById('nativeLangSelect');
@@ -53,6 +54,9 @@ function syncSettingsUI() {
 
     const displaySelect = document.getElementById('cardDisplayModeSelect');
     if (displaySelect) displaySelect.value = savedDisplayMode;
+
+    const phoneticPosSelect = document.getElementById('phoneticPosSelect');
+    if (phoneticPosSelect) phoneticPosSelect.value = savedPhoneticPos;
 
     const themeSelect = document.getElementById('themeSelect');
     if (themeSelect) themeSelect.value = savedTheme;
@@ -97,6 +101,11 @@ function initLanguageSettings() {
 
     syncSettingsUI();
 
+    // 🌟 初始化時同步更新批量輸入提示
+    if (typeof updateBatchPlaceholders === 'function') {
+        updateBatchPlaceholders();
+    }
+
     if (typeof applyLanguageUI === 'function') {
         applyLanguageUI();
     }
@@ -123,6 +132,12 @@ function handleNativeLangChange(lang) {
 function handleTargetLangChange(lang) {
     localStorage.setItem('lzhcard_target_lang', lang);
     syncSettingsUI();
+
+    // 🌟 當使用者切換學習目標語言時，立即更新批量/快速新增視窗的 Placeholder
+    if (typeof updateBatchPlaceholders === 'function') {
+        updateBatchPlaceholders();
+    }
+
     if (typeof showToast === 'function') showToast(t('toastTargetLangUpdated'), 'info');
     if (typeof saveStorage === 'function') saveStorage();
 }
@@ -151,6 +166,20 @@ function handleCardDisplayModeChange(mode) {
     if (typeof updateUI === 'function') updateUI();
     if (typeof nextCard === 'function') nextCard();
     if (typeof showToast === 'function') showToast(t('toastDisplayModeUpdated'), 'success');
+    if (typeof saveStorage === 'function') saveStorage();
+}
+
+/**
+ * 🔤 切換音標 / 讀音顯示位置 (正面 / 背面)
+ */
+function handlePhoneticPosChange(mode) {
+    localStorage.setItem('lzhcard_phonetic_pos', mode);
+    if (typeof updateUI === 'function') updateUI();
+    if (typeof nextCard === 'function') nextCard();
+    if (typeof showToast === 'function') {
+        const msgKey = mode === 'back' ? 'toastPhoneticBack' : 'toastPhoneticFront';
+        showToast(t(msgKey), 'info');
+    }
     if (typeof saveStorage === 'function') saveStorage();
 }
 

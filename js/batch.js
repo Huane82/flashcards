@@ -1,12 +1,67 @@
 /**
- * LZHCard - 批量匯入、AI 自動補齊、拆分與 JSON 備份模組 (batch.js)
+ * LZHCard - 批量匯入、UI 控制、字庫管理與 JSON 備份模組 (Batch UI Controller)
  */
 
 window.parsedBatchList = window.parsedBatchList || [];
 
+function safeT(key, params, fallbackStr) {
+    if (typeof t === 'function') {
+        try {
+            return t(key, params);
+        } catch (e) {}
+    }
+    if (!fallbackStr) fallbackStr = key;
+    if (params && typeof params === 'object') {
+        Object.keys(params).forEach(k => {
+            fallbackStr = fallbackStr.replace(new RegExp(`{\\s*${k}\\s*}`, 'g'), params[k]);
+        });
+    }
+    return fallbackStr;
+}
+
 /**
- * 🔍 從物件中搜尋可能包含中文釋義的欄位
+ * 🌐 依據目前設定的目標語言 (Target Language) 動態切換批量輸入與快速新增的範例提示
  */
+function updateBatchPlaceholders() {
+    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
+    const batchRawInput = document.getElementById('batchRawInput');
+    const quickAddInput = document.getElementById('quickAddInput');
+
+    let batchPlaceholder = "";
+    let quickAddPlaceholder = "";
+
+    if (targetLang === 'ja') {
+        batchPlaceholder = `【日語輸入範例】（支援格式：單字 + 假名讀音 + 詞性 + 母語釋義）\n` +
+                           `1. 食べる たべる (動詞) 吃\n` +
+                           `2. 猫 ねこ (名詞) 貓咪\n` +
+                           `3. 綺麗 きれい (adj.) 美麗的\n` +
+                           `4. 勉強する : 學習\n` +
+                           `5. 乾杯 /かんぱい/ 乾杯！`;
+
+        quickAddPlaceholder = `例如: 食べる, 猫, 勉強する, 綺麗`;
+    } else if (targetLang === 'zh-TW' || targetLang === 'zh') {
+        batchPlaceholder = `【中文/國語輸入範例】（支援格式：詞彙 + 注音/拼音 + 詞性 + 外語釋義）\n` +
+                           `1. 韌性 ㄖㄣˋ ㄒㄧㄥˋ (n.) resilience\n` +
+                           `2. 努力 ㄋㄨˇ ㄌㄧˋ (v.) make effort\n` +
+                           `3. 學習 : study\n` +
+                           `4. 蘋果 (名詞) apple`;
+
+        quickAddPlaceholder = `例如: 韌性, 努力, 學習, 蘋果`;
+    } else {
+        // 預設英文範例 (en 或自訂)
+        batchPlaceholder = `【英文輸入範例】（支援格式：單字 + 音標 + 詞性 + 中文釋義）\n` +
+                           `1. resilient /rɪˈzɪl.jənt/ (adj.) 有彈性的\n` +
+                           `2. apple n. 蘋果\n` +
+                           `3. take off (phr.) 起飛；脫下\n` +
+                           `4. candidate : 候選人`;
+
+        quickAddPlaceholder = `例如: resilient, fragile, candidate`;
+    }
+
+    if (batchRawInput) batchRawInput.placeholder = batchPlaceholder;
+    if (quickAddInput) quickAddInput.placeholder = quickAddPlaceholder;
+}
+
 function findChineseMeaningFromObject(item) {
     if (!item || typeof item !== 'object') return '';
     const preferredKeys = ['meaning', 'definition', 'zh', 'ch', 'chinese', 'ch_meaning', 'trans', 'translation', 'm', 'd', 'explanation', 'note'];
@@ -23,11 +78,9 @@ function findChineseMeaningFromObject(item) {
     return '';
 }
 
-/**
- * 📚 載入高中 7000 單預設字庫包 (支援 CDN 多備援)
- */
 async function handleLoadPreset(levelNum) {
-    if (!confirm(t('confirmLoadPreset', { level: levelNum }))) return;
+    const confirmMsg = safeT('confirmLoadPreset', { level: levelNum }, `確定要載入高中 7000 單 L${levelNum} 嗎？`);
+    if (!confirm(confirmMsg)) return;
 
     const CDN_SOURCES = [
         "https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json",
@@ -40,7 +93,7 @@ async function handleLoadPreset(levelNum) {
     const origText = btn ? btn.innerText : "";
     if (btn) {
         btn.disabled = true;
-        btn.innerText = t('btnDownloading');
+        btn.innerText = safeT('btnDownloading', null, '下載中...');
     }
 
     let allWords = null;
@@ -61,7 +114,7 @@ async function handleLoadPreset(levelNum) {
     }
 
     if (!allWords) {
-        if (typeof showToast === 'function') showToast(t('toastCdnFailed'), 'error');
+        if (typeof showToast === 'function') showToast(safeT('toastCdnFailed', null, '無法連接至字庫伺服器'), 'error');
         if (btn) { btn.disabled = false; btn.innerText = origText; }
         return;
     }
@@ -74,7 +127,7 @@ async function handleLoadPreset(levelNum) {
     });
 
     if (!targetWords || targetWords.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastLevelNotFound', { level: levelNum }), 'warning');
+        if (typeof showToast === 'function') showToast(safeT('toastLevelNotFound', { level: levelNum }, `未找到 Level ${levelNum} 的單字`), 'warning');
         if (btn) { btn.disabled = false; btn.innerText = origText; }
         return;
     }
@@ -112,11 +165,11 @@ async function handleLoadPreset(levelNum) {
     }
 
     renderBatchPreview();
-    if (typeof showToast === 'function') showToast(t('toastPresetSuccess', { name: catName, count: window.parsedBatchList.length }), 'success');
+    if (typeof showToast === 'function') showToast(safeT('toastPresetSuccess', { name: catName, count: window.parsedBatchList.length }, `成功載入「${catName}」共 ${window.parsedBatchList.length} 個單字`), 'success');
 }
 
 /**
- * 🌐 批量貼上文字解析器（支援多單字片語完整識別、日文假名/漢字 + 羅馬拼音發音）
+ * 🌐 批量貼上文字解析器 (支援 日語假名/中文注音 與 多種分隔符)
  */
 function parseBatchText(text) {
     if (!text || typeof text !== 'string') return [];
@@ -124,11 +177,17 @@ function parseBatchText(text) {
     const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
     const results = [];
 
-    // 嚴謹詞性匹配：英文字母詞性需帶點 (n., v.) 或括號 ([n])，避免將羅馬拼音 n, v 誤判為詞性
-    const strictPosRegex = /(?:\[|\()\s*(adj|adv|v|n|prep|conj|pron|vt|vi|num|art|phr|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞)\.?\s*(?:\]|\))|\b(adj|adv|v|n|prep|conj|pron|vt|vi|num|art|phr)\.|\b(名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)\b/i;
+    const posUnit = '(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|art|phr|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)';
+    const strictPosRegex = new RegExp(
+        `(?:[\\(\\[\\{]\\s*${posUnit}(?:[\\s\\.\\,\\/\\\\&\\|]+${posUnit})*[\\.\\s]*[\\)\\]\\}])` +
+        `|(?:\\b${posUnit}\\.(?:[\\s\\,\\/\\\\&\\|]*${posUnit}\\.)*)` +
+        `|(?:\\b(?:名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)(?:[\\s\\,\\/\\\\&\\|]+(?:名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞))*\\b)`,
+        'i'
+    );
 
-    // 日文字元判斷（平假名、片假名）
-    const jpRegex = /[\u3040-\u309F\u30A0-\u30FF]/;
+    const jpRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+    // 支援平假名、片假名、英數與注音符號
+    const phoneticReadingRegex = /^[\u3040-\u309F\u30A0-\u30FF\u3100-\u312F\u02EA\u02EB\u02C5\u02C7\u02C9\u02CA\u02CBa-zA-Z\s\-\.\'\`]+$/;
 
     lines.forEach(line => {
         let tempLine = line;
@@ -137,49 +196,41 @@ function parseBatchText(text) {
         let phonetic = '';
         let meaning = '';
 
-        // 1. 提取斜線內的音標 / 讀音 (例如: /rɪˈzɪl.jənt/)
+        // 1. 提取斜線音標 /.../
         const slashPhonetic = tempLine.match(/\/([^\/]+)\//);
         if (slashPhonetic) {
             phonetic = '/' + slashPhonetic[1] + '/';
             tempLine = tempLine.replace(slashPhonetic[0], ' ');
         }
 
-        // 2. 提取詞性 (僅比對帶點或帶括號的顯式詞性標籤)
+        // 2. 提取詞性 (n., v., 名詞, 動詞)
         const posMatch = tempLine.match(strictPosRegex);
         if (posMatch) {
-            pos = (posMatch[1] || posMatch[2] || posMatch[3]).trim();
-            if (!pos.endsWith('.') && !/[\u4e00-\u9fa5\u3040-\u30ff]/.test(pos)) {
-                pos += '.';
-            }
+            pos = posMatch[0].replace(/[\(\[\{\)\]\}]/g, '').trim();
             tempLine = tempLine.replace(posMatch[0], ' ');
         }
 
-        // 3. 智慧拆分「單字/片語」與「母語釋義」
         const delimRegex = /\t|:|＝|=| - | -- | — | – /;
 
         if (delimRegex.test(tempLine)) {
-            // 情況 A：有明確分隔符號 (Tab, 冒號, 等號, 破折號)
             const parts = tempLine.split(delimRegex).map(s => s.trim()).filter(Boolean);
             word = parts[0] || '';
             meaning = parts.slice(1).join(' ');
         } else {
-            // 情況 B：無明確分隔符號時的智慧分析
             const spaceParts = tempLine.split(/\s+/).map(s => s.trim()).filter(Boolean);
 
-            // 判斷是否為日文假名 + 羅馬拼音 (例如: "ン n" 或 "たべる taberu")
-            if (spaceParts.length >= 2 && jpRegex.test(spaceParts[0]) && /^[a-zA-Z\s\-\.\'\`]+$/.test(spaceParts[1]) && !phonetic) {
+            // 判斷日語假名或中文讀音（例如：食べる たべる 吃 或 貓 ねこ 貓咪）
+            if (spaceParts.length >= 2 && jpRegex.test(spaceParts[0]) && phoneticReadingRegex.test(spaceParts[1]) && !phonetic) {
                 word = spaceParts[0];
                 phonetic = spaceParts[1];
                 meaning = spaceParts.slice(2).join(' ');
             } else {
-                // 檢查是否含有中文母語釋義邊界 (例如: "keep up with 跟上進度")
                 const zhMatch = tempLine.match(/[\u4e00-\u9fa5]/);
-                if (zhMatch) {
+                if (zhMatch && !jpRegex.test(tempLine.substring(0, tempLine.indexOf(zhMatch[0])))) {
                     const idx = tempLine.indexOf(zhMatch[0]);
                     word = tempLine.substring(0, idx).trim();
                     meaning = tempLine.substring(idx).trim();
                 } else {
-                    // 情況 C：全外文片語 (例如輸入 "keep up with" 或 "look forward to")
                     word = tempLine.trim();
                     meaning = '';
                 }
@@ -205,29 +256,23 @@ function parseBatchText(text) {
     return results;
 }
 
-/**
- * 📋 觸發文字解析處理
- */
 function handleParseBatchText() {
     const raw = document.getElementById('batchRawInput')?.value.trim();
     if (!raw) {
-        if (typeof showToast === 'function') showToast(t('toastPasteFirst'), 'warning');
+        if (typeof showToast === 'function') showToast(safeT('toastPasteFirst', null, '請先貼上單字內容'), 'warning');
         return;
     }
 
     window.parsedBatchList = parseBatchText(raw);
     if (window.parsedBatchList.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastParseError'), 'error');
+        if (typeof showToast === 'function') showToast(safeT('toastParseError', null, '解析文字失敗，請確認格式'), 'error');
         return;
     }
 
     renderBatchPreview();
-    if (typeof showToast === 'function') showToast(t('toastParseSuccess', { count: window.parsedBatchList.length }), 'success');
+    if (typeof showToast === 'function') showToast(safeT('toastParseSuccess', { count: window.parsedBatchList.length }, `成功解析 ${window.parsedBatchList.length} 個單字`), 'success');
 }
 
-/**
- * 👁️ 渲染批量匯入預覽表格
- */
 function renderBatchPreview() {
     const previewBox = document.getElementById('batchPreviewBox');
     const previewBody = document.getElementById('batchPreviewBody');
@@ -241,10 +286,10 @@ function renderBatchPreview() {
         return;
     }
 
-    const textComplete = typeof t === 'function' ? t('statusComplete') : '完整';
-    const textPending = typeof t === 'function' ? t('statusPending') : '待補充';
-    const textRemove = typeof t === 'function' ? t('btnRemove') : '移除';
-    const textTitleRemove = typeof t === 'function' ? t('titleRemove') : '移除此項';
+    const textComplete = safeT('statusComplete', null, '完整');
+    const textPending = safeT('statusPending', null, '待補充');
+    const textRemove = safeT('btnRemove', null, '移除');
+    const textTitleRemove = safeT('titleRemove', null, '移除此項');
 
     if (previewBody) {
         previewBody.innerHTML = window.parsedBatchList.map((item, idx) => {
@@ -274,17 +319,11 @@ function renderBatchPreview() {
     if (confirmBtn) confirmBtn.disabled = false;
 }
 
-/**
- * 🗑️ 移除預覽列表中指定索引的項目
- */
 function removeBatchItem(index) {
     window.parsedBatchList.splice(index, 1);
     renderBatchPreview();
 }
 
-/**
- * 🤖 執行預覽列表中項目的批次 AI 補齊
- */
 async function handleRunBatchAiAutoFill() {
     const btn = document.getElementById('batchAiFillBtn');
     const progressContainer = document.getElementById('batchProgressContainer');
@@ -298,7 +337,7 @@ async function handleRunBatchAiAutoFill() {
     if (typeof runBatchAiAutoFill === 'function') {
         await runBatchAiAutoFill(window.parsedBatchList, (current, total) => {
             const pct = Math.round((current / total) * 100);
-            if (progressText) progressText.innerText = t('progressBatchAi', { current, total });
+            if (progressText) progressText.innerText = safeT('progressBatchAi', { current, total }, `AI 補齊中... (${current}/${total})`);
             if (progressBar) progressBar.style.width = `${pct}%`;
             if (progressPercent) progressPercent.innerText = `${pct}%`;
             renderBatchPreview();
@@ -309,14 +348,11 @@ async function handleRunBatchAiAutoFill() {
 
     if (progressBar) progressBar.style.width = `100%`;
     if (progressPercent) progressPercent.innerText = `100%`;
-    if (progressText) progressText.innerText = typeof t === 'function' ? t('progressAiComplete') : 'AI 自動補齊完成！';
+    if (progressText) progressText.innerText = safeT('progressAiComplete', null, 'AI 自動補齊完成！');
     if (btn) btn.disabled = false;
-    if (typeof showToast === 'function') showToast(t('toastAiBatchSuccess'), 'success');
+    if (typeof showToast === 'function') showToast(safeT('toastAiBatchSuccess', null, 'AI 批次補充成功！'), 'success');
 }
 
-/**
- * 🔄 重置批量匯入 Modal UI 狀態
- */
 function resetBatchModal() {
     window.parsedBatchList = [];
     
@@ -339,13 +375,10 @@ function resetBatchModal() {
     if (progressBar) progressBar.style.width = '0%';
 }
 
-/**
- * ✅ 確認將預覽列表中單字匯入至單字庫
- */
 function handleConfirmBatchImport() {
     if (!window.parsedBatchList || window.parsedBatchList.length === 0) return;
 
-    const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
+    const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
     const targetCatElem = document.getElementById('batchTargetCategory');
     const targetCategory = targetCatElem ? (targetCatElem.value.trim() || defaultCatName) : defaultCatName;
     let addedCount = 0;
@@ -371,7 +404,7 @@ function handleConfirmBatchImport() {
                 word: itemWord,
                 pos: String(item.pos || '').trim(),
                 phonetic: String(item.phonetic || '').trim(),
-                meaning: String(item.meaning || t('noMeaning')).trim(),
+                meaning: String(item.meaning || safeT('noMeaning', null, '無釋義')).trim(),
                 sentence: String(item.sentence || '').trim(),
                 translation: String(item.translation || '').trim(),
                 level: 1, 
@@ -390,22 +423,19 @@ function handleConfirmBatchImport() {
 
     const netUniqueAdded = addedCount - replacedCount;
     const msg = replacedCount > 0 
-        ? t('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded })
-        : t('toastImportSuccess', { count: addedCount });
+        ? safeT('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded }, `成功匯入 ${addedCount} 個單字（覆蓋 ${replacedCount} 筆重複資料）`)
+        : safeT('toastImportSuccess', { count: addedCount }, `成功匯入 ${addedCount} 個單字`);
 
     if (typeof showToast === 'function') showToast(msg, 'success');
     if (typeof saveStorage === 'function') saveStorage();
 }
 
-/**
- * ⚡ 快速收錄單字（支援逗號/換行分隔輸入）
- */
 async function handleQuickAddWords() {
     const inputElem = document.getElementById('quickAddInput');
     const rawText = inputElem ? inputElem.value.trim() : '';
 
     if (!rawText) {
-        if (typeof showToast === 'function') showToast(t('toastEnterQuickWords'), 'warning');
+        if (typeof showToast === 'function') showToast(safeT('toastEnterQuickWords', null, '請輸入要快速新增的單字'), 'warning');
         return;
     }
 
@@ -415,7 +445,7 @@ async function handleQuickAddWords() {
         .filter(w => w.length > 0);
 
     if (wordsToProcess.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastNoValidQuickWords'), 'warning');
+        if (typeof showToast === 'function') showToast(safeT('toastNoValidQuickWords', null, '未檢測到有效的單字'), 'warning');
         return;
     }
 
@@ -423,14 +453,15 @@ async function handleQuickAddWords() {
     const origText = btn ? btn.innerText : '';
     if (btn) {
         btn.disabled = true;
-        btn.innerText = t('btnProcessing');
+        btn.innerText = safeT('btnProcessing', null, '處理中...');
     }
 
-    const defaultCategoryName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
-    const defaultMeaningText = typeof t === 'function' ? t('progressAiParsing') : 'AI 自動解析中...';
+    const defaultCategoryName = safeT('defaultCategoryName', null, '預設字庫');
+    const defaultMeaningText = safeT('progressAiParsing', null, 'AI 自動解析中...');
 
-    const targetCategory = (typeof selectedCategory !== 'undefined' && selectedCategory !== 'ALL') 
-        ? selectedCategory 
+    const activeCats = window.selectedCategories || ['ALL'];
+    const targetCategory = (activeCats.length === 1 && activeCats[0] !== 'ALL') 
+        ? activeCats[0] 
         : defaultCategoryName;
 
     let addedList = [];
@@ -468,7 +499,7 @@ async function handleQuickAddWords() {
     }
 
     if (addedList.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastQuickWordsExist'), 'info');
+        if (typeof showToast === 'function') showToast(safeT('toastQuickWordsExist', null, '輸入的單字皆已存在於字庫中'), 'info');
         return;
     }
 
@@ -479,23 +510,8 @@ async function handleQuickAddWords() {
     if (typeof nextCard === 'function') {
         nextCard();
     }
-    if (!currentCard || currentCard.word === t('noWordAvailable')) {
-        currentCard = addedList[0];
-        const wordElem = document.getElementById('cardWord');
-        const meaningElem = document.getElementById('cardMeaning');
-        if (wordElem) wordElem.innerText = currentCard.word;
-        if (meaningElem) meaningElem.innerText = currentCard.meaning || defaultMeaningText;
-    }
 
-    if (typeof initQuiz === 'function') {
-        initQuiz();
-    } else if (typeof startQuiz === 'function') {
-        startQuiz();
-    } else if (typeof nextQuizQuestion === 'function') {
-        nextQuizQuestion();
-    }
-
-    if (typeof showToast === 'function') showToast(t('toastQuickAddSuccess', { count: addedList.length }), 'success');
+    if (typeof showToast === 'function') showToast(safeT('toastQuickAddSuccess', { count: addedList.length }, `已新增 ${addedList.length} 個單字，AI 正在背景解析中`), 'success');
 
     if (typeof runBatchAiAutoFill === 'function') {
         try {
@@ -514,24 +530,18 @@ async function handleQuickAddWords() {
                     if (typeof nextCard === 'function') nextCard();
                 }
             }
-            if (typeof showToast === 'function') showToast(t('toastAiCompletionDone'), 'success');
+            if (typeof showToast === 'function') showToast(safeT('toastAiCompletionDone', null, 'AI 背景解析完成！'), 'success');
         } catch (err) {
             console.warn("AI 自動補充跳過或失敗:", err);
         }
     }
 }
 
-/**
- * ✂️ 打開字庫拆分 Modal
- */
 function openSplitDeckModal() {
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof openModal === 'function') openModal('splitModal');
 }
 
-/**
- * ✂️ 確認執行字庫自動拆分
- */
 function handleConfirmSplitDeck() {
     const select = document.getElementById('splitTargetCategorySelect');
     const chunkSizeInput = document.getElementById('splitChunkSizeInput');
@@ -540,14 +550,14 @@ function handleConfirmSplitDeck() {
     const chunkSize = parseInt(chunkSizeInput.value, 10) || 200;
 
     if (!targetCat) {
-        if (typeof showToast === 'function') showToast(t('toastSelectSplitDeck'), 'warning');
+        if (typeof showToast === 'function') showToast(safeT('toastSelectSplitDeck', null, '請選擇要拆分的字庫'), 'warning');
         return;
     }
 
-    const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
+    const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
     const targetWords = wordList.filter(w => (w.category || defaultCatName) === targetCat);
     if (targetWords.length === 0 || targetWords.length <= chunkSize) {
-        if (typeof showToast === 'function') showToast(t('toastSplitThreshold', { size: chunkSize }), 'info');
+        if (typeof showToast === 'function') showToast(safeT('toastSplitThreshold', { size: chunkSize }, `單字量未超過 ${chunkSize}，無需拆分`), 'info');
         return;
     }
 
@@ -565,19 +575,68 @@ function handleConfirmSplitDeck() {
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof updateUI === 'function') updateUI();
     if (typeof closeModal === 'function') closeModal('splitModal');
-    if (typeof showToast === 'function') showToast(t('toastSplitSuccess', { count: partNum - 1 }), 'success');
+    if (typeof showToast === 'function') showToast(safeT('toastSplitSuccess', { count: partNum - 1 }, `成功拆分為 ${partNum - 1} 個子字庫`), 'success');
+}
+
+function handleRenameCategory() {
+    const activeCats = window.selectedCategories || [];
+    let targetCat = activeCats[0] || 'ALL';
+    const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
+
+    if (targetCat === 'ALL' || activeCats.length > 1 || activeCats.length === 0) {
+        const cats = typeof getAllCategories === 'function' ? getAllCategories() : [];
+        const inputCat = prompt(safeT('promptSelectRenameDeck', { list: cats.join('、 ') }, `請輸入要重命名的字庫名稱：\n(${cats.join('、 ')})`));
+        if (!inputCat || !inputCat.trim()) return;
+        targetCat = inputCat.trim();
+        
+        if (!cats.includes(targetCat)) {
+            if (typeof showToast === 'function') showToast(safeT('toastCategoryNotFound', { name: targetCat }, `未找到字庫「${targetCat}」`), 'warning');
+            return;
+        }
+    }
+
+    const newName = prompt(safeT('promptNewDeckName', { name: targetCat }, `請輸入「${targetCat}」的新名稱：`), targetCat);
+    if (!newName || !newName.trim() || newName.trim() === targetCat) return;
+
+    const cleanNewName = newName.trim();
+    let updatedCount = 0;
+
+    wordList.forEach(item => {
+        const currentCat = item.category || defaultCatName;
+        if (currentCat === targetCat) {
+            item.category = cleanNewName;
+            updatedCount++;
+        }
+    });
+
+    window.selectedCategories = window.selectedCategories.map(c => c === targetCat ? cleanNewName : c);
+    if (typeof saveSelectedCategoriesToCloud === 'function') {
+        saveSelectedCategoriesToCloud(window.selectedCategories);
+    }
+
+    if (typeof saveStorage === 'function') saveStorage();
+    if (typeof updateCategorySelects === 'function') updateCategorySelects();
+    if (typeof updateUI === 'function') updateUI();
+    if (typeof showToast === 'function') showToast(safeT('toastRenameSuccess', { oldName: targetCat, newName: cleanNewName, count: updatedCount }, `已將「${targetCat}」重命名為「${cleanNewName}」`), 'success');
 }
 
 /**
- * 📁 批次切換選取單字之字庫分類
+ * 📦 批量變更 / 移動字庫
  */
 function handleBatchChangeCategory() {
-    if (selectedWordIds.size === 0) {
-        if (typeof showToast === 'function') showToast(t('toastSelectMoveWords'), 'warning');
+    if (typeof selectedWordIds === 'undefined' || selectedWordIds.size === 0) {
+        if (typeof showToast === 'function') showToast(safeT('toastSelectMoveWords', null, '請先勾選要移動的單字！'), 'warning');
         return;
     }
 
-    const newCategory = prompt(t('promptMoveTarget', { count: selectedWordIds.size }), selectedCategory === 'ALL' ? t('defaultCategoryName') : selectedCategory);
+    const activeCats = window.selectedCategories || ['ALL'];
+    const currentCatName = (activeCats.length === 1 && activeCats[0] !== 'ALL')
+        ? activeCats[0]
+        : safeT('defaultCategoryName', null, '預設字庫');
+
+    const promptText = safeT('promptMoveTarget', { count: selectedWordIds.size }, `將已選取的 ${selectedWordIds.size} 筆單字移至新的字庫名稱：`);
+
+    const newCategory = prompt(promptText, currentCatName);
     if (!newCategory || !newCategory.trim()) return;
 
     const catName = newCategory.trim();
@@ -590,123 +649,166 @@ function handleBatchChangeCategory() {
         }
     });
 
+    if (typeof selectedWordIds !== 'undefined') selectedWordIds.clear();
+
     if (typeof saveStorage === 'function') saveStorage();
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof updateUI === 'function') updateUI();
-    if (typeof showToast === 'function') showToast(t('toastMoveSuccess', { count, name: catName }), 'success');
+    if (typeof showToast === 'function') showToast(safeT('toastMoveSuccess', { count, name: catName }, `已成功將 ${count} 個單字移至「${catName}」`), 'success');
 }
 
-/**
- * 🗑️ 批次刪除選取單字
- */
 function handleBatchDeleteWords() {
-    if (selectedWordIds.size === 0) {
-        if (typeof showToast === 'function') showToast(t('toastSelectDeleteWords'), 'warning');
+    if (typeof selectedWordIds === 'undefined' || selectedWordIds.size === 0) {
+        if (typeof showToast === 'function') showToast(safeT('toastSelectDeleteWords', null, '請先勾選要刪除的單字！'), 'warning');
         return;
     }
 
-    if (confirm(t('confirmDeleteBatch', { count: selectedWordIds.size }))) {
+    const confirmMsg = safeT('confirmDeleteBatch', { count: selectedWordIds.size }, `確定要刪除已選取的 ${selectedWordIds.size} 筆單字嗎？`);
+    if (confirm(confirmMsg)) {
         wordList = wordList.filter(item => !selectedWordIds.has(item.id));
         selectedWordIds.clear();
         if (typeof saveStorage === 'function') saveStorage();
         if (typeof updateCategorySelects === 'function') updateCategorySelects();
         if (typeof updateUI === 'function') updateUI();
         if (typeof nextCard === 'function') nextCard();
-        if (typeof showToast === 'function') showToast(t('toastDeleteBatchSuccess'), 'info');
+        if (typeof showToast === 'function') showToast(safeT('toastDeleteBatchSuccess', null, '批量刪除完成！'), 'info');
     }
 }
 
 /**
- * 🤖 批次執行單字庫 AI 自動補充
+ * 🤖 點擊畫面「✨ AI 補齊」觸發的 UI 互動與進度條控制
  */
 async function handleBatchAiFillLibraryWords() {
-    const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
+    try {
+        const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
+        const activeCats = window.selectedCategories || ['ALL'];
 
-    let targetWords = [];
-    if (selectedWordIds.size > 0) {
-        targetWords = wordList.filter(item => selectedWordIds.has(item.id));
-    } else {
-        targetWords = wordList.filter(item => {
-            if (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") return true;
-            return (item.category || defaultCatName) === selectedCategory;
+        let targetWords = [];
+        if (typeof selectedWordIds !== 'undefined' && selectedWordIds.size > 0) {
+            targetWords = (wordList || []).filter(item => selectedWordIds.has(item.id));
+        } else {
+            targetWords = (wordList || []).filter(item => {
+                if (activeCats.includes("ALL")) return true;
+                return activeCats.includes(item.category || defaultCatName);
+            });
+        }
+
+        if (targetWords.length === 0) {
+            if (typeof showToast === 'function') showToast(safeT('toastNoWordsToFill', null, '當前選取範圍內沒有單字可供補齊！'), 'warning');
+            return;
+        }
+
+        const incompleteWords = targetWords.filter(item => {
+            return (typeof isFieldIncomplete === 'function') ? (
+                isFieldIncomplete(item.meaning) || 
+                isFieldIncomplete(item.pos) || 
+                isFieldIncomplete(item.sentence) || 
+                isFieldIncomplete(item.translation) ||
+                isFieldIncomplete(item.phonetic)
+            ) : (!item.meaning || !item.pos || !item.sentence);
         });
+
+        let forceOverwrite = false;
+        let targetBatch = [];
+
+        if (incompleteWords.length < targetWords.length && incompleteWords.length > 0) {
+            const choice = prompt(
+                `選取的 ${targetWords.length} 筆單字中，有 ${incompleteWords.length} 筆缺漏欄位。\n\n` +
+                `請輸入數字選擇處理方式：\n` +
+                `1 ➜ 僅補齊缺漏欄位 (${incompleteWords.length} 筆)\n` +
+                `2 ➜ 開啟「語言修正模式」(強制覆蓋解析全選 ${targetWords.length} 筆)\n\n` +
+                `點擊【取消】將關閉並退出。`,
+                "1"
+            );
+
+            if (choice === null) return;
+
+            const trimmedChoice = choice.trim();
+            if (trimmedChoice === "2") {
+                forceOverwrite = true;
+                targetBatch = targetWords;
+            } else if (trimmedChoice === "1") {
+                forceOverwrite = false;
+                targetBatch = incompleteWords;
+            } else {
+                return;
+            }
+        } else if (incompleteWords.length === 0) {
+            const confirmOverwrite = confirm(
+                `所選取的 ${targetWords.length} 筆單字資料皆已完整！\n\n` +
+                `是否要開啟「語言修正模式」（依據當前學習語系重新解析並【強制覆蓋】舊資料）？\n\n` +
+                `【確定】➜ 強制覆蓋\n` +
+                `【取消】➜ 放棄退出`
+            );
+            if (!confirmOverwrite) return;
+            forceOverwrite = true;
+            targetBatch = targetWords;
+        } else {
+            targetBatch = incompleteWords;
+            const confirmMsg = safeT('confirmBatchAiFill', { count: targetBatch.length }, `確定要使用 AI 自動補齊缺漏的 ${targetBatch.length} 筆單字嗎？`);
+            if (!confirm(confirmMsg)) return;
+        }
+
+        if (targetBatch.length === 0) {
+            if (typeof showToast === 'function') showToast(safeT('toastAllWordsComplete', null, '單字資料皆已完整！'), 'info');
+            return;
+        }
+
+        const MAX_LIMIT = typeof MAX_AI_BATCH_LIMIT !== 'undefined' ? MAX_AI_BATCH_LIMIT : 50;
+
+        if (targetBatch.length > MAX_LIMIT) {
+            if (typeof showToast === 'function') showToast(safeT('toastBatchLimitExceeded', { count: targetBatch.length }, `一次最多僅支援批次補齊 ${MAX_LIMIT} 筆單字！`), 'error');
+            return;
+        }
+
+        const progressContainer = document.getElementById('libAiProgressContainer') 
+                                || document.getElementById('aiProgressContainer');
+        const progressBar = document.getElementById('libAiProgressBar') 
+                         || document.getElementById('aiProgressBar');
+        const progressText = document.getElementById('libAiProgressText') 
+                         || document.getElementById('aiProgressText');
+        const progressPercent = document.getElementById('libAiProgressPercent') 
+                           || document.getElementById('aiProgressPercent');
+
+        if (progressContainer) progressContainer.classList.remove('hidden');
+
+        if (typeof runBatchAiAutoFill === 'function') {
+            await runBatchAiAutoFill(targetBatch, (current, total) => {
+                const pct = Math.round((current / total) * 100);
+                if (progressText) progressText.innerText = safeT('progressBatchAi', { current, total }, `AI 自動補充中... (${current}/${total})`);
+                if (progressBar) progressBar.style.width = `${pct}%`;
+                if (progressPercent) progressPercent.innerText = `${pct}%`;
+                if (typeof renderWordList === 'function') renderWordList();
+            }, forceOverwrite);
+        }
+
+        if (typeof saveStorage === 'function') saveStorage();
+        if (typeof updateUI === 'function') updateUI();
+
+        if (progressText) progressText.innerText = safeT('progressAiComplete', null, 'AI 自動補充完成！');
+        if (progressBar) progressBar.style.width = "100%";
+        if (progressPercent) progressPercent.innerText = "100%";
+
+        setTimeout(() => {
+            if (progressContainer) progressContainer.classList.add('hidden');
+        }, 2500);
+
+        if (typeof showToast === 'function') showToast(safeT('toastBatchFillSuccess', { count: targetBatch.length }, `成功補齊 ${targetBatch.length} 筆單字！`), 'success');
+    } catch (err) {
+        console.error("[AI Batch Fill Exception]:", err);
+        if (typeof showToast === 'function') showToast("AI 補齊過程發生錯誤: " + err.message, "error");
     }
-
-    if (targetWords.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastNoWordsToFill'), 'warning');
-        return;
-    }
-
-    const incompleteWords = targetWords.filter(item => {
-        return (typeof isFieldIncomplete === 'function') ? (
-            isFieldIncomplete(item.meaning) || 
-            isFieldIncomplete(item.pos) || 
-            isFieldIncomplete(item.sentence) || 
-            isFieldIncomplete(item.translation) ||
-            isFieldIncomplete(item.phonetic)
-        ) : (!item.meaning || !item.pos || !item.sentence);
-    });
-
-    if (incompleteWords.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastAllWordsComplete'), 'info');
-        return;
-    }
-
-    const MAX_LIMIT = typeof MAX_AI_BATCH_LIMIT !== 'undefined' ? MAX_AI_BATCH_LIMIT : 50;
-
-    if (incompleteWords.length > MAX_LIMIT) {
-        if (typeof showToast === 'function') showToast(t('toastBatchLimitExceeded', { count: incompleteWords.length }), 'error');
-        return;
-    }
-
-    if (!confirm(t('confirmBatchAiFill', { count: incompleteWords.length }))) {
-        return;
-    }
-
-    const progressContainer = document.getElementById('libAiProgressContainer');
-    const progressBar = document.getElementById('libAiProgressBar');
-    const progressText = document.getElementById('libAiProgressText');
-    const progressPercent = document.getElementById('libAiProgressPercent');
-
-    if (progressContainer) progressContainer.classList.remove('hidden');
-
-    if (typeof runBatchAiAutoFill === 'function') {
-        await runBatchAiAutoFill(targetWords, (current, total) => {
-            const pct = Math.round((current / total) * 100);
-            if (progressText) progressText.innerText = t('progressBatchAi', { current, total });
-            if (progressBar) progressBar.style.width = `${pct}%`;
-            if (progressPercent) progressPercent.innerText = `${pct}%`;
-            if (typeof renderWordList === 'function') renderWordList();
-        });
-    }
-
-    if (typeof saveStorage === 'function') saveStorage();
-    if (typeof updateUI === 'function') updateUI();
-
-    if (progressText) progressText.innerText = t('progressAiComplete');
-    if (progressBar) progressBar.style.width = "100%";
-    if (progressPercent) progressPercent.innerText = "100%";
-
-    setTimeout(() => {
-        if (progressContainer) progressContainer.classList.add('hidden');
-    }, 2500);
-
-    if (typeof showToast === 'function') showToast(t('toastBatchFillSuccess', { count: incompleteWords.length }), 'success');
 }
 
-/**
- * 📥 匯出 JSON 備份檔 (相容 iOS Safari 與桌機瀏覽器)
- */
 function exportJSON() {
     if (!wordList || wordList.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastNoDataToExport') || '尚無資料可匯出', 'warning');
+        if (typeof showToast === 'function') showToast(safeT('toastNoExportWords', null, '尚無單字資料可匯出！'), 'warning');
         return;
     }
 
     const dataStr = JSON.stringify(wordList, null, 2);
     const fileName = `LZHCard_Backup_${new Date().toISOString().slice(0, 10)}.json`;
 
-    // 判斷是否為 iOS Safari / iOS WebView
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
     if (isIOS) {
@@ -730,16 +832,13 @@ function exportJSON() {
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
-    if (typeof showToast === 'function') showToast(t('toastExportSuccess') || '單字庫匯出成功！', 'success');
+    if (typeof showToast === 'function') showToast(safeT('toastDownloadSuccess', { count: wordList.length }, `成功匯出 ${wordList.length} 筆單字備份`), 'success');
 }
 
-/**
- * 📤 匯入 JSON 備份檔
- */
 function handleImportJSON() {
     const fileInput = document.getElementById('jsonFileInput');
     if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-        if (typeof showToast === 'function') showToast(t('toastSelectJsonFirst'), "warning");
+        if (typeof showToast === 'function') showToast(safeT('toastSelectJsonFirst', null, '請先選擇要匯入的 JSON 檔案！'), "warning");
         return;
     }
 
@@ -750,11 +849,11 @@ function handleImportJSON() {
         try {
             const importedData = JSON.parse(e.target.result);
             if (!Array.isArray(importedData)) {
-                if (typeof showToast === 'function') showToast(t('toastJsonFormatError'), "error");
+                if (typeof showToast === 'function') showToast(safeT('toastJsonFormatError', null, 'JSON 檔案格式不正確！'), "error");
                 return;
             }
 
-            const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
+            const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
             let addedCount = 0;
             let replacedCount = 0;
 
@@ -779,7 +878,7 @@ function handleImportJSON() {
                         word: itemWord,
                         pos: String(item.pos || '').trim(),
                         phonetic: String(item.phonetic || '').trim(),
-                        meaning: String(item.meaning || t('noMeaning')).trim(),
+                        meaning: String(item.meaning || safeT('noMeaning', null, '無釋義')).trim(),
                         sentence: String(item.sentence || '').trim(),
                         translation: String(item.translation || '').trim(),
                         level: item.level || 1,
@@ -800,16 +899,23 @@ function handleImportJSON() {
 
             const netUniqueAdded = addedCount - replacedCount;
             const msg = replacedCount > 0 
-                ? t('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded })
-                : t('toastImportSuccess', { count: addedCount });
+                ? safeT('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded }, `成功匯入 ${addedCount} 個單字（覆蓋 ${replacedCount} 筆重複資料）`)
+                : safeT('toastImportSuccess', { count: addedCount }, `成功匯入 ${addedCount} 個單字`);
 
             if (typeof showToast === 'function') showToast(msg, "success");
 
         } catch (err) {
             console.error("JSON 解析失敗:", err);
-            if (typeof showToast === 'function') showToast(t('toastJsonParseError'), "error");
+            if (typeof showToast === 'function') showToast(safeT('toastJsonParseError', null, 'JSON 檔案解析失敗'), "error");
         }
     };
 
     reader.readAsText(file);
 }
+
+// 🔗 全向點擊導向別名綁定
+const handleBatchMoveCategory = handleBatchChangeCategory;
+const handleBatchDelete = handleBatchDeleteWords;
+const handleBatchAiFill = handleBatchAiFillLibraryWords;
+const handleExportJSON = exportJSON;
+const handleSplitCategory = handleConfirmSplitDeck;

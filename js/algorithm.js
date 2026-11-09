@@ -29,9 +29,12 @@ function getLevelInfo(level) {
 function getNextCardSpacedRepetition() {
     if (!wordList || wordList.length === 0) return null;
 
+    const activeCats = window.selectedCategories || ['ALL'];
+    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+
     const filteredList = wordList.filter(w => {
-        if (typeof selectedCategory === 'undefined' || selectedCategory === "ALL") return true;
-        return (w.category || "預設字庫") === selectedCategory;
+        if (activeCats.includes("ALL")) return true;
+        return activeCats.includes(w.category || defaultCatName);
     });
 
     if (filteredList.length === 0) return null;
@@ -41,7 +44,7 @@ function getNextCardSpacedRepetition() {
         if (typeof w.knowStreak === 'undefined') w.knowStreak = 0;
     });
 
-    // 🌟 將 Level 1 焦點池容量上限由 3 擴充至 6，讓更多 1 級生字同時進入輪播
+    // 🌟 Level 1 焦點池
     activeLevel1Pool = activeLevel1Pool.filter(id => {
         const w = filteredList.find(item => item.id === id);
         return w && w.level === 1;
@@ -54,6 +57,7 @@ function getNextCardSpacedRepetition() {
         }
     }
 
+    // 🌟 Level 2 焦點池
     activeLevel2Pool = activeLevel2Pool.filter(id => {
         const w = filteredList.find(item => item.id === id);
         return w && w.level === 2;
@@ -75,19 +79,25 @@ function getNextCardSpacedRepetition() {
     if (candidateWords.length === 0) return filteredList[0];
     if (candidateWords.length === 1) return candidateWords[0];
 
-    // 🌟 將 Level 1 的抽牌權重由 100 調高至 250，大幅提升出現頻率
+    // 🚫 嚴格防止同一張牌連續出現第二次
+    const lastCardId = historyQueue.length > 0 ? historyQueue[historyQueue.length - 1] : null;
+    let poolToSelectFrom = candidateWords;
+
+    if (candidateWords.length > 1 && lastCardId) {
+        const nonRepeatPool = candidateWords.filter(w => w.id !== lastCardId);
+        if (nonRepeatPool.length > 0) {
+            poolToSelectFrom = nonRepeatPool;
+        }
+    }
+
     const BASE_WEIGHTS = { 1: 250, 2: 70, 3: 35, 4: 15, 5: 4 };
 
-    const weightedCandidates = candidateWords.map(word => {
+    const weightedCandidates = poolToSelectFrom.map(word => {
         let weight = BASE_WEIGHTS[word.level] || 50;
 
         const historyIndex = historyQueue.indexOf(word.id);
         if (historyIndex !== -1) {
-            if (historyIndex === historyQueue.length - 1) {
-                weight *= 0.05;
-            } else {
-                weight *= 0.25;
-            }
+            weight *= 0.25;
         }
         return { word, weight: Math.max(weight, 0.1) };
     });

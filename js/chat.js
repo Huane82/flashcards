@@ -1,5 +1,5 @@
 /**
- * LZHCard - 聊天、好友與系統公告模組 (chat.js - 升級公告 Firestore 雲端即時同步版)
+ * LZHCard - 聊天、好友申請、未讀提示與系統公告模組 (chat.js - 升級好友申請與未讀通知版)
  */
 
 if (!window.userData) window.userData = {};
@@ -7,7 +7,16 @@ if (!window.userData.friends) window.userData.friends = [];
 
 let currentActiveChatId = null;
 let chatSearchQuery = '';
-let activeChatUnsubscribe = null; // Firestore 即時監聽解鎖器
+let activeChatUnsubscribe = null; // 當前開啟視窗之訊息監聽器
+
+// 即時監聽退訂器與數據記錄
+let friendRequestsUnsubscribe = null;
+let chatsListUnsubscribe = null;
+let announcementsUnsubscribe = null;
+
+let pendingRequestsList = [];
+let userChatThreads = [];
+let cloudAnnouncements = [];
 
 /**
  * 🔒 判斷當前是否為訪客身分
@@ -33,6 +42,110 @@ function checkAdminPermissions() {
 
     const adminBadge = document.getElementById('adminBadge');
     if (adminBadge) adminBadge.classList.toggle('hidden', !isAdmin);
+}
+
+/**
+ * 🔴🟡 即時更新全站未讀提示（紅點與黃點）
+ */
+function updateUnreadBadgeUI() {
+    const dot = document.getElementById('chatUnreadDot');
+    if (!dot) return;
+
+    if (isGuestUser() || typeof firebase === 'undefined' || !firebase.auth || !firebase.auth().currentUser) {
+        dot.classList.add('hidden');
+        return;
+    }
+
+    const currentUid = firebase.auth().currentUser.uid;
+    const lastReadNotice = parseInt(localStorage.getItem('lzhcard_last_read_announcements') || '0', 10);
+
+    // 1. 檢查是否有未讀好友申請 (觸發紅點)
+    const hasUnreadRequests = pendingRequestsList.length > 0;
+
+    // 2. 檢查是否有未讀私聊訊息 (排除全站公開討論區 chat_group_public，觸發紅點)
+    let hasUnreadPrivateMsg = false;
+    userChatThreads.forEach(chat => {
+        if (chat.id !== 'chat_group_public' && chat.updatedAt) {
+            const chatTime = chat.updatedAt.seconds ? chat.updatedAt.seconds * 1000 : new Date(chat.updatedAt).getTime();
+            const lastReadChat = parseInt(localStorage.getItem(`lzhcard_last_read_chat_${chat.id}`) || '0', 10);
+            if (chatTime > lastReadChat && chat.lastSenderUid !== currentUid) {
+                hasUnreadPrivateMsg = true;
+            }
+        }
+    });
+
+    // 3. 檢查是否有未讀公告 (觸發黃點)
+    let hasUnreadAnnounce = false;
+    cloudAnnouncements.forEach(ann => {
+        const annTime = ann.createdAt?.seconds ? ann.createdAt.seconds * 1000 : (ann.time ? new Date(ann.time).getTime() : 0);
+        if (annTime > lastReadNotice) {
+            hasUnreadAnnounce = true;
+        }
+    });
+
+    const hasRedDot = hasUnreadRequests || hasUnreadPrivateMsg;
+    const hasYellowDot = hasUnreadAnnounce;
+
+    if (hasRedDot) {
+        // 紅點優先
+        dot.className = "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-800";
+        dot.classList.remove('hidden');
+    } else if (hasYellowDot) {
+        // 黃點次之
+        dot.className = "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full ring-2 ring-white dark:ring-slate-800";
+        dot.classList.remove('hidden');
+    } else {
+        dot.classList.add('hidden');
+    }
+}
+
+/**
+ * 📡 初始化 Firestore 全局即時監聽器 (好友申請、聊天頻道與公告)
+ */
+function initChatRealtimeListeners() {
+    if (typeof db === 'undefined' || !firebase.auth || !firebase.auth().currentUser) return;
+    const currentUid = firebase.auth().currentUser.uid;
+
+    // A. 監聽傳給自己的好友申請
+    if (friendRequestsUnsubscribe) friendRequestsUnsubscribe();
+    friendRequestsUnsubscribe = db.collection('friendRequests')
+        .where('toUid', '==', currentUid)
+        .where('status', '==', 'pending')
+        .onSnapshot(snapshot => {
+            pendingRequestsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            updateUnreadBadgeUI();
+            const friendsView = document.getElementById('friendsView');
+            if (friendsView && !friendsView.classList.contains('hidden')) {
+                renderFriendsList();
+            }
+        }, err => console.warn("好友申請監聽異常:", err));
+
+    // B. 監聽包含自己的所有聊天頻道
+    if (chatsListUnsubscribe) chatsListUnsubscribe();
+    chatsListUnsubscribe = db.collection('chats')
+        .where('members', 'array-contains', currentUid)
+        .onSnapshot(snapshot => {
+            userChatThreads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            updateUnreadBadgeUI();
+            const chatsView = document.getElementById('chatsView');
+            if (chatsView && !chatsView.classList.contains('hidden')) {
+                renderChatThreads(false);
+            }
+        }, err => console.warn("對話列表監聽異常:", err));
+
+    // C. 監聽系統公告
+    if (announcementsUnsubscribe) announcementsUnsubscribe();
+    announcementsUnsubscribe = db.collection('announcements')
+        .orderBy('createdAt', 'desc')
+        .onSnapshot(snapshot => {
+            cloudAnnouncements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            window.appAnnouncements = cloudAnnouncements;
+            updateUnreadBadgeUI();
+            const noticeView = document.getElementById('noticeView');
+            if (noticeView && !noticeView.classList.contains('hidden')) {
+                renderAnnouncements();
+            }
+        }, err => console.warn("公告監聽異常:", err));
 }
 
 /**
@@ -97,6 +210,8 @@ function switchChatTab(tab) {
     if (tab === 'notice') {
         if (noticeView) noticeView.classList.remove('hidden');
         if (tabNoticeBtn) tabNoticeBtn.className = "flex-1 py-3 text-center border-b-2 border-brand-600 text-brand-600 font-bold text-xs";
+        localStorage.setItem('lzhcard_last_read_announcements', Date.now().toString());
+        updateUnreadBadgeUI();
         renderAnnouncements();
     } else if (tab === 'chats') {
         if (chatsView) chatsView.classList.remove('hidden');
@@ -136,7 +251,7 @@ function handleChatSearch() {
 }
 
 /**
- * 👥 渲染好友列表
+ * 👥 渲染好友列表（含「待處理好友申請」與「已確認好友」）
  */
 async function renderFriendsList() {
     const container = document.getElementById('friendsListContainer');
@@ -145,25 +260,56 @@ async function renderFriendsList() {
     const friends = (window.userData && window.userData.friends) ? window.userData.friends : [];
     const query = chatSearchQuery;
 
-    const filteredFriends = friends.filter(f => 
-        (f.nickname || f.username || '').toLowerCase().includes(query) || 
-        (f.email && f.email.toLowerCase().includes(query))
-    );
-
     let html = '';
 
+    // 1. 📩 渲染待處理的好友申請
+    if (pendingRequestsList.length > 0) {
+        html += `
+            <div class="mb-4 p-3 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-clock text-amber-600"></i>
+                        <span>待處理的好友申請 (${pendingRequestsList.length})</span>
+                    </span>
+                </div>
+                <div class="space-y-2">
+        `;
+        html += pendingRequestsList.map(req => `
+            <div class="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                    <img src="${req.fromAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(req.fromNickname)}`}" class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
+                    <div>
+                        <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${req.fromNickname}</h4>
+                        <p class="text-[10px] text-slate-400 font-mono">${req.fromEmail || ''}</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1.5">
+                    <button type="button" onclick="handleAcceptFriendRequest('${req.id}', '${req.fromUid}', '${encodeURIComponent(req.fromNickname)}', '${req.fromEmail || ''}', '${encodeURIComponent(req.fromAvatar || '')}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition shadow-2xs">
+                        同意
+                    </button>
+                    <button type="button" onclick="handleRejectFriendRequest('${req.id}')" class="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg transition">
+                        拒絕
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        html += `</div></div>`;
+    }
+
+    // 2. 🔍 按 Email / 雲端用戶發送好友申請
     if (query.includes('@') && !friends.some(f => f.email && f.email.toLowerCase() === query)) {
         html += `
-            <div onclick="addFriendByEmail('${query}')" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
+            <div onclick="sendFriendRequestByEmail('${query}')" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-300">
-                    <i class="fa-solid fa-user-plus text-sm"></i>
-                    <span class="text-xs font-bold">按 Email 新增好友：「${query}」</span>
+                    <i class="fa-solid fa-paper-plane text-sm"></i>
+                    <span class="text-xs font-bold">發送好友申請給：「${query}」</span>
                 </div>
-                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">新增</span>
+                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">送出申請</span>
             </div>
         `;
     }
 
+    // 3. 雲端搜尋非好友用戶
     if (query && typeof db !== 'undefined' && !isGuestUser()) {
         try {
             const currentUid = auth.currentUser ? auth.currentUser.uid : '';
@@ -209,7 +355,7 @@ async function renderFriendsList() {
                                 <p class="text-[10px] text-slate-400 font-mono">${u.email || '無電子郵件'}</p>
                             </div>
                         </div>
-                        <button type="button" onclick="addFriendByObject('${encodeURIComponent(JSON.stringify(u))}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
+                        <button type="button" onclick="sendFriendRequestByObject('${encodeURIComponent(JSON.stringify(u))}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
                             <i class="fa-solid fa-user-plus"></i>
                             <span>加好友</span>
                         </button>
@@ -221,15 +367,19 @@ async function renderFriendsList() {
         }
     }
 
+    // 4. 渲染已確認的好友列表
+    const filteredFriends = friends.filter(f => 
+        (f.nickname || f.username || '').toLowerCase().includes(query) || 
+        (f.email && f.email.toLowerCase().includes(query))
+    );
+
     if (filteredFriends.length === 0 && !html) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">查無符合「${query}」的暱稱或好友</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">查無符合「${query}」的好友或搜尋結果</div>`;
         return;
     }
 
     if (filteredFriends.length > 0) {
-        if (query) {
-            html += `<div class="text-[11px] font-bold text-slate-500 mb-1">已新增的好友：</div>`;
-        }
+        html += `<div class="text-[11px] font-bold text-slate-500 mb-1">我的好友列表：</div>`;
         html += filteredFriends.map(f => {
             const displayName = f.nickname || f.username;
             return `
@@ -254,70 +404,39 @@ async function renderFriendsList() {
 }
 
 /**
- * ➕ 從搜尋結果一鍵新增雲端用戶為好友
+ * ➕ 發送好友申請 (從雲端物件)
  */
-function addFriendByObject(encodedUserObjStr) {
+async function sendFriendRequestByObject(encodedUserObjStr) {
     if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能新增好友！', 'warning');
+        if (typeof showToast === 'function') showToast('請先登入帳號才能發送好友申請！', 'warning');
         return;
     }
 
     try {
-        const userObj = JSON.parse(decodeURIComponent(encodedUserObjStr));
-        if (!window.userData) window.userData = {};
-        if (!window.userData.friends) window.userData.friends = [];
-
-        const exists = window.userData.friends.some(f => (f.email && f.email.toLowerCase() === userObj.email.toLowerCase()) || (f.uid && f.uid === userObj.uid));
-        if (exists) {
-            if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
-            return;
-        }
-
-        window.userData.friends.push({
-            username: userObj.username,
-            nickname: userObj.nickname || userObj.username,
-            email: userObj.email,
-            avatar: userObj.avatar,
-            uid: userObj.uid
-        });
-
-        if (typeof saveUserData === 'function') saveUserData();
-        if (typeof saveStorage === 'function') saveStorage();
-        renderFriendsList();
-        if (typeof showToast === 'function') showToast(`成功新增固定暱稱好友「${userObj.username}」！`, 'success');
+        const targetUser = JSON.parse(decodeURIComponent(encodedUserObjStr));
+        await sendFriendRequestCore(targetUser.uid, targetUser.username, targetUser.email);
     } catch (e) {
-        console.error("解析暱稱用戶資料失敗:", e);
+        console.error("發送好友申請解析失敗:", e);
     }
 }
 
 /**
- * ➕ 通過電子郵件搜尋並發送加入好友請求
+ * ➕ 發送好友申請 (從 Email)
  */
-async function addFriendByEmail(emailInput) {
+async function sendFriendRequestByEmail(emailInput) {
     if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能新增好友！', 'warning');
+        if (typeof showToast === 'function') showToast('請先登入帳號才能發送好友申請！', 'warning');
         return;
     }
 
     const targetEmail = (emailInput || prompt('請輸入對方的電子郵件 (Email)：') || '').trim().toLowerCase();
-    
     if (!targetEmail || !targetEmail.includes('@')) {
         if (targetEmail && typeof showToast === 'function') showToast('請輸入有效的電子郵件格式！', 'warning');
         return;
     }
 
-    if (!window.userData) window.userData = {};
-    if (!window.userData.friends) window.userData.friends = [];
-
-    const exists = window.userData.friends.some(f => f.email && f.email.toLowerCase() === targetEmail);
-    if (exists) {
-        if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
-        return;
-    }
-
     let targetUid = '';
     let targetNickname = targetEmail.split('@')[0];
-    let targetAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(targetEmail)}`;
 
     if (typeof db !== 'undefined') {
         try {
@@ -325,33 +444,138 @@ async function addFriendByEmail(emailInput) {
             if (!snapshot.empty) {
                 const doc = snapshot.docs[0];
                 targetUid = doc.id;
-                const data = doc.data();
-                if (data.nickname) targetNickname = data.nickname;
-                if (data.photoURL) targetAvatar = data.photoURL;
+                if (doc.data().nickname) targetNickname = doc.data().nickname;
             }
         } catch (e) {
-            console.warn("查詢雲端 Email 失敗:", e);
+            console.warn("查詢 Email UID 失敗:", e);
         }
     }
 
-    const newFriend = {
-        username: targetNickname,
-        nickname: targetNickname,
-        email: targetEmail,
-        avatar: targetAvatar,
-        uid: targetUid
-    };
+    if (!targetUid) {
+        if (typeof showToast === 'function') showToast('⚠️ 找不到該 Email 的使用者帳號！', 'error');
+        return;
+    }
 
-    window.userData.friends.push(newFriend);
-    if (typeof saveUserData === 'function') saveUserData();
-    if (typeof saveStorage === 'function') saveStorage();
-
-    renderFriendsList();
-    if (typeof showToast === 'function') showToast(`成功新增好友「${targetNickname}」！`, 'success');
+    await sendFriendRequestCore(targetUid, targetNickname, targetEmail);
 }
 
 /**
- * 💬 發起/開啟 1對1 雲端私聊
+ * 核心：向 Firestore 寫入好友申請
+ */
+async function sendFriendRequestCore(targetUid, targetNickname, targetEmail) {
+    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const myName = (window.userData && window.userData.username) ? window.userData.username : '使用者';
+    const myEmail = auth.currentUser ? auth.currentUser.email : '';
+    const myAvatar = auth.currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUid)}`;
+
+    if (targetUid === currentUid) {
+        if (typeof showToast === 'function') showToast('無法發送好友申請給自己！', 'warning');
+        return;
+    }
+
+    // 檢查是否已經是好友
+    if (window.userData?.friends?.some(f => f.uid === targetUid)) {
+        if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
+        return;
+    }
+
+    try {
+        // 檢查是否已發送過 pending 申請
+        const existingSnap = await db.collection('friendRequests')
+            .where('fromUid', '==', currentUid)
+            .where('toUid', '==', targetUid)
+            .where('status', '==', 'pending')
+            .get();
+
+        if (!existingSnap.empty) {
+            if (typeof showToast === 'function') showToast('您已發送過好友申請，請等待對方同意！', 'info');
+            return;
+        }
+
+        await db.collection('friendRequests').add({
+            fromUid: currentUid,
+            fromNickname: myName,
+            fromEmail: myEmail,
+            fromAvatar: myAvatar,
+            toUid: targetUid,
+            toEmail: targetEmail,
+            status: 'pending',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        if (typeof showToast === 'function') showToast(`🎉 已成功發送好友申請給「${targetNickname}」！`, 'success');
+    } catch (e) {
+        console.error("發送好友申請失敗:", e);
+        if (typeof showToast === 'function') showToast('發送失敗：' + e.message, 'error');
+    }
+}
+
+/**
+ * ✅ 同意好友申請
+ */
+async function handleAcceptFriendRequest(reqId, fromUid, encodedNickname, fromEmail, encodedAvatar) {
+    const fromNickname = decodeURIComponent(encodedNickname);
+    const fromAvatar = decodeURIComponent(encodedAvatar);
+    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+
+    try {
+        // 1. 更新申請狀態為 accepted
+        await db.collection('friendRequests').doc(reqId).update({
+            status: 'accepted',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 2. 將對方加為本地與雲端好友列表
+        if (!window.userData) window.userData = {};
+        if (!window.userData.friends) window.userData.friends = [];
+
+        if (!window.userData.friends.some(f => f.uid === fromUid)) {
+            window.userData.friends.push({
+                username: fromNickname,
+                nickname: fromNickname,
+                email: fromEmail,
+                avatar: fromAvatar,
+                uid: fromUid
+            });
+            if (typeof saveUserData === 'function') saveUserData();
+            if (typeof saveStorage === 'function') saveStorage();
+        }
+
+        // 3. 確保建立雙方成員的私人聊天頻道
+        const chatId = [currentUid, fromUid].sort().join('_');
+        await db.collection('chats').doc(chatId).set({
+            type: 'private',
+            name: fromNickname,
+            members: [currentUid, fromUid],
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        if (typeof showToast === 'function') showToast(`🤝 已同意「${fromNickname}」的好友申請！`, 'success');
+        renderFriendsList();
+    } catch (e) {
+        console.error("同意好友申請失敗:", e);
+        if (typeof showToast === 'function') showToast('處理失敗：' + e.message, 'error');
+    }
+}
+
+/**
+ * ❌ 拒絕好友申請
+ */
+async function handleRejectFriendRequest(reqId) {
+    try {
+        await db.collection('friendRequests').doc(reqId).update({
+            status: 'rejected',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        if (typeof showToast === 'function') showToast('已拒絕該好友申請', 'info');
+        renderFriendsList();
+    } catch (e) {
+        console.error("拒絕好友申請失敗:", e);
+    }
+}
+
+/**
+ * 💬 發起/開啟 1對1 雲端私聊 (修正雙方可見問題)
  */
 async function startPrivateChat(encodedTargetUsername, targetUid = '') {
     if (isGuestUser()) {
@@ -367,16 +591,19 @@ async function startPrivateChat(encodedTargetUsername, targetUid = '') {
         if (found && found.uid) targetUid = found.uid;
     }
     
+    // 生成固定且唯雙方組成的對話 ID
     const chatId = (currentUid && targetUid) 
         ? [currentUid, targetUid].sort().join('_') 
         : 'chat_private_' + encodeURIComponent(targetUser);
+
+    const membersList = [currentUid, targetUid].filter(Boolean);
 
     if (typeof db !== 'undefined') {
         try {
             await db.collection('chats').doc(chatId).set({
                 type: 'private',
                 name: targetUser,
-                members: [currentUid, targetUid].filter(Boolean),
+                members: membersList,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
         } catch (e) {
@@ -438,7 +665,7 @@ async function deleteChatMessage(chatId, msgId) {
 }
 
 /**
- * 💬 渲染對話列表
+ * 💬 渲染對話列表 (修復一般接收方看不見私聊視窗的 Bug)
  */
 async function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
@@ -452,13 +679,20 @@ async function renderChatThreads(isAdminInspector = false) {
 
     if (typeof db !== 'undefined') {
         try {
-            const snapshot = await db.collection('chats').get();
+            let snapshot;
+            if (isAdminInspector) {
+                snapshot = await db.collection('chats').get();
+            } else {
+                // 核心修復：精準拉取包含 currentUid 的所有聊天頻道
+                snapshot = await db.collection('chats').where('members', 'array-contains', currentUid).get();
+            }
             threads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         } catch (e) {
             console.warn("無法從雲端拉取對話列表：", e);
         }
     }
 
+    // 確保加入全站公開討論區
     if (!threads.some(t => t.id === 'chat_group_public')) {
         threads.unshift({
             id: 'chat_group_public',
@@ -467,29 +701,33 @@ async function renderChatThreads(isAdminInspector = false) {
         });
     }
 
-    if (!isAdminInspector) {
-        threads = threads.filter(c => c.id === 'chat_group_public' || (c.members && c.members.includes(currentUid)));
-    }
-
     if (query) {
         threads = threads.filter(c => (c.name || '').toLowerCase().includes(query));
     }
 
     if (threads.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">沒有找到符合條件的對話紀錄</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">沒有找到對話紀錄</div>`;
         return;
     }
+
+    const lastReadNotice = parseInt(localStorage.getItem('lzhcard_last_read_announcements') || '0', 10);
 
     container.innerHTML = threads.map(c => {
         const isGroup = c.type === 'group';
         const icon = isGroup ? 'fa-users text-purple-500' : 'fa-user-lock text-emerald-500';
         const displayName = c.name || '對話';
 
+        // 判讀該頻道是否有未讀私訊
+        const chatTime = c.updatedAt?.seconds ? c.updatedAt.seconds * 1000 : (c.updatedAt ? new Date(c.updatedAt).getTime() : 0);
+        const lastReadChat = parseInt(localStorage.getItem(`lzhcard_last_read_chat_${c.id}`) || '0', 10);
+        const hasUnread = !isGroup && chatTime > lastReadChat && c.lastSenderUid !== currentUid;
+
         return `
-            <div onclick="openChatWindow('${c.id}', '${encodeURIComponent(displayName)}')" class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-300 transition cursor-pointer flex justify-between items-center">
+            <div onclick="openChatWindow('${c.id}', '${encodeURIComponent(displayName)}')" class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-brand-300 transition cursor-pointer flex justify-between items-center relative">
                 <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">
+                    <div class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm relative">
                         <i class="fa-solid ${icon}"></i>
+                        ${hasUnread ? `<span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-800"></span>` : ''}
                     </div>
                     <div>
                         <div class="flex items-center space-x-1.5">
@@ -515,6 +753,10 @@ async function renderChatThreads(isAdminInspector = false) {
  */
 function openChatWindow(chatId, encodedName = '') {
     currentActiveChatId = chatId;
+
+    // 紀錄點開的時間戳（消掉該頻道的未讀）
+    localStorage.setItem(`lzhcard_last_read_chat_${chatId}`, Date.now().toString());
+    updateUnreadBadgeUI();
 
     const displayName = encodedName ? decodeURIComponent(encodedName) : '對話';
 
@@ -609,7 +851,7 @@ function renderMessagesList(messages = []) {
 }
 
 /**
- * 📤 發送訊息至雲端 Firestore
+ * 📤 發送訊息至雲端 Firestore (確保成員陣列更新)
  */
 async function handleSendMessage(e) {
     if (e) e.preventDefault();
@@ -643,6 +885,7 @@ async function handleSendMessage(e) {
         
         await db.collection('chats').doc(currentActiveChatId).set({
             lastMessage: `${currentUser}: ${text}`,
+            lastSenderUid: currentUid,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
@@ -661,18 +904,6 @@ async function renderAnnouncements() {
 
     const isAdmin = window.userData ? window.userData.role === 'admin' : false;
     let annList = window.appAnnouncements || [];
-
-    if (typeof db !== 'undefined') {
-        try {
-            const snapshot = await db.collection('announcements').orderBy('createdAt', 'desc').get();
-            if (!snapshot.empty) {
-                annList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.appAnnouncements = annList;
-            }
-        } catch (e) {
-            console.warn("無法從雲端讀取公告：", e);
-        }
-    }
 
     if (annList.length === 0) {
         container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">目前無系統公告</div>`;

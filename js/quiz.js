@@ -1,3 +1,7 @@
+/**
+ * LZHCard - 隨堂測驗模組 (已修復多選字庫連動與高亮樣式)
+ */
+
 let currentQuizWord = null;
 let currentQuizMode = 1;
 let quizScoreCorrect = 0;
@@ -36,10 +40,12 @@ function nextQuizQuestion() {
     const badgeElem = document.getElementById('quizBadge');
     const promptTitleElem = document.getElementById('quizPromptTitle');
 
+    // 🌟 修正：連動 window.selectedCategories 多選字庫陣列
+    const activeCats = window.selectedCategories || ['ALL'];
+    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+
     const validQuizCandidates = (typeof wordList !== 'undefined' ? wordList : []).filter(w => {
-        const matchCat = (typeof selectedCategory === 'undefined' || selectedCategory === "ALL")
-            ? true
-            : (w.category || "預設字庫") === selectedCategory;
+        const matchCat = activeCats.includes("ALL") || activeCats.includes(w.category || defaultCatName);
         const hasSentence = w.sentence && w.sentence.trim() !== '';
         return matchCat && hasSentence;
     });
@@ -49,7 +55,7 @@ function nextQuizQuestion() {
         if (promptBox) {
             promptBox.innerHTML = `
                 <div class="text-center py-4 space-y-2">
-                    <p class="text-amber-600 dark:text-amber-400 font-bold text-base">⚠️ 當前字庫尚無具備英文例句的單字！</p>
+                    <p class="text-amber-600 dark:text-amber-400 font-bold text-base">⚠️ 當前選取的字庫中尚無具備英文例句的單字！</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-normal">
                         隨堂測驗已開啟過濾保護（僅考有英文例句的單字）。<br>
                         沒有例句的單字可先至「<span class="font-bold text-brand-600 dark:text-brand-400">卡片輪播</span>」背誦，或點擊「批量貼上」使用 AI 補齊例句。
@@ -95,7 +101,6 @@ function nextQuizQuestion() {
         }
 
         const regex = new RegExp(`\\b${word}\\b`, 'gi');
-        // 🌟 移除底線 decoration-wavy，改用明顯的高亮 tag，修復藍色波浪線與深色模式下字體偏暗問題
         let maskedSentence = sentence.replace(regex, `<span class="text-brand-500 dark:text-sky-400 font-extrabold border-b-2 border-brand-500 dark:border-sky-400 px-1 py-0.5">${hintWord}</span>`);
         
         if (maskedSentence === sentence) {

@@ -1,14 +1,20 @@
 /**
- * LZHCard - UI 語系與全介面 AI 翻譯引擎
+ * LZHCard - UI 語系與全介面 AI 翻譯引擎 (js/i18n.js)
  */
 
 const I18N_DICTIONARY = {
     'zh-TW': {
+        // 頂部與導覽
         appSubtitle: "小考背單字神器",
         navHome: "主頁",
         navList: "字庫管理",
         navStore: "字庫商店",
+        navStats: "統計",
         navSettings: "設定",
+        catAll: "全部字庫",
+        defaultCategoryName: "預設字庫",
+
+        // 主頁 View
         homeTitle: "選擇學習模式",
         homeDesc: "專注背單字，高效提升記憶力",
         modeFlashcard: "卡片輪播",
@@ -17,18 +23,8 @@ const I18N_DICTIONARY = {
         modeQuizDesc: "拼字、詞性變化與拼寫上下文挑戰",
         btnStartFocus: "開啟專注輪播",
         btnStartQuiz: "進入測驗",
-        settingsTitle: "帳號與系統設定",
-        settingsDesc: "管理您的個人資料、學習偏好、外觀主題與 API 金鑰",
-        lblNativeLang: "使用者母語 (Native Language)",
-        descNativeLang: "系統已依據您的裝置語言自動判定",
-        lblTargetLang: "學習目標語言 (Target Language)",
-        descTargetLang: "選擇 AI 自動解析單字與例句時的語言",
-        lblDisplayMode: "卡片正面顯示模式",
-        descDisplayMode: "可自由切換母語/外語在正面或同時顯示",
-        lblTheme: "外觀主題設定",
-        descTheme: "可手動切換或跟隨手機系統預設",
-        lblApiKey: "Gemini AI Key",
-        descApiKey: "用於自動帶入音標與例句",
+
+        // 專注與測驗 View
         btnExit: "退出模式",
         btnQuickAdd: "快速填入",
         stockCount: "當前庫存:",
@@ -45,6 +41,8 @@ const I18N_DICTIONARY = {
         quizInputPlaceholder: "在此輸入答案...",
         btnSubmit: "提交答案",
         btnNext: "下一題",
+
+        // 字庫管理 View
         btnAddWord: "新增單字",
         btnBatchImport: "批量匯入",
         btnBackup: "JSON 備份",
@@ -56,31 +54,7 @@ const I18N_DICTIONARY = {
         btnBatchAi: "✨ AI 補齊",
         btnBatchDelete: "刪除",
         libAiProgressText: "AI 自動補充中...",
-        optTargetFront: "🔤 目標語言在正面，母語在背面",
-        optNativeFront: "🇹🇼 母語在正面，目標語言在背面",
-        optBothFront: "✨ 正面同時顯示 (雙語對照)",
-        optCustomLang: "✏️ 自訂 / 自動識別語言...",
-        customTargetPlaceholder: "輸入語言名稱（或留空由 AI 自動識別）",
-        
-        guestMode: "訪客模式",
-        notLinkedGoogle: "目前未連結 Google 帳號",
-        btnLoginGoogle: "使用 Google 帳號登入",
-        btnLogout: "登出帳號",
-
-        sortDefault: "預設排序",
-        sortAlphaAsc: "字母 (A ➔ Z)",
-        sortAlphaDesc: "字母 (Z ➔ A)",
-        sortPos: "詞性排序",
-        sortLevelAsc: "等級 (Lv.1 ➔ 5)",
-        sortLevelDesc: "等級 (Lv.5 ➔ 1)",
-
-        themeSystem: "📱 跟隨系統",
-        themeLight: "☀️ 亮色模式",
-        themeDark: "🌙 夜間模式",
-
         searchPlaceholder: "搜尋單字、詞性、字庫或母語釋義...",
-        catAll: "全部字庫",
-        defaultCategoryName: "預設字庫",
         thCheck: "勾選",
         thWord: "單字 / 音標",
         thCategory: "字庫",
@@ -90,18 +64,78 @@ const I18N_DICTIONARY = {
         emptySearchResult: "查無相關單字資料",
         emptyNoticeTitle: "目前選擇的字庫沒有單字！",
         emptyNoticeDesc: "您可以切換至「字庫管理」進行匯入或新增單字。",
+
+        // 排序
+        sortDefault: "預設排序",
+        sortAlphaAsc: "字母 (A ➔ Z)",
+        sortAlphaDesc: "字母 (Z ➔ A)",
+        sortPos: "詞性排序",
+        sortLevelAsc: "等級 (Lv.1 ➔ 5)",
+        sortLevelDesc: "等級 (Lv.5 ➔ 1)",
+
+        // 設定 View
+        settingsTitle: "帳號與系統設定",
+        settingsDesc: "管理您的個人資料、學習偏好、外觀主題與 API 金鑰",
+        lblNickname: "個人固定暱稱 (用於發布字庫與社群)",
+        descNickname: "登入後固定綁定帳號，防止他人盜用身份發布",
+        phNicknameInput: "設定您的固定暱稱...",
+        btnSaveNickname: "儲存暱稱",
+        guestMode: "訪客模式",
+        notLinkedGoogle: "目前未連結 Google 帳號",
+        btnLoginGoogle: "使用 Google 帳號登入",
+        btnLogout: "登出帳號",
+        lblNativeLang: "使用者母語 (Native Language)",
+        descNativeLang: "系統已依據您的裝置語言自動判定",
+        lblTargetLang: "學習目標語言 (Target Language)",
+        descTargetLang: "選擇 AI 自動解析單字與例句時的語言",
+        lblDisplayMode: "卡片正面顯示模式",
+        descDisplayMode: "可自由切換母語/外語在正面或同時顯示",
+        lblPhoneticPos: "音標 / 讀音顯示位置",
+        descPhoneticPos: "背日文時建議設為「背面」，避免正面直接透露發音",
+        lblTheme: "外觀主題設定",
+        descTheme: "可手動切換或跟隨手機系統預設",
+        lblApiKey: "Gemini AI Key",
+        descApiKey: "用於自動帶入音標與例句",
+        btnSetKey: "設定 Key",
+        optTargetFront: "目標語言在正面，母語在背面",
+        optNativeFront: "母語在正面，目標語言在背面",
+        optBothFront: "正面同時顯示 (雙語對照)",
+        optPhoneticFront: "🔤 正面顯示 (英文預設)",
+        optPhoneticBack: "🙈 背面顯示 (日文推薦)",
+        optCustomLang: "✏️ 自訂 / 自動識別語言...",
+        customTargetPlaceholder: "輸入語言名稱（或留空由 AI 自動識別）",
+        optCustomNative: "✏️ 自訂母語...",
+        phCustomNative: "輸入自訂母語",
+        themeSystem: "📱 跟隨系統",
+        themeLight: "☀️ 亮色模式",
+        themeDark: "🌙 夜間模式",
+
+        // 商店 View
         storeTitle: "官方單字庫商店",
         storeDesc: "免費下載與擴充主題單字庫",
-
+        storeSubDesc: "搜尋、下載或分享來自社群的單字庫",
+        btnPublishDeck: "發布字庫",
+        storeSearchPlaceholder: "搜尋字庫名稱、簡介或作者名稱...",
+        btnGetDeck: "取得字庫",
+        btnClose: "關閉",
         storeDevTitle: "開發中",
         storeDevDesc: "涵蓋大考中心 Level 1 ~ Level 6 全部單字。",
         btnGoPreset: "前往載入預設包",
 
-        optCustomLang: "✏️ 自訂語言...",
-        customTargetPlaceholder: "輸入自訂目標語言",
-        btnSetKey: "設定 Key",
+        // 統計 View
+        statsTitle: "學習成果與數據統計",
+        statsDesc: "掌握您的詞彙累積量、學習熟悉度與各字庫分佈",
+        statsOptionsTitle: "顯示指標設定",
+        lblShowTotal: "📊 總單字量與掌握率",
+        lblShowCategory: "📚 各字庫 / 語言分佈",
+        lblShowLevel: "📈 艾賓浩斯等級熟悉度分佈",
+        lblShowCatLevel: "🔍 各字庫之等級細節分佈",
+        statsTotalWords: "總單字量",
+        statsMasteredRate: "總體掌握率 (Lv.4~5)",
+        statsLevelDetail: "記憶等級分佈 (Lv.1~5)",
+        statsCatBreakdown: "字庫 / 語言明細",
 
-        // 彈窗 Modal
+        // Modals
         modalCardTitle: "新增/編輯單字卡",
         lblFormCategory: "歸屬字庫/分類名稱",
         lblFormLevel: "熟悉度等級 (Level 1~5)",
@@ -160,7 +194,49 @@ const I18N_DICTIONARY = {
         phQuickAddInput: "例如: resilient, fragile",
         btnQuickAddConfirm: "確定並 AI 自動填入",
 
-        // 動態及狀態提示
+        modalPublishTitle: "🚀 發布我的字庫至商店",
+        lblPubCategory: "選擇要發布的字庫分類",
+        lblPubTitle: "字庫名稱 (不可與商店現有名稱重複)",
+        phPubTitle: "例如：JLPT N3 高頻動詞 100 選",
+        lblPubPrice: "下載所需金幣 (0 表示免費分享)",
+        phPubPrice: "例如：100",
+        lblPubAuthor: "發布者暱稱 (已鎖定帳號)：",
+        lblPubDesc: "字庫簡介",
+        phPubDesc: "簡短說明這個字庫包含什麼內容...",
+        btnSubmitPublish: "發布上架",
+
+        // 歡迎與條款
+        welcomeTitle: "歡迎使用 LZHCard",
+        welcomeSub: "請閱讀並同意服務條款以開啟學習旅程",
+        tosTitle: "使用者服務與隱私條款",
+        tosSub: "為維護平台安全與使用者權益，請仔細閱讀以下聲明：",
+        tosItem1Title: "💬 對話內容檢視權限：",
+        tosItem1Desc: "本平台包含之公開聊天室與「私訊管理員」功能，系統管理員出於安全稽核、違規處理與服務維護之必要，皆擁有查看與審核之權限。",
+        tosItem2Title: "💾 資料保管免責聲明：",
+        tosItem2Desc: "本網頁服務不承擔任何單字庫與學習數據之免費保管或永久儲存責任。建議使用者務必定期使用系統內建之「JSON 備份」功能自行下載備份資料。",
+        tosItem3Title: "⚠️ 防詐騙與安全提醒：",
+        tosItem3Desc: "請勿於聊天室中透漏任何個人敏感資訊（如銀行帳密、身份證字號）。本平台不會以私訊要求轉帳或提供信用卡資訊，請提高警覺避免受騙。",
+        tosCheckLabel: "我已閱讀並完全同意上述使用者服務與隱私條款",
+        btnGuestContinue: "以訪客身份繼續使用",
+
+        // 聊天室
+        chatDrawerTitle: "交流聊天室",
+        badgeAdmin: "管理員",
+        phChatSearch: "搜尋群組、固定暱稱或 Email...",
+        tabNotice: "公告",
+        tabChats: "對話",
+        tabFriends: "好友",
+        tabAdmin: "巡視",
+        btnPubAnnounce: "發布官方公告",
+        lblFriendsHeader: "好友與聯絡人",
+        btnEmailAddFriend: "Email 加好友",
+        phChatInput: "輸入訊息...",
+        modalAnnounceTitle: "📢 發布官方公告",
+        phAnnTitle: "公告標題",
+        phAnnContent: "公告內容...",
+        btnPubAnnounceSubmit: "發布公告",
+
+        // 狀態與輔助文字
         statusComplete: "完整",
         statusPending: "待補齊",
         btnRemove: "移除",
@@ -171,7 +247,7 @@ const I18N_DICTIONARY = {
         selectOtherDeck: "請選擇其他字庫或匯入單字",
         unitItem: "筆",
 
-        // JS 動態彈窗與 Toast 訊息
+        // Toast 訊息提示
         toastCategoryNotFound: "⚠️ 找不到名為【{name}】的字庫！",
         toastRenameSuccess: "🎉 成功將【{oldName}】重新命名為【{newName}】（共 {count} 筆單字）！",
         toastSelectMoveWords: "請先勾選要變更字庫的單字！",
@@ -217,24 +293,14 @@ const I18N_DICTIONARY = {
         toastNativeLangUpdated: "母語設定已更新！",
         toastTargetLangUpdated: "學習目標語言已更新！",
         toastDisplayModeUpdated: "卡片顯示模式已更新！",
+        toastPhoneticBack: "已切換為背面顯示 (防劇透模式)",
+        toastPhoneticFront: "已切換為正面顯示",
         toastInvalidApiKey: "⚠️ API Key 無效，請重新設定 Key！",
         toastRateLimit: "⚠️ 觸發 API 頻率限制，請稍後再試！",
         toastApiConnError: "⚠️ 無法連線至 Gemini API 端點！",
         toastNoApiKey: "尚未設定 API Key，請先設定！",
 
-        navStats: "統計",
-        statsTitle: "學習成果與數據統計",
-        statsDesc: "掌握您的詞彙累積量、學習熟悉度與各字庫分佈",
-        statsOptionsTitle: "顯示指標設定",
-        lblShowTotal: "📊 總單字量與掌握率",
-        lblShowCategory: "📚 各字庫 / 語言分佈",
-        lblShowLevel: "📈 艾賓浩斯等級熟悉度分佈",
-        lblShowCatLevel: "🔍 各字庫之等級細節分佈",
-        statsTotalWords: "總單字量",
-        statsMasteredRate: "總體掌握率 (Lv.4~5)",
-        statsLevelDetail: "記憶等級分佈 (Lv.1~5)",
-        statsCatBreakdown: "字庫 / 語言明細",
-
+        // Prompts & Confirms
         promptSelectRenameDeck: "請輸入要重命名的字庫名稱：\n（可選字庫：{list}）",
         promptNewDeckName: "請輸入【{name}】字庫的新名稱：",
         promptMoveTarget: "將已選取的 {count} 筆單字移至新的字庫名稱：",
@@ -256,7 +322,11 @@ const I18N_DICTIONARY = {
         navHome: "Home",
         navList: "Decks",
         navStore: "Store",
+        navStats: "Stats",
         navSettings: "Settings",
+        catAll: "All Decks",
+        defaultCategoryName: "Default Deck",
+
         homeTitle: "Select Study Mode",
         homeDesc: "Focus on words and boost your memory effectively",
         modeFlashcard: "Flashcards",
@@ -265,18 +335,7 @@ const I18N_DICTIONARY = {
         modeQuizDesc: "Spelling, parts of speech & context recall challenges",
         btnStartFocus: "Start Flashcards",
         btnStartQuiz: "Start Quiz",
-        settingsTitle: "Settings",
-        settingsDesc: "Manage your profile, preferences, themes & API key",
-        lblNativeLang: "Native Language",
-        descNativeLang: "Auto-detected based on your device language",
-        lblTargetLang: "Target Learning Language",
-        descTargetLang: "Language used for AI auto-generating definitions & sentences",
-        lblDisplayMode: "Card Front Display",
-        descDisplayMode: "Switch native/target on front or show both",
-        lblTheme: "Appearance Theme",
-        descTheme: "Switch manually or follow system default",
-        lblApiKey: "Gemini AI Key",
-        descApiKey: "Used for auto-generating phonetics & sentences",
+
         btnExit: "Exit Mode",
         btnQuickAdd: "Quick Add",
         stockCount: "Current Total:",
@@ -293,6 +352,7 @@ const I18N_DICTIONARY = {
         quizInputPlaceholder: "Type your answer here...",
         btnSubmit: "Submit",
         btnNext: "Next",
+
         btnAddWord: "Add Word",
         btnBatchImport: "Batch Import",
         btnBackup: "JSON Backup",
@@ -304,31 +364,7 @@ const I18N_DICTIONARY = {
         btnBatchAi: "✨ AI Auto-fill",
         btnBatchDelete: "Delete",
         libAiProgressText: "AI auto-filling...",
-        optTargetFront: "🔤 Target Front, Native Back",
-        optNativeFront: "🇹🇼 Native Front, Target Back",
-        optBothFront: "✨ Both Front (Bilingual)",
-        optCustomLang: "✏️ Custom / Auto-Detect...",
-        customTargetPlaceholder: "Enter language (or leave blank for AI Auto-Detect)",
-        
-        guestMode: "Guest Mode",
-        notLinkedGoogle: "Google Account not linked",
-        btnLoginGoogle: "Sign in with Google",
-        btnLogout: "Log Out",
-
-        sortDefault: "Default Sort",
-        sortAlphaAsc: "Alphabetical (A ➔ Z)",
-        sortAlphaDesc: "Alphabetical (Z ➔ A)",
-        sortPos: "By Part of Speech",
-        sortLevelAsc: "Level (Lv.1 ➔ 5)",
-        sortLevelDesc: "Level (Lv.5 ➔ 1)",
-
-        themeSystem: "📱 System Default",
-        themeLight: "☀️ Light Mode",
-        themeDark: "🌙 Dark Mode",
-
         searchPlaceholder: "Search words, POS, decks, or meanings...",
-        catAll: "All Decks",
-        defaultCategoryName: "Default Deck",
         thCheck: "Select",
         thWord: "Word / Phonetic",
         thCategory: "Deck",
@@ -338,16 +374,72 @@ const I18N_DICTIONARY = {
         emptySearchResult: "No matching words found",
         emptyNoticeTitle: "No words in the selected deck!",
         emptyNoticeDesc: "You can switch to 'Decks' to import or add words.",
+
+        sortDefault: "Default Sort",
+        sortAlphaAsc: "Alphabetical (A ➔ Z)",
+        sortAlphaDesc: "Alphabetical (Z ➔ A)",
+        sortPos: "By Part of Speech",
+        sortLevelAsc: "Level (Lv.1 ➔ 5)",
+        sortLevelDesc: "Level (Lv.5 ➔ 1)",
+
+        settingsTitle: "Settings",
+        settingsDesc: "Manage your profile, preferences, themes & API key",
+        lblNickname: "Fixed Nickname (For Store & Chat)",
+        descNickname: "Bound to account once set to prevent impersonation",
+        phNicknameInput: "Set your fixed nickname...",
+        btnSaveNickname: "Save Nickname",
+        guestMode: "Guest Mode",
+        notLinkedGoogle: "Google Account not linked",
+        btnLoginGoogle: "Sign in with Google",
+        btnLogout: "Log Out",
+        lblNativeLang: "Native Language",
+        descNativeLang: "Auto-detected based on your device language",
+        lblTargetLang: "Target Learning Language",
+        descTargetLang: "Language used for AI auto-generating definitions & sentences",
+        lblDisplayMode: "Card Front Display",
+        descDisplayMode: "Switch native/target on front or show both",
+        lblPhoneticPos: "Phonetic / Pronunciation Position",
+        descPhoneticPos: "Recommended 'Back' for Japanese to avoid spoiler",
+        lblTheme: "Appearance Theme",
+        descTheme: "Switch manually or follow system default",
+        lblApiKey: "Gemini AI Key",
+        descApiKey: "Used for auto-generating phonetics & sentences",
+        btnSetKey: "Set Key",
+        optTargetFront: "Target Front, Native Back",
+        optNativeFront: "Native Front, Target Back",
+        optBothFront: "Both Front (Bilingual)",
+        optPhoneticFront: "🔤 Front (English default)",
+        optPhoneticBack: "🙈 Back (Japanese recommended)",
+        optCustomLang: "✏️ Custom / Auto-Detect...",
+        customTargetPlaceholder: "Enter language (or leave blank for AI Auto-Detect)",
+        optCustomNative: "✏️ Custom Native...",
+        phCustomNative: "Type custom native language",
+        themeSystem: "📱 System Default",
+        themeLight: "☀️ Light Mode",
+        themeDark: "🌙 Dark Mode",
+
         storeTitle: "Official Deck Store",
         storeDesc: "Free download and expansion of topic decks",
-
+        storeSubDesc: "Search, download, or share decks from the community",
+        btnPublishDeck: "Publish Deck",
+        storeSearchPlaceholder: "Search title, description, or author...",
+        btnGetDeck: "Get Deck",
+        btnClose: "Close",
         storeDevTitle: "Under Development",
         storeDevDesc: "Covers all Level 1 - Level 6 vocabulary.",
         btnGoPreset: "Load Preset Packs",
 
-        optCustomLang: "✏️ Custom...",
-        customTargetPlaceholder: "Enter custom target language",
-        btnSetKey: "Set Key",
+        statsTitle: "Learning Statistics",
+        statsDesc: "Track your vocabulary growth, mastery rate, and deck distribution",
+        statsOptionsTitle: "Display Settings",
+        lblShowTotal: "📊 Total Words & Mastery Rate",
+        lblShowCategory: "📚 Deck / Language Breakdown",
+        lblShowLevel: "📈 Mastery Level Distribution",
+        lblShowCatLevel: "🔍 Detailed Deck Level Breakdown",
+        statsTotalWords: "Total Vocabulary",
+        statsMasteredRate: "Overall Mastery (Lv.4~5)",
+        statsLevelDetail: "Memory Level Breakdown (Lv.1~5)",
+        statsCatBreakdown: "Deck Breakdown",
 
         modalCardTitle: "Add / Edit Word Card",
         lblFormCategory: "Deck / Category Name",
@@ -407,6 +499,46 @@ const I18N_DICTIONARY = {
         phQuickAddInput: "e.g., resilient, fragile",
         btnQuickAddConfirm: "Confirm & AI Auto-fill",
 
+        modalPublishTitle: "🚀 Publish Deck to Store",
+        lblPubCategory: "Select Deck Category",
+        lblPubTitle: "Deck Title",
+        phPubTitle: "e.g. JLPT N3 Essential Verbs",
+        lblPubPrice: "Coins Required (0 = Free)",
+        phPubPrice: "e.g. 100",
+        lblPubAuthor: "Publisher Nickname:",
+        lblPubDesc: "Description",
+        phPubDesc: "Short summary of this deck...",
+        btnSubmitPublish: "Publish Now",
+
+        welcomeTitle: "Welcome to LZHCard",
+        welcomeSub: "Please read and accept the Terms of Service to start.",
+        tosTitle: "Terms of Service & Privacy Policy",
+        tosSub: "To protect platform security and user rights, please read carefully:",
+        tosItem1Title: "💬 Chat Content Inspection:",
+        tosItem1Desc: "Admins retain rights to review public chat & support messages for security & maintenance.",
+        tosItem2Title: "💾 Data Disclaimer:",
+        tosItem2Desc: "This service provides no guaranteed permanent storage. Please export JSON backups regularly.",
+        tosItem3Title: "⚠️ Anti-Fraud Warning:",
+        tosItem3Desc: "Do not share sensitive credentials. We will never ask for wire transfers via chat.",
+        tosCheckLabel: "I have read and fully agree to the Terms of Service",
+        btnGuestContinue: "Continue as Guest",
+
+        chatDrawerTitle: "Community Chat",
+        badgeAdmin: "Admin",
+        phChatSearch: "Search groups, nickname, or email...",
+        tabNotice: "Notices",
+        tabChats: "Chats",
+        tabFriends: "Friends",
+        tabAdmin: "Audit",
+        btnPubAnnounce: "Post Announcement",
+        lblFriendsHeader: "Friends & Contacts",
+        btnEmailAddFriend: "Add Friend by Email",
+        phChatInput: "Type a message...",
+        modalAnnounceTitle: "📢 Official Announcement",
+        phAnnTitle: "Title",
+        phAnnContent: "Content...",
+        btnPubAnnounceSubmit: "Post Notice",
+
         statusComplete: "Complete",
         statusPending: "Pending",
         btnRemove: "Remove",
@@ -462,23 +594,12 @@ const I18N_DICTIONARY = {
         toastNativeLangUpdated: "Native language updated!",
         toastTargetLangUpdated: "Target language updated!",
         toastDisplayModeUpdated: "Card display mode updated!",
+        toastPhoneticBack: "Phonetic position set to Back (Anti-spoiler mode)",
+        toastPhoneticFront: "Phonetic position set to Front",
         toastInvalidApiKey: "⚠️ Invalid API Key. Please re-configure!",
         toastRateLimit: "⚠️ Rate limit reached. Please try again later!",
         toastApiConnError: "⚠️ Cannot connect to Gemini API endpoint!",
         toastNoApiKey: "API Key not set. Please configure first!",
-
-        navStats: "Stats",
-        statsTitle: "Learning Statistics",
-        statsDesc: "Track your vocabulary growth, mastery rate, and deck distribution",
-        statsOptionsTitle: "Display Settings",
-        lblShowTotal: "📊 Total Words & Mastery Rate",
-        lblShowCategory: "📚 Deck / Language Breakdown",
-        lblShowLevel: "📈 Mastery Level Distribution",
-        lblShowCatLevel: "🔍 Detailed Deck Level Breakdown",
-        statsTotalWords: "Total Vocabulary",
-        statsMasteredRate: "Overall Mastery (Lv.4~5)",
-        statsLevelDetail: "Memory Level Breakdown (Lv.1~5)",
-        statsCatBreakdown: "Deck Breakdown",
 
         promptSelectRenameDeck: "Enter the deck name to rename:\n(Available: {list})",
         promptNewDeckName: "Enter new name for deck '{name}':",
@@ -501,7 +622,11 @@ const I18N_DICTIONARY = {
         navHome: "ホーム",
         navList: "単語帳管理",
         navStore: "ストア",
+        navStats: "設定",
         navSettings: "設定",
+        catAll: "すべての単語帳",
+        defaultCategoryName: "デフォルト",
+
         homeTitle: "学習モードを選択",
         homeDesc: "効率的に記憶力を高めましょう",
         modeFlashcard: "カードめくり",
@@ -510,18 +635,7 @@ const I18N_DICTIONARY = {
         modeQuizDesc: "スペルと文脈理解のクイズ",
         btnStartFocus: "カード学習を開始",
         btnStartQuiz: "テストを開始",
-        settingsTitle: "アカウントと設定",
-        settingsDesc: "個人設定、テーマ、APIキーの管理",
-        lblNativeLang: "母国語 (Native Language)",
-        descNativeLang: "端末の言語設定に基づいて自動判定されています",
-        lblTargetLang: "学習言語 (Target Language)",
-        descTargetLang: "AIが単語や例文を解析する際に使用する言語",
-        lblDisplayMode: "表面の表示モード",
-        descDisplayMode: "表面に母国語・学習言語のどちらを表示するか切替",
-        lblTheme: "テーマ設定",
-        descTheme: "手動切り替えまたはシステム設定に従う",
-        lblApiKey: "Gemini API キー",
-        descApiKey: "発音記号や例文の自動生成に使用",
+
         btnExit: "終了",
         btnQuickAdd: "クイック追加",
         stockCount: "現在の登録数:",
@@ -538,6 +652,7 @@ const I18N_DICTIONARY = {
         quizInputPlaceholder: "ここに回答を入力...",
         btnSubmit: "回答する",
         btnNext: "次の問題",
+
         btnAddWord: "単語を追加",
         btnBatchImport: "一括インポート",
         btnBackup: "バックアップ",
@@ -549,31 +664,7 @@ const I18N_DICTIONARY = {
         btnBatchAi: "✨ AI補完",
         btnBatchDelete: "削除",
         libAiProgressText: "AI自動補完中...",
-        optTargetFront: "🔤 表面：学習言語 / 裏面：母国語",
-        optNativeFront: "🇹🇼 表面：母国語 / 裏面：学習言語",
-        optBothFront: "✨ 表面：両方表示 (二言語対照)",
-        optCustomLang: "✏️ カスタム / 自動判別...",
-        customTargetPlaceholder: "言語名を入力（空欄でAI自動識別）",
-
-        guestMode: "ゲストモード",
-        notLinkedGoogle: "Googleアカウント未連携",
-        btnLoginGoogle: "Googleでログイン",
-        btnLogout: "ログアウト",
-
-        sortDefault: "デフォルト順",
-        sortAlphaAsc: "アルファベット順 (A ➔ Z)",
-        sortAlphaDesc: "アルファベット順 (Z ➔ A)",
-        sortPos: "品詞順",
-        sortLevelAsc: "レベル順 (Lv.1 ➔ 5)",
-        sortLevelDesc: "レベル逆順 (Lv.5 ➔ 1)",
-
-        themeSystem: "📱 システムに従う",
-        themeLight: "☀️ ライトモード",
-        themeDark: "🌙 ダークモード",
-
         searchPlaceholder: "単語、品詞、単語帳、意味を検索...",
-        catAll: "すべての単語帳",
-        defaultCategoryName: "デフォルト",
         thCheck: "選択",
         thWord: "単語 / 発音記号",
         thCategory: "単語帳",
@@ -583,16 +674,72 @@ const I18N_DICTIONARY = {
         emptySearchResult: "該当する単語が見つかりません",
         emptyNoticeTitle: "選択した単語帳に単語がありません！",
         emptyNoticeDesc: "「単語帳管理」に切り替えて、単語をインポートまたは追加できます。",
+
+        sortDefault: "デフォルト順",
+        sortAlphaAsc: "アルファベット順 (A ➔ Z)",
+        sortAlphaDesc: "アルファベット順 (Z ➔ A)",
+        sortPos: "品詞順",
+        sortLevelAsc: "レベル順 (Lv.1 ➔ 5)",
+        sortLevelDesc: "レベル逆順 (Lv.5 ➔ 1)",
+
+        settingsTitle: "アカウントと設定",
+        settingsDesc: "個人設定、テーマ、APIキーの管理",
+        lblNickname: "固定ニックネーム",
+        descNickname: "ストア公開やチャットで使用されます",
+        phNicknameInput: "ニックネームを入力...",
+        btnSaveNickname: "保存",
+        guestMode: "ゲストモード",
+        notLinkedGoogle: "Googleアカウント未連携",
+        btnLoginGoogle: "Googleでログイン",
+        btnLogout: "ログアウト",
+        lblNativeLang: "母国語 (Native Language)",
+        descNativeLang: "端末の言語設定に基づいて自動判定されています",
+        lblTargetLang: "学習言語 (Target Language)",
+        descTargetLang: "AIが単語や例文を解析する際に使用する言語",
+        lblDisplayMode: "表面の表示モード",
+        descDisplayMode: "表面に母国語・学習言語のどちらを表示するか切替",
+        lblPhoneticPos: "発音記号・読みの表示位置",
+        descPhoneticPos: "日本語学習時は「裏面」表示がおすすめ（ネタバレ防止）",
+        lblTheme: "テーマ設定",
+        descTheme: "手動切り替えまたはシステム設定に従う",
+        lblApiKey: "Gemini API キー",
+        descApiKey: "発音記号や例文の自動生成に使用",
+        btnSetKey: "APIキー設定",
+        optTargetFront: "表面：学習言語 / 裏面：母国語",
+        optNativeFront: "表面：母国語 / 裏面：学習言語",
+        optBothFront: "表面：両方表示 (二言語対照)",
+        optPhoneticFront: "🔤 表面表示 (英語推奨)",
+        optPhoneticBack: "🙈 裏面表示 (日本語推奨)",
+        optCustomLang: "✏️ カスタム / 自動判別...",
+        customTargetPlaceholder: "言語名を入力（空欄でAI自動識別）",
+        optCustomNative: "✏️ カスタム母国語...",
+        phCustomNative: "母国語を入力",
+        themeSystem: "📱 システムに従う",
+        themeLight: "☀️ ライトモード",
+        themeDark: "🌙 ダークモード",
+
         storeTitle: "公式単語帳ストア",
         storeDesc: "テーマ別単語帳を無料でダウンロード・拡張",
-
+        storeSubDesc: "コミュニティの単語帳を検索・ダウンロード",
+        btnPublishDeck: "単語帳を公開",
+        storeSearchPlaceholder: "タイトル、説明、作者名で検索...",
+        btnGetDeck: "入手する",
+        btnClose: "閉じる",
         storeDevTitle: "開発中",
         storeDevDesc: "Level 1 〜 Level 6 の全単語をカバー。",
         btnGoPreset: "プリセットパックを読み込む",
 
-        optCustomLang: "✏️ カスタム...",
-        customTargetPlaceholder: "カスタム学習言語を入力",
-        btnSetKey: "APIキー設定",
+        statsTitle: "学習統計成果",
+        statsDesc: "単語数の蓄積、定着度、単語帳ごとの進捗を分析",
+        statsOptionsTitle: "表示項目設定",
+        lblShowTotal: "📊 総単語数と定着率",
+        lblShowCategory: "📚 単語帳・言語別内訳",
+        lblShowLevel: "📈 習熟度レベル分布",
+        lblShowCatLevel: "🔍 単語帳ごとのレベル詳細",
+        statsTotalWords: "総単語数",
+        statsMasteredRate: "全体定着率 (Lv.4~5)",
+        statsLevelDetail: "記憶レベル分布 (Lv.1~5)",
+        statsCatBreakdown: "単語帳別内訳",
 
         modalCardTitle: "単語カードの追加・編集",
         lblFormCategory: "所属単語帳/分類名",
@@ -606,7 +753,7 @@ const I18N_DICTIONARY = {
         lblFormPhonetic: "発音記号・読み",
         phFormPhonetic: "例: /rɪˈzɪl.jənt/ または たべる",
         lblFormMeaning: "意味・翻訳",
-        phFormMeaning: "例: しなやかな / 食べる (空欄でAI自動補完)",
+        phFormMeaning: "例: 彈力のある",
         lblFormSentence: "例文 (学習言語)",
         phFormSentence: "例: She is resilient enough to bounce back from failure.",
         lblFormTranslation: "例文の翻訳 (母国語)",
@@ -651,6 +798,46 @@ const I18N_DICTIONARY = {
         modalQuickAddDesc: "分からない単語を入力してください（カンマ、スペース、改行で区切り可能）。AIがバックグラウンドで発音記号、品詞、意味を自動補完します！",
         phQuickAddInput: "例: resilient, fragile",
         btnQuickAddConfirm: "確定してAI自動入力",
+
+        modalPublishTitle: "🚀 単語帳をストアに公開",
+        lblPubCategory: "カテゴリ選択",
+        lblPubTitle: "単語帳タイトル",
+        phPubTitle: "例: JLPT N3 重要動詞",
+        lblPubPrice: "必要コイン (0 = 無料)",
+        phPubPrice: "例: 100",
+        lblPubAuthor: "作者ニックネーム：",
+        lblPubDesc: "説明文",
+        phPubDesc: "この単語帳の概要...",
+        btnSubmitPublish: "公開する",
+
+        welcomeTitle: "LZHCard へようこそ",
+        welcomeSub: "利用規約に同意して学習を開始してください",
+        tosTitle: "利用規約とプライバシーポリシー",
+        tosSub: "安全な利用のために以下の規約をご確認ください：",
+        tosItem1Title: "💬 チャット監査権限：",
+        tosItem1Desc: "管理者には安全確保のため、チャット内容を点検する権限があります。",
+        tosItem2Title: "💾 データ保存の免責：",
+        tosItem2Desc: "データは定期的に JSON バックアップ機能で保存してください。",
+        tosItem3Title: "⚠️ 詐欺防止の警告：",
+        tosItem3Desc: "個人情報やクレジットカード情報をチャット上で公開しないでください。",
+        tosCheckLabel: "上記の利用規約に同意します",
+        btnGuestContinue: "ゲストとして継続",
+
+        chatDrawerTitle: "コミュニティチャット",
+        badgeAdmin: "管理者",
+        phChatSearch: "グループ、名前、Emailで検索...",
+        tabNotice: "お知らせ",
+        tabChats: "チャット",
+        tabFriends: "フレンド",
+        tabAdmin: "監査",
+        btnPubAnnounce: "お知らせ投稿",
+        lblFriendsHeader: "フレンド一覧",
+        btnEmailAddFriend: "Email で追加",
+        phChatInput: "メッセージを入力...",
+        modalAnnounceTitle: "📢 公式お知らせ投稿",
+        phAnnTitle: "タイトル",
+        phAnnContent: "内容...",
+        btnPubAnnounceSubmit: "投稿",
 
         statusComplete: "完了",
         statusPending: "未完了",
@@ -707,23 +894,12 @@ const I18N_DICTIONARY = {
         toastNativeLangUpdated: "母国語を設定しました！",
         toastTargetLangUpdated: "学習言語を設定しました！",
         toastDisplayModeUpdated: "表示モードを変更しました！",
+        toastPhoneticBack: "発音を裏面表示に設定しました（ネタバレ防止モード）",
+        toastPhoneticFront: "発音を表面表示に設定しました",
         toastInvalidApiKey: "⚠️ 無効な API キーです！",
         toastRateLimit: "⚠️ リクエスト制限に達しました！",
         toastApiConnError: "⚠️ Gemini API に接続できません！",
         toastNoApiKey: "API キーが設定されていません！",
-
-        navStats: "統計",
-        statsTitle: "学習統計成果",
-        statsDesc: "単語数の蓄積、定着度、単語帳ごとの進捗を分析",
-        statsOptionsTitle: "表示項目設定",
-        lblShowTotal: "📊 総単語数と定着率",
-        lblShowCategory: "📚 単語帳・言語別内訳",
-        lblShowLevel: "📈 習熟度レベル分布",
-        lblShowCatLevel: "🔍 単語帳ごとのレベル詳細",
-        statsTotalWords: "総単語数",
-        statsMasteredRate: "全体定着率 (Lv.4~5)",
-        statsLevelDetail: "記憶レベル分布 (Lv.1~5)",
-        statsCatBreakdown: "単語帳別内訳",
 
         promptSelectRenameDeck: "名前を変更する単語帳名を入力してください：\n（候補: {list}）",
         promptNewDeckName: "「{name}」の新しい名前を入力してください：",
@@ -744,10 +920,24 @@ const I18N_DICTIONARY = {
 };
 
 /**
- * 🌐 全域多語言翻譯與變數替換輔助函式
+ * 取得當前使用的語言代碼
+ */
+function getCurrentLanguage() {
+    const saved = localStorage.getItem('user_native_lang') || localStorage.getItem('lzhcard_native_lang');
+    if (saved && (I18N_DICTIONARY[saved] || saved === 'custom')) {
+        return saved;
+    }
+    const sysLang = navigator.language || navigator.userLanguage || 'zh-TW';
+    if (sysLang.startsWith('zh')) return 'zh-TW';
+    if (sysLang.startsWith('ja')) return 'ja';
+    return 'en';
+}
+
+/**
+ * 🌐 全域多語言翻譯與動態變數替換輔助函式 (相容 t('key', { name: 'xxx' }))
  */
 function t(key, params = {}) {
-    const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
+    const nativeLang = getCurrentLanguage();
     const customNative = localStorage.getItem('lzhcard_custom_native') || '';
     
     let dict = I18N_DICTIONARY[nativeLang];
@@ -763,10 +953,17 @@ function t(key, params = {}) {
 
     let text = dict[key] || I18N_DICTIONARY['zh-TW'][key] || key;
 
-    // 自動做動態變數替換 (如 {name}, {count})
-    Object.keys(params).forEach(p => {
-        text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
-    });
+    // 若 params 為字串（舊版相容）
+    if (typeof params === 'string') {
+        return text || params;
+    }
+
+    // 自動執行 {name}, {count} 等動態變數替換
+    if (params && typeof params === 'object') {
+        Object.keys(params).forEach(p => {
+            text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
+        });
+    }
 
     return text;
 }
@@ -775,7 +972,7 @@ function t(key, params = {}) {
  * 更新 DOM 元素 UI 語言
  */
 function applyLanguageUI() {
-    const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
+    const nativeLang = getCurrentLanguage();
     const customNative = localStorage.getItem('lzhcard_custom_native') || '';
 
     let dict = I18N_DICTIONARY[nativeLang];
@@ -794,6 +991,8 @@ function applyLanguageUI() {
         const key = elem.getAttribute('data-i18n');
         if (dict[key]) {
             elem.innerText = dict[key];
+        } else if (I18N_DICTIONARY['zh-TW'][key]) {
+            elem.innerText = I18N_DICTIONARY['zh-TW'][key];
         }
     });
 
@@ -802,6 +1001,8 @@ function applyLanguageUI() {
         const key = elem.getAttribute('data-i18n-placeholder');
         if (dict[key]) {
             elem.setAttribute('placeholder', dict[key]);
+        } else if (I18N_DICTIONARY['zh-TW'][key]) {
+            elem.setAttribute('placeholder', I18N_DICTIONARY['zh-TW'][key]);
         }
     });
 
@@ -809,6 +1010,18 @@ function applyLanguageUI() {
     if (typeof updateCategorySelects === 'function') {
         updateCategorySelects();
     }
+
+    // 4. 同步更新批量輸入與快速新增的範例提示
+    if (typeof updateBatchPlaceholders === 'function') {
+        updateBatchPlaceholders();
+    }
+}
+
+/**
+ * 相容別名函式
+ */
+function updatePageTranslations() {
+    applyLanguageUI();
 }
 
 /**
@@ -838,7 +1051,7 @@ Return ONLY valid JSON.`;
         if (res.ok) {
             const data = await res.json();
             let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const translatedDict = safeParseJSON(rawText);
+            const translatedDict = typeof safeParseJSON === 'function' ? safeParseJSON(rawText) : JSON.parse(rawText);
             if (translatedDict) {
                 localStorage.setItem(`lzhcard_ui_dict_${customLangName}`, JSON.stringify(translatedDict));
                 applyLanguageUI();

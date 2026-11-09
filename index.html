@@ -49,31 +49,31 @@
             <!-- 標頭 -->
             <div class="text-center space-y-2 flex-shrink-0">
                 <img src="images/logo.png" alt="Logo" class="w-14 h-14 mx-auto rounded-2xl shadow-md object-cover">
-                <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">歡迎使用 LZHCard</h2>
-                <p class="text-xs text-slate-500 dark:text-slate-400">請閱讀並同意服務條款以開啟學習旅程</p>
+                <h2 class="text-xl font-extrabold text-slate-900 dark:text-white" data-i18n="welcomeTitle">歡迎使用 LZHCard</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400" data-i18n="welcomeSub">請閱讀並同意服務條款以開啟學習旅程</p>
             </div>
 
             <!-- 📜 服務條款內容區塊 (可滾動) -->
             <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 space-y-3 overflow-y-auto max-h-48 leading-relaxed font-sans">
                 <div class="font-bold text-slate-800 dark:text-slate-200 text-sm border-b border-slate-200 dark:border-slate-700 pb-1.5 flex items-center space-x-1.5">
                     <i class="fa-solid fa-shield-halved text-brand-600"></i>
-                    <span>使用者服務與隱私條款</span>
+                    <span data-i18n="tosTitle">使用者服務與隱私條款</span>
                 </div>
 
-                <p class="font-semibold text-slate-700 dark:text-slate-200">為維護平台安全與使用者權益，請仔細閱讀以下聲明：</p>
+                <p class="font-semibold text-slate-700 dark:text-slate-200" data-i18n="tosSub">為維護平台安全與使用者權益，請仔細閱讀以下聲明：</p>
 
                 <ul class="space-y-2 list-disc list-inside text-[11px]">
                     <li>
-                        <strong class="text-slate-800 dark:text-slate-100">💬 對話內容檢視權限：</strong>
-                        本平台包含之公開聊天室與「私訊管理員」功能，系統管理員出於安全稽核、違規處理與服務維護之必要，皆擁有查看與審核之權限。
+                        <strong class="text-slate-800 dark:text-slate-100" data-i18n="tosItem1Title">💬 對話內容檢視權限：</strong>
+                        <span data-i18n="tosItem1Desc">本平台包含之公開聊天室與「私訊管理員」功能，系統管理員出於安全稽核、違規處理與服務維護之必要，皆擁有查看與審核之權限。</span>
                     </li>
                     <li>
-                        <strong class="text-slate-800 dark:text-slate-100">💾 資料保管免責聲明：</strong>
-                        本網頁服務不承擔任何單字庫與學習數據之免費保管或永久儲存責任。建議使用者務必定期使用系統內建之「JSON 備份」功能自行下載備份資料。
+                        <strong class="text-slate-800 dark:text-slate-100" data-i18n="tosItem2Title">💾 資料保管免責聲明：</strong>
+                        <span data-i18n="tosItem2Desc">本網頁服務不承擔任何單字庫與學習數據之免費保管或永久儲存責任。建議使用者務必定期使用系統內建之「JSON 備份」功能自行下載備份資料。</span>
                     </li>
                     <li>
-                        <strong class="text-slate-800 dark:text-slate-100">⚠️ 防詐騙與安全提醒：</strong>
-                        請勿於聊天室中透漏任何個人敏感資訊（如銀行帳密、身份證字號）。本平台不會以私訊要求轉帳或提供信用卡資訊，請提高警覺避免受騙。
+                        <strong class="text-slate-800 dark:text-slate-100" data-i18n="tosItem3Title">⚠️ 防詐騙與安全提醒：</strong>
+                        <span data-i18n="tosItem3Desc">請勿於聊天室中透漏任何個人敏感資訊（如銀行帳密、身份證字號）。本平台不會以私訊要求轉帳或提供信用卡資訊，請提高警覺避免受騙。</span>
                     </li>
                 </ul>
             </div>
@@ -81,7 +81,7 @@
             <!-- 勾選框 -->
             <div class="flex items-center space-x-2 flex-shrink-0 pt-1">
                 <input type="checkbox" id="tosCheckbox" onchange="toggleAuthButtons()" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
-                <label for="tosCheckbox" class="text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer select-none">
+                <label for="tosCheckbox" class="text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer select-none" data-i18n="tosCheckLabel">
                     我已閱讀並完全同意上述使用者服務與隱私條款
                 </label>
             </div>
@@ -91,13 +91,13 @@
                 <!-- 1. Google 登入 -->
                 <button type="button" id="welcomeGoogleBtn" onclick="handleWelcomeGoogleLogin()" disabled class="w-full py-3 bg-slate-200 dark:bg-slate-700 text-slate-400 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition cursor-not-allowed">
                     <i class="fa-brands fa-google text-sm"></i>
-                    <span>使用 Google 帳號登入</span>
+                    <span data-i18n="btnLoginGoogle">使用 Google 帳號登入</span>
                 </button>
 
                 <!-- 2. 訪客登入 -->
                 <button type="button" id="welcomeGuestBtn" onclick="handleWelcomeGuestLogin()" disabled class="w-full py-3 bg-slate-200 dark:bg-slate-700 text-slate-400 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition cursor-not-allowed">
                     <i class="fa-solid fa-user text-sm"></i>
-                    <span>以訪客身份繼續使用</span>
+                    <span data-i18n="btnGuestContinue">以訪客身份繼續使用</span>
                 </button>
             </div>
 
@@ -127,12 +127,18 @@
                     </button>
                 </div>
 
-                <!-- 右側字庫選擇器 -->
-                <div id="headerCategorySelector" class="flex items-center space-x-2 bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs">
-                    <i class="fa-solid fa-folder-tree text-brand-600 dark:text-brand-400"></i>
-                    <select id="categoryFilterSelect" onchange="handleCategoryFilterChange()" class="bg-white dark:bg-slate-800 font-semibold text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-1 outline-none text-xs max-w-[130px] sm:max-w-[200px] truncate">
-                        <option value="ALL" data-i18n="catAll">全部字庫</option>
-                    </select>
+                <!-- 右側字庫選擇器 (漂亮多選彈出面板版) -->
+                <div id="headerCategorySelector" class="relative">
+                    <button type="button" onclick="toggleCategoryDropdown(event)" class="flex items-center space-x-2 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600 transition shadow-2xs">
+                        <i class="fa-solid fa-folder-tree text-brand-600 dark:text-brand-400"></i>
+                        <span id="categoryDropdownBtnText" class="max-w-[110px] sm:max-w-[160px] truncate" data-i18n="catAll">全部字庫</span>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+                    </button>
+
+                    <!-- 點擊彈出的多選勾選面板 -->
+                    <div id="categoryDropdownMenu" class="hidden absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 p-2 space-y-1 text-xs max-h-64 overflow-y-auto">
+                        <!-- JS 動態生成多選 Checkbox 列 -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -248,6 +254,7 @@
                         </div>
                         <div class="space-y-4 my-auto">
                             <div id="cardMeaning" class="text-2xl sm:text-3xl font-bold text-center text-amber-300 leading-snug">請新增單字</div>
+                            <div id="cardPhoneticBack" class="text-base text-amber-200/90 font-mono text-center"></div>
                             <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700/50 space-y-1.5">
                                 <p id="cardSentence" class="text-sm font-medium text-slate-200 italic leading-relaxed">"No sentence"</p>
                                 <p id="cardTranslation" class="text-xs text-slate-400">翻譯</p>
@@ -266,7 +273,7 @@
                 </button>
                 <button type="button" onclick="handleKnow()" class="flex-1 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-lg transition flex items-center justify-center space-x-2">
                     <i class="fa-solid fa-check text-lg"></i>
-                    <span><span data-i18n="btnKnow">已掌握</span> (<span id="knowStreakText">0/3</span>)</span>
+                    <span><span data-i18n="btnKnow">已掌握</span> (<span id="knowStreakText">0/2</span>)</span>
                 </button>
             </div>
         </section>
@@ -472,18 +479,18 @@
                             <span id="userCoinsDisplay">500</span>
                         </div>
                     </div>
-                    <p class="text-xs text-slate-400">搜尋、下載或分享來自社群的單字庫</p>
+                    <p class="text-xs text-slate-400" data-i18n="storeSubDesc">搜尋、下載或分享來自社群的單字庫</p>
                 </div>
                 <button type="button" onclick="openPublishModal()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1 shadow-sm">
                     <i class="fa-solid fa-cloud-arrow-up"></i>
-                    <span>發布字庫</span>
+                    <span data-i18n="btnPublishDeck">發布字庫</span>
                 </button>
             </div>
 
             <!-- 🔍 搜尋列 -->
             <div class="relative">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                <input type="text" id="storeSearchInput" oninput="renderStore()" placeholder="搜尋字庫名稱、簡介或作者名稱..." class="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-800 dark:text-slate-100">
+                <input type="text" id="storeSearchInput" oninput="renderStore()" data-i18n-placeholder="storeSearchPlaceholder" placeholder="搜尋字庫名稱、簡介或作者名稱..." class="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-800 dark:text-slate-100">
             </div>
 
             <!-- 📦 商店字庫列表容器 -->
@@ -503,24 +510,26 @@
                     <div class="flex items-center space-x-3">
                         <img id="settings-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=user" alt="Avatar" class="w-12 h-12 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
                         <div>
-                            <div id="settings-email" class="font-bold text-sm text-slate-800 dark:text-slate-100">訪客模式</div>
-                            <div id="settings-subtext" class="text-xs text-slate-400">目前未連結 Google 帳號</div>
+                            <div id="settings-email" class="font-bold text-sm text-slate-800 dark:text-slate-100" data-i18n="guestMode">訪客模式</div>
+                            <div id="settings-subtext" class="text-xs text-slate-400" data-i18n="notLinkedGoogle">目前未連結 Google 帳號</div>
                         </div>
                     </div>
                 </div>
-                            <!-- 🏷️ 個人固定暱稱設定區塊 -->
+
+                <!-- 🏷️ 個人固定暱稱設定區塊 -->
                 <div class="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-2">
                     <div class="flex justify-between items-center">
                         <div>
-                            <div class="text-xs font-bold text-slate-800 dark:text-slate-100">個人固定暱稱 (用於發布字庫與社群)</div>
-                            <div class="text-[11px] text-slate-400">登入後固定綁定帳號，防止他人盜用身份發布</div>
+                            <div class="text-xs font-bold text-slate-800 dark:text-slate-100" data-i18n="lblNickname">個人固定暱稱 (用於發布字庫與社群)</div>
+                            <div class="text-[11px] text-slate-400" data-i18n="descNickname">登入後固定綁定帳號，防止他人盜用身份發布</div>
                         </div>
                     </div>
                     <div class="flex space-x-2">
-                        <input type="text" id="settingsNicknameInput" placeholder="設定您的固定暱稱..." class="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
-                        <button type="button" onclick="handleSaveNickname()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-xs whitespace-nowrap">儲存暱稱</button>
+                        <input type="text" id="settingsNicknameInput" data-i18n-placeholder="phNicknameInput" placeholder="設定您的固定暱稱..." class="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+                        <button type="button" onclick="handleSaveNickname()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-xs whitespace-nowrap" data-i18n="btnSaveNickname">儲存暱稱</button>
                     </div>
                 </div>
+
                 <!-- 登入/登出操作 -->
                 <div id="settings-auth-actions" class="space-y-2">
                     <div id="settings-logged-out">
@@ -549,9 +558,9 @@
                                 <option value="zh-TW">🇹🇼 繁體中文</option>
                                 <option value="en">🇺🇸 English</option>
                                 <option value="ja">🇯🇵 日本語</option>
-                                <option value="custom">✏️ 自訂母語...</option>
+                                <option value="custom" data-i18n="optCustomNative">✏️ 自訂母語...</option>
                             </select>
-                            <input type="text" id="customNativeInput" onchange="handleCustomLangChange('native', this.value)" placeholder="輸入自訂母語" class="hidden px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                            <input type="text" id="customNativeInput" onchange="handleCustomLangChange('native', this.value)" data-i18n-placeholder="phCustomNative" placeholder="輸入自訂母語" class="hidden px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                         </div>
                     </div>
 
@@ -577,11 +586,23 @@
                             <div class="text-[11px] text-slate-400" data-i18n="descDisplayMode">可自由切換母語/外語在正面或同時顯示</div>
                         </div>
                         <select id="cardDisplayModeSelect" onchange="handleCardDisplayModeChange(this.value)" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold rounded-lg text-xs outline-none cursor-pointer">
-                            <option value="target_front" data-i18n="optTargetFront">🔤 目標語言在正面，母語在背面</option>
-                            <option value="native_front" data-i18n="optNativeFront">🇹🇼 母語在正面，目標語言在背面</option>
-                            <option value="both_front" data-i18n="optBothFront">✨ 正面同時顯示 (雙語對照)</option>
+                            <option value="target_front" data-i18n="optTargetFront">目標語言在正面，母語在背面</option>
+                            <option value="native_front" data-i18n="optNativeFront">母語在正面，目標語言在背面</option>
+                            <option value="both_front" data-i18n="optBothFront">正面同時顯示 (雙語對照)</option>
                         </select>
                     </div>
+                </div>
+
+                <!-- 音標顯示位置 -->
+                <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700">
+                    <div>
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100" data-i18n="lblPhoneticPos">音標 / 讀音顯示位置</div>
+                        <div class="text-[11px] text-slate-400" data-i18n="descPhoneticPos">背日文時建議設為「背面」，避免正面直接透露發音</div>
+                    </div>
+                    <select id="phoneticPosSelect" onchange="handlePhoneticPosChange(this.value)" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold rounded-lg text-xs outline-none cursor-pointer">
+                        <option value="front" data-i18n="optPhoneticFront">🔤 正面顯示 (英文預設)</option>
+                        <option value="back" data-i18n="optPhoneticBack">🙈 背面顯示 (日文推薦)</option>
+                    </select>
                 </div>
 
                 <!-- 主題設定區塊 -->
@@ -941,41 +962,41 @@
     <div id="publishModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100 dark:border-slate-700">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3">
-                <h3 class="font-bold text-base text-slate-900 dark:text-white">🚀 發布我的字庫至商店</h3>
+                <h3 class="font-bold text-base text-slate-900 dark:text-white" data-i18n="modalPublishTitle">🚀 發布我的字庫至商店</h3>
                 <button type="button" onclick="closeModal('publishModal')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
 
             <div class="space-y-3">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">選擇要發布的字庫分類 <span class="text-rose-500">*</span></label>
+                    <label class="block text-xs font-bold text-slate-500 mb-1" data-i18n="lblPubCategory">選擇要發布的字庫分類 <span class="text-rose-500">*</span></label>
                     <select id="pubCategorySelect" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-800 dark:text-slate-100"></select>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">字庫名稱 (不可與商店現有名稱重複) <span class="text-rose-500">*</span></label>
-                    <input type="text" id="pubTitle" placeholder="例如：JLPT N3 高頻動詞 100 選" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold">
+                    <label class="block text-xs font-bold text-slate-500 mb-1" data-i18n="lblPubTitle">字庫名稱 (不可與商店現有名稱重複) <span class="text-rose-500">*</span></label>
+                    <input type="text" id="pubTitle" data-i18n-placeholder="phPubTitle" placeholder="例如：JLPT N3 高頻動詞 100 選" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold">
                 </div>
 
                 <!-- 🪙 設定字庫下載價格 -->
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">下載所需金幣 (0 表示免費分享)</label>
-                    <input type="number" id="pubPrice" value="0" min="0" placeholder="例如：100" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <label class="block text-xs font-bold text-slate-500 mb-1" data-i18n="lblPubPrice">下載所需金幣 (0 表示免費分享)</label>
+                    <input type="number" id="pubPrice" value="0" min="0" data-i18n-placeholder="phPubPrice" placeholder="例如：100" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
                 </div>
 
                 <div class="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-center text-xs">
-                    <span class="font-bold text-slate-500">發布者暱稱 (已鎖定帳號)：</span>
+                    <span class="font-bold text-slate-500" data-i18n="lblPubAuthor">發布者暱稱 (已鎖定帳號)：</span>
                     <span id="pubAuthorDisplay" class="font-extrabold text-brand-600 dark:text-brand-400">載入中...</span>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">字庫簡介</label>
-                    <textarea id="pubDesc" rows="3" placeholder="簡短說明這個字庫包含什麼內容..." class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100"></textarea>
+                    <label class="block text-xs font-bold text-slate-500 mb-1" data-i18n="lblPubDesc">字庫簡介</label>
+                    <textarea id="pubDesc" rows="3" data-i18n-placeholder="phPubDesc" placeholder="簡短說明這個字庫包含什麼內容..." class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100"></textarea>
                 </div>
             </div>
 
             <div class="flex justify-end space-x-2 pt-2">
-                <button type="button" onclick="closeModal('publishModal')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl">取消</button>
-                <button type="button" onclick="submitPublishDeck()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm">發布上架</button>
+                <button type="button" onclick="closeModal('publishModal')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl" data-i18n="btnCancel">取消</button>
+                <button type="button" onclick="submitPublishDeck()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm" data-i18n="btnSubmitPublish">發布上架</button>
             </div>
         </div>
     </div>
@@ -1012,8 +1033,8 @@
                 <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
                     <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-comments text-brand-600 text-lg"></i>
-                        <h3 class="font-extrabold text-base text-slate-900 dark:text-white">交流聊天室</h3>
-                        <span id="adminBadge" class="hidden px-2 py-0.5 text-[10px] font-black bg-rose-600 text-white rounded-full">管理員</span>
+                        <h3 class="font-extrabold text-base text-slate-900 dark:text-white" data-i18n="chatDrawerTitle">交流聊天室</h3>
+                        <span id="adminBadge" class="hidden px-2 py-0.5 text-[10px] font-black bg-rose-600 text-white rounded-full" data-i18n="badgeAdmin">管理員</span>
                     </div>
                     <button type="button" onclick="closeChatDrawer()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                         <i class="fa-solid fa-xmark text-lg"></i>
@@ -1024,16 +1045,16 @@
                 <div class="p-3 border-b border-slate-100 dark:border-slate-700 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
                     <!-- 🔍 搜尋框 (支援搜尋群組、好友或輸入 Email) -->
                     <div class="relative">
-                        <input type="text" id="chatSearchInput" oninput="handleChatSearch()" placeholder="搜尋群組、固定暱稱或 Email..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <input type="text" id="chatSearchInput" oninput="handleChatSearch()" data-i18n-placeholder="phChatSearch" placeholder="搜尋群組、固定暱稱或 Email..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
                         <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
                     </div>
 
                     <!-- 📌 頁籤按鈕 -->
                     <div class="flex border-b border-slate-200 dark:border-slate-700">
-                        <button type="button" id="tabNoticeBtn" onclick="switchChatTab('notice')" class="flex-1 py-2 text-center text-xs font-bold text-slate-400">公告</button>
-                        <button type="button" id="tabChatsBtn" onclick="switchChatTab('chats')" class="flex-1 py-2 text-center text-xs font-bold text-slate-400">對話</button>
-                        <button type="button" id="tabFriendsBtn" onclick="switchChatTab('friends')" class="flex-1 py-2 text-center text-xs font-bold text-slate-400">好友</button>
-                        <button type="button" id="tabAdminBtn" onclick="switchChatTab('admin')" class="hidden flex-1 py-2 text-center text-xs font-bold text-rose-500">巡視</button>
+                        <button type="button" id="tabNoticeBtn" onclick="switchChatTab('notice')" class="flex-1 py-2 text-center text-xs font-bold text-slate-400" data-i18n="tabNotice">公告</button>
+                        <button type="button" id="tabChatsBtn" onclick="switchChatTab('chats')" class="flex-1 py-2 text-center text-xs font-bold text-slate-400" data-i18n="tabChats">對話</button>
+                        <button type="button" id="tabFriendsBtn" onclick="switchChatTab('friends')" class="flex-1 py-2 text-center text-xs font-bold text-slate-400" data-i18n="tabFriends">好友</button>
+                        <button type="button" id="tabAdminBtn" onclick="switchChatTab('admin')" class="hidden flex-1 py-2 text-center text-xs font-bold text-rose-500" data-i18n="tabAdmin">巡視</button>
                     </div>
                 </div>
 
@@ -1045,7 +1066,7 @@
                         <div id="adminNoticeAction" class="hidden mb-3">
                             <button type="button" onclick="openModal('announceModal')" class="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1 shadow-sm">
                                 <i class="fa-solid fa-bullhorn"></i>
-                                <span>發布官方公告</span>
+                                <span data-i18n="btnPubAnnounce">發布官方公告</span>
                             </button>
                         </div>
                         <div id="noticeList" class="space-y-2.5"></div>
@@ -1059,10 +1080,10 @@
                     <!-- 👥 View C: 好友列表區塊 -->
                     <div id="friendsView" class="hidden space-y-3">
                         <div class="flex justify-between items-center px-1">
-                            <span class="text-xs font-bold text-slate-500 dark:text-slate-400">好友與聯絡人</span>
-                            <button type="button" onclick="addFriendByEmail()" class="text-xs text-brand-600 dark:text-brand-400 font-bold hover:underline flex items-center space-x-1">
+                            <span class="text-xs font-bold text-slate-500 dark:text-slate-400" data-i18n="lblFriendsHeader">好友與聯絡人</span>
+                            <button type="button" onclick="sendFriendRequestByEmail()" class="text-xs text-brand-600 dark:text-brand-400 font-bold hover:underline flex items-center space-x-1">
                                 <i class="fa-solid fa-user-plus"></i>
-                                <span>Email 加好友</span>
+                                <span data-i18n="btnEmailAddFriend">Email 加好友</span>
                             </button>
                         </div>
                         <div id="friendsListContainer" class="space-y-2"></div>
@@ -1081,7 +1102,7 @@
                         <div id="chatMessagesBox" class="flex-1 overflow-y-auto p-3 space-y-3"></div>
                         <!-- 輸入框與發送按鈕 -->
                         <form onsubmit="handleSendMessage(event)" class="p-3 border-t border-slate-100 dark:border-slate-700 flex items-center space-x-2 bg-slate-50 dark:bg-slate-900">
-                            <input type="text" id="chatInput" placeholder="輸入訊息..." class="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <input type="text" id="chatInput" data-i18n-placeholder="phChatInput" placeholder="輸入訊息..." class="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
                             <button type="submit" class="px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-xs">
                                 <i class="fa-solid fa-paper-plane"></i>
                             </button>
@@ -1097,17 +1118,17 @@
     <!-- 📢 發布公告 Modal (僅管理員可見) -->
     <div id="announceModal" class="hidden fixed inset-0 z-[65] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100 dark:border-slate-700">
-            <h3 class="font-bold text-base">📢 發布官方公告</h3>
-            <input type="text" id="annTitle" placeholder="公告標題" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold">
-            <textarea id="annContent" rows="4" placeholder="公告內容..." class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"></textarea>
+            <h3 class="font-bold text-base" data-i18n="modalAnnounceTitle">📢 發布官方公告</h3>
+            <input type="text" id="annTitle" data-i18n-placeholder="phAnnTitle" placeholder="公告標題" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold">
+            <textarea id="annContent" rows="4" data-i18n-placeholder="phAnnContent" placeholder="公告內容..." class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"></textarea>
             <div class="flex justify-end space-x-2">
-                <button type="button" onclick="closeModal('announceModal')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-xs font-bold rounded-xl">取消</button>
-                <button type="button" onclick="submitAnnouncement()" class="px-4 py-2 bg-rose-600 text-white text-xs font-bold rounded-xl">發布公告</button>
+                <button type="button" onclick="closeModal('announceModal')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-xs font-bold rounded-xl" data-i18n="btnCancel">取消</button>
+                <button type="button" onclick="submitAnnouncement()" class="px-4 py-2 bg-rose-600 text-white text-xs font-bold rounded-xl" data-i18n="btnPubAnnounceSubmit">發布公告</button>
             </div>
         </div>
     </div>
 
-        <!-- 🛍️ 彈窗 9: 商店字庫內容預覽 Modal -->
+    <!-- 🛍️ 彈窗 9: 商店字庫內容預覽 Modal -->
     <div id="storePreviewModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-100 dark:border-slate-700 max-h-[85vh] flex flex-col">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3 flex-shrink-0">
@@ -1126,8 +1147,8 @@
             </div>
 
             <div class="pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-end space-x-2 flex-shrink-0">
-                <button type="button" onclick="closeModal('storePreviewModal')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl">關閉</button>
-                <button type="button" id="previewActionBtn" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl shadow-sm">取得字庫</button>
+                <button type="button" onclick="closeModal('storePreviewModal')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl" data-i18n="btnClose">關閉</button>
+                <button type="button" id="previewActionBtn" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl shadow-sm" data-i18n="btnGetDeck">取得字庫</button>
             </div>
         </div>
     </div>
