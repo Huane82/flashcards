@@ -140,7 +140,20 @@ async function saveSelectedCategoriesToCloud(categories) {
   }
 }
 
-// 6. 監聽帳號狀態切換，同步雲端資料與字庫記憶
+// 🌐 6. 儲存好友列表至雲端 Firestore
+async function saveFriendsToCloud(friends) {
+  if (!Array.isArray(friends) || !auth.currentUser) return;
+  try {
+    await db.collection('users').doc(auth.currentUser.uid).set({
+      friends: friends,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.warn("同步好友列表至雲端失敗：", e);
+  }
+}
+
+// 7. 監聽帳號狀態切換，同步雲端資料與字庫記憶
 auth.onAuthStateChanged(async (user) => {
   const emailEl = document.getElementById('settings-email');
   const subtextEl = document.getElementById('settings-subtext');
@@ -153,29 +166,36 @@ auth.onAuthStateChanged(async (user) => {
     let userNickname = user.displayName || (user.email ? user.email.split('@')[0] : '使用者');
     let userRole = 'user';
     let userCoins = 500;
-    
+    let userFriends = [];
+
     try {
-      const userDoc = await db.collection('users').doc(user.uid).get();
+      const userRef = db.collection('users').doc(user.uid);
+      const userDoc = await userRef.get();
+
       if (userDoc.exists) {
         const data = userDoc.data();
         if (data.nickname) userNickname = data.nickname;
         if (data.role) userRole = data.role;
         if (typeof data.coins === 'number') userCoins = data.coins;
-        
+        if (Array.isArray(data.friends)) userFriends = data.friends;
+
         // 自動載入帳號上記錄的多選字庫
         if (Array.isArray(data.selectedCategories) && data.selectedCategories.length > 0) {
           window.selectedCategories = data.selectedCategories;
           localStorage.setItem('lzhcard_selected_categories', JSON.stringify(data.selectedCategories));
         }
-
-        // 自動載入好友列表
-        if (Array.isArray(data.friends)) {
-          if (!window.userData) window.userData = {};
-          window.userData.friends = data.friends;
-        }
       }
+
+      // 🌟 自動維護雲端 Users 集合，確保 Email 與頭像索引存在（方便好友搜尋）
+      await userRef.set({
+        email: user.email || '',
+        photoURL: user.photoURL || '',
+        nickname: userNickname,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
     } catch (e) {
-      console.warn("無法從雲端讀取使用者資料：", e);
+      console.warn("無法同步或讀取雲端使用者資料：", e);
     }
 
     if (!window.userData) window.userData = {};
@@ -183,6 +203,7 @@ auth.onAuthStateChanged(async (user) => {
     window.userData.username = userNickname;
     window.userData.role = userRole;
     window.userData.coins = userCoins;
+    window.userData.friends = userFriends;
 
     const nicknameInput = document.getElementById('settingsNicknameInput');
     if (nicknameInput) nicknameInput.value = userNickname;
@@ -203,6 +224,7 @@ auth.onAuthStateChanged(async (user) => {
     window.userData.username = '訪客玩家';
     window.userData.role = 'user';
     window.userData.coins = 0;
+    window.userData.friends = [];
 
     if (emailEl) emailEl.innerText = "訪客模式";
     if (subtextEl) subtextEl.innerText = "目前未連結 Google 帳號";

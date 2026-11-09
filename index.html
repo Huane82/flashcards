@@ -1081,7 +1081,7 @@
                     <div id="friendsView" class="hidden space-y-3">
                         <div class="flex justify-between items-center px-1">
                             <span class="text-xs font-bold text-slate-500 dark:text-slate-400" data-i18n="lblFriendsHeader">好友與聯絡人</span>
-                            <button type="button" onclick="sendFriendRequestByEmail()" class="text-xs text-brand-600 dark:text-brand-400 font-bold hover:underline flex items-center space-x-1">
+                            <button type="button" onclick="sendFriendRequestByEmail(null, this)" class="text-xs text-brand-600 dark:text-brand-400 font-bold hover:underline flex items-center space-x-1">
                                 <i class="fa-solid fa-user-plus"></i>
                                 <span data-i18n="btnEmailAddFriend">Email 加好友</span>
                             </button>
@@ -1097,6 +1097,7 @@
                                 <i class="fa-solid fa-chevron-left text-sm"></i>
                             </button>
                             <h4 id="activeChatTitle" class="font-bold text-sm text-slate-800 dark:text-slate-100 flex-1 truncate">對話標題</h4>
+                            <div id="activeChatHeaderActions" class="flex items-center space-x-1.5"></div>
                         </div>
                         <!-- 訊息對話框 -->
                         <div id="chatMessagesBox" class="flex-1 overflow-y-auto p-3 space-y-3"></div>

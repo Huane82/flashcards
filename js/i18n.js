@@ -236,6 +236,13 @@ const I18N_DICTIONARY = {
         phAnnContent: "公告內容...",
         btnPubAnnounceSubmit: "發布公告",
 
+        // 群組
+        btnCreateGroup: "+ 建立新群組",
+        btnLeaveGroup: "退出群組",
+        btnInviteMember: "邀請",
+        pendingRequests: "待處理的好友申請",
+        pendingGroupInvites: "待處理的群組邀請",
+
         // 狀態與輔助文字
         statusComplete: "完整",
         statusPending: "待補齊",
@@ -539,6 +546,13 @@ const I18N_DICTIONARY = {
         phAnnContent: "Content...",
         btnPubAnnounceSubmit: "Post Notice",
 
+        // Groups
+        btnCreateGroup: "+ Create New Group",
+        btnLeaveGroup: "Leave Group",
+        btnInviteMember: "Invite",
+        pendingRequests: "Pending Friend Requests",
+        pendingGroupInvites: "Pending Group Invites",
+
         statusComplete: "Complete",
         statusPending: "Pending",
         btnRemove: "Remove",
@@ -838,6 +852,13 @@ const I18N_DICTIONARY = {
         phAnnTitle: "タイトル",
         phAnnContent: "内容...",
         btnPubAnnounceSubmit: "投稿",
+
+        // Groups
+        btnCreateGroup: "+ グループを作成",
+        btnLeaveGroup: "グループを脱退",
+        btnInviteMember: "招待",
+        pendingRequests: "保留中のフレンド申請",
+        pendingGroupInvites: "保留中のグループ招待",
 
         statusComplete: "完了",
         statusPending: "未完了",
