@@ -105,6 +105,9 @@ function updateCategorySelects() {
     const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
     const catAllText = (typeof t === 'function') ? t('catAll') : "全部字庫";
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
+    const noCatText = (typeof t === 'function') ? t('noCategorySelected') : '未選取字庫';
+    const selectedPrefix = (typeof t === 'function') ? t('selectedPrefix') : '已選';
+    const unitDeck = (typeof t === 'function') ? t('unitDeck') : '個字庫';
     const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
 
     let activeCats = window.selectedCategories || ['ALL'];
@@ -139,11 +142,11 @@ function updateCategorySelects() {
         if (isAllChecked) {
             btnText.innerText = catAllText;
         } else if (activeCats.length === 0) {
-            btnText.innerText = '未選取字庫';
+            btnText.innerText = noCatText;
         } else if (activeCats.length === 1) {
             btnText.innerText = activeCats[0];
         } else {
-            btnText.innerText = `已選 ${activeCats.length} 個字庫`;
+            btnText.innerText = `${selectedPrefix} ${activeCats.length} ${unitDeck}`;
         }
     }
 
