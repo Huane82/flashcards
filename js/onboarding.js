@@ -4,45 +4,57 @@
 
 let currentTourIndex = 0;
 
-// 🎯 導覽步驟定義 (指向 DOM 元素 ID)
+// 🎯 完整 7 步驟導覽 (指向 DOM 元素 ID)
 const TOUR_STEPS = [
     {
         targetId: 'headerCategorySelector',
-        titleKey: 'tour1Title',
-        descKey: 'tour1Desc',
+        titleKey: 'tourCatTitle',
+        descKey: 'tourCatDesc',
+        tab: 'home'
+    },
+    {
+        targetId: 'headerChatBtn',
+        titleKey: 'tourChatTitle',
+        descKey: 'tourChatDesc',
         tab: 'home'
     },
     {
         targetId: 'sec-home',
-        titleKey: 'tour2Title',
-        descKey: 'tour2Desc',
+        titleKey: 'tourHomeTitle',
+        descKey: 'tourHomeDesc',
         tab: 'home'
     },
     {
         targetId: 'bnav-list',
-        titleKey: 'tour3Title',
-        descKey: 'tour3Desc',
+        titleKey: 'tourListTitle',
+        descKey: 'tourListDesc',
         tab: 'home'
     },
     {
         targetId: 'bnav-store',
-        titleKey: 'tour4Title',
-        descKey: 'tour4Desc',
+        titleKey: 'tourStoreTitle',
+        descKey: 'tourStoreDesc',
+        tab: 'home'
+    },
+    {
+        targetId: 'bnav-stats',
+        titleKey: 'tourStatsTitle',
+        descKey: 'tourStatsDesc',
         tab: 'home'
     },
     {
         targetId: 'bnav-settings',
-        titleKey: 'tour5Title',
-        descKey: 'tour5Desc',
+        titleKey: 'tourSettingsTitle',
+        descKey: 'tourSettingsDesc',
         tab: 'home'
     }
 ];
 
 /**
- * 1. 同意條款後觸發：開啟新手客製化設定 Modal
+ * 1. 同意條款/登入後觸發：開啟新手客製化設定 Modal
  */
 function startOnboardingFlow() {
-    closeModal('welcomeModal');
+    if (typeof closeModal === 'function') closeModal('welcomeModal');
     
     // 如果已經完成過新手引導，直接進入
     if (localStorage.getItem('lzhcard_onboarding_completed') === 'true') {
@@ -60,14 +72,14 @@ function startOnboardingFlow() {
     if (cardSelect) cardSelect.value = localStorage.getItem('lzhcard_display_mode') || 'target_front';
     if (keyInput) keyInput.value = (typeof getValidApiKey === 'function') ? (getValidApiKey() || '') : '';
 
-    openModal('onboardingSetupModal');
+    if (typeof openModal === 'function') openModal('onboardingSetupModal');
 }
 
 /**
  * 2. 略過設定 Modal
  */
 function skipOnboardingSetup() {
-    closeModal('onboardingSetupModal');
+    if (typeof closeModal === 'function') closeModal('onboardingSetupModal');
     startInteractiveTour(); // 直接開啟介面導覽
 }
 
@@ -92,7 +104,7 @@ function saveOnboardingSetupAndContinue() {
     // 更新介面 UI 語系
     if (typeof applyLanguageUI === 'function') applyLanguageUI();
 
-    closeModal('onboardingSetupModal');
+    if (typeof closeModal === 'function') closeModal('onboardingSetupModal');
     startInteractiveTour();
 }
 
@@ -100,8 +112,8 @@ function saveOnboardingSetupAndContinue() {
  * 4. 開啟高亮聚焦導覽教學
  */
 function startInteractiveTour() {
-    // 👈 確保開始導覽時自動關閉偏好設定 Modal
-    closeModal('onboardingSetupModal');
+    // 確保開始導覽時強制關閉設定彈窗
+    if (typeof closeModal === 'function') closeModal('onboardingSetupModal');
 
     currentTourIndex = 0;
     const tourOverlay = document.getElementById('onboardingTourOverlay');
@@ -142,9 +154,17 @@ function renderTourStep(index) {
     highlightBox.style.height = `${rect.height + 12}px`;
 
     // 2. 更新標題與內容
-    document.getElementById('tourStepBadge').innerText = `${index + 1} / ${TOUR_STEPS.length}`;
-    document.getElementById('tourStepTitle').innerText = t(step.titleKey);
-    document.getElementById('tourStepDesc').innerText = t(step.descKey);
+    const badgeText = `${index + 1} / ${TOUR_STEPS.length}`;
+    const titleText = (typeof t === 'function') ? t(step.titleKey) : step.titleKey;
+    const descText = (typeof t === 'function') ? t(step.descKey) : step.descKey;
+
+    const badgeElem = document.getElementById('tourStepBadge');
+    const titleElem = document.getElementById('tourStepTitle');
+    const descElem = document.getElementById('tourStepDesc');
+
+    if (badgeElem) badgeElem.innerText = badgeText;
+    if (titleElem) titleElem.innerText = titleText;
+    if (descElem) descElem.innerText = descText;
 
     // 3. 計算浮動卡片 Popover 位置 (判斷擺在目標上方或下方)
     const windowHeight = window.innerHeight;
@@ -174,11 +194,14 @@ function renderTourStep(index) {
     if (prevBtn) prevBtn.disabled = (index === 0);
 
     if (nextBtn) {
+        const finishText = (typeof t === 'function') ? t('btnFinishTour') : '完成導覽';
+        const nextText = (typeof t === 'function') ? t('btnNextStep') : '下一步';
+
         if (index === TOUR_STEPS.length - 1) {
-            nextBtn.innerText = t('btnFinishTour');
+            nextBtn.innerText = finishText;
             nextBtn.className = "px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs";
         } else {
-            nextBtn.innerHTML = `${t('btnNextStep')} <i class="fa-solid fa-chevron-right ml-1"></i>`;
+            nextBtn.innerHTML = `${nextText} <i class="fa-solid fa-chevron-right ml-1"></i>`;
             nextBtn.className = "px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold transition shadow-xs";
         }
     }

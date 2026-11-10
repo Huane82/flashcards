@@ -370,7 +370,28 @@ const I18N_DICTIONARY = {
         
         lblTourGuide: "頁面功能導覽",
         descTourGuide: "重新開啟新手介面指引教學",
-        btnStartTour: "開啟導覽"
+        btnStartTour: "開啟導覽",
+        tourCatTitle: "字庫選擇器",
+        
+        tourCatDesc: "點擊可切換或多選要學習的單字庫，彈性過濾學習目標。",
+
+        tourChatTitle: "交流聊天室",
+        tourChatDesc: "開啟全站公開討論區或 1-on-1 私訊，與其他創作者交流或尋求幫助。",
+
+        tourHomeTitle: "核心學習模式",
+        tourHomeDesc: "提供「卡片輪播 (艾賓浩斯演算法)」與「多元隨堂測驗」兩種高效記憶模式。",
+
+        tourListTitle: "字庫管理",
+        tourListDesc: "管理您的單字清單，支援 Gemini AI 智慧補齊、批量貼上解析與 JSON 備份。",
+
+        tourStoreTitle: "字庫商店",
+        tourStoreDesc: "探索、預覽與下載社群創作者分享的優秀字庫，亦可發布自製字庫賺取金幣。",
+
+        tourStatsTitle: "學習成果統計",
+        tourStatsDesc: "視覺化圖表呈現總單字累積量、掌握率及艾賓浩斯 5 級熟練度分佈。",
+
+        tourSettingsTitle: "帳號與系統設定",
+        tourSettingsDesc: "設定固定暱稱、母語/學習目標語言、卡片正面顯示模式及 Gemini API Key。"
     },
     'en': {
         appSubtitle: "Exam Prep Flashcards",
@@ -725,7 +746,28 @@ const I18N_DICTIONARY = {
 
         lblTourGuide: "App Feature Tour",
         descTourGuide: "Reopen the interactive beginner tutorial",
-        btnStartTour: "Start Tour"
+        btnStartTour: "Start Tour",
+
+        tourCatTitle: "Deck Selector",
+        tourCatDesc: "Click to switch or multi-select word decks to customize your study scope.",
+
+        tourChatTitle: "Community Chat",
+        tourChatDesc: "Open public forums or 1-on-1 private messaging to discuss and connect with others.",
+
+        tourHomeTitle: "Learning Modes",
+        tourHomeDesc: "Includes Interactive Flashcards (Ebbinghaus algorithm) and Multiple-mode Quizzes.",
+
+        tourListTitle: "Deck Management",
+        tourListDesc: "Manage your vocabulary list with AI auto-fill, batch text import, and JSON backup.",
+
+        tourStoreTitle: "Deck Store",
+        tourStoreDesc: "Explore and download community decks, or publish your own to earn coins.",
+
+        tourStatsTitle: "Learning Analytics",
+        tourStatsDesc: "Visualized charts showing vocabulary growth, mastery rate, and level distributions.",
+
+        tourSettingsTitle: "System Settings",
+        tourSettingsDesc: "Configure your nickname, native/target languages, card display mode, and Gemini API Key."
     },
     'ja': {
         appSubtitle: "単語暗記ツール",
@@ -1080,7 +1122,28 @@ const I18N_DICTIONARY = {
 
         lblTourGuide: "機能ガイド",
         descTourGuide: "初心者向けのチュートリアルを再開します",
-        btnStartTour: "ツアーを開始"
+        btnStartTour: "ツアーを開始",
+
+        tourCatTitle: "単語帳セレクター",
+        tourCatDesc: "クリックして学習したい単語帳を切り替え・複数選択できます。",
+
+        tourChatTitle: "交流チャットルーム",
+        tourChatDesc: "全体チャットや1対1のメッセージで他の学習者と交流できます。",
+
+        tourHomeTitle: "コア学習モード",
+        tourHomeDesc: "エビングハウス暗記カードと多様なクイズモードで効率的に学習します。",
+
+        tourListTitle: "単語帳管理",
+        tourListDesc: "AI自動補完、一括テキスト解析、JSONバックアップに対応した単語管理画面です。",
+
+        tourStoreTitle: "単語帳ストア",
+        tourStoreDesc: "コミュニティの単語帳を試聴・ダウンロードしたり、自作単語帳を販売できます。",
+
+        tourStatsTitle: "学習成果統計",
+        tourStatsDesc: "総単語数、習得率、エビングハウスレベルの分布をグラフで視覚化します。",
+
+        tourSettingsTitle: "アカウント＆設定",
+        tourSettingsDesc: "ニックネーム、母国語・目標言語、カード表示モード、Gemini API Keyを設定します。"
     }
 };
 

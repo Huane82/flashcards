@@ -231,9 +231,9 @@
             </div>
 
             <div class="flex items-center space-x-3">
-                <!-- 💬 聊天室按鈕 -->
+                <!-- 💬 聊天室按鈕 (加上 id="headerChatBtn") -->
                 <div class="flex items-center space-x-2">
-                    <button type="button" onclick="openChatDrawer()" class="relative p-2 rounded-xl bg-brand-50 dark:bg-brand-950/50 hover:bg-brand-100 dark:hover:bg-brand-900 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition shadow-2xs">
+                    <button type="button" id="headerChatBtn" onclick="openChatDrawer()" class="relative p-2 rounded-xl bg-brand-50 dark:bg-brand-950/50 hover:bg-brand-100 dark:hover:bg-brand-900 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition shadow-2xs">
                         <i class="fa-solid fa-comments text-base"></i>
                         <span id="chatUnreadDot" class="hidden absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-800"></span>
                     </button>

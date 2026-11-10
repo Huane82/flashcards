@@ -1,3 +1,8 @@
+/* 🚫 全局禁用雙擊放大 (保留單指滑動與正常點擊) */
+html, body, button, a, input, select, textarea, label, div {
+    touch-action: manipulation;
+}
+
 /* 3D 翻轉卡片視覺樣式與動畫時間優化 (200ms) */
 .perspective-1000 {
     perspective: 1000px;
