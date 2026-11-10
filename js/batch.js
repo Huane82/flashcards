@@ -20,12 +20,13 @@ function safeT(key, params, fallbackStr) {
 }
 
 /**
- * 🌐 依據目前設定的目標語言 (Target Language) 動態切換批量輸入與快速新增的範例提示
+ * 🌐 依據目前設定的目標語言與選擇字庫動態切換範例提示與預設字庫名稱
  */
 function updateBatchPlaceholders() {
     const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
     const batchRawInput = document.getElementById('batchRawInput');
     const quickAddInput = document.getElementById('quickAddInput');
+    const quickAddCatInput = document.getElementById('quickAddCategoryInput');
 
     let batchPlaceholder = "";
     let quickAddPlaceholder = "";
@@ -48,7 +49,6 @@ function updateBatchPlaceholders() {
 
         quickAddPlaceholder = `例如: 韌性, 努力, 學習, 蘋果`;
     } else {
-        // 預設英文範例 (en 或自訂)
         batchPlaceholder = `【英文輸入範例】（支援格式：單字 + 音標 + 詞性 + 中文釋義）\n` +
                            `1. resilient /rɪˈzɪl.jənt/ (adj.) 有彈性的\n` +
                            `2. apple n. 蘋果\n` +
@@ -60,6 +60,21 @@ function updateBatchPlaceholders() {
 
     if (batchRawInput) batchRawInput.placeholder = batchPlaceholder;
     if (quickAddInput) quickAddInput.placeholder = quickAddPlaceholder;
+
+    // 🌟 優先讀取上次快速新增儲存的字庫名稱；若無紀錄則帶入目前選取的字庫
+    if (quickAddCatInput) {
+        const savedLastCat = localStorage.getItem('lzhcard_last_quick_add_cat');
+        if (savedLastCat) {
+            quickAddCatInput.value = savedLastCat;
+        } else {
+            const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
+            const activeCats = window.selectedCategories || ['ALL'];
+            const currentCat = (activeCats.length === 1 && activeCats[0] !== 'ALL') 
+                ? activeCats[0] 
+                : defaultCatName;
+            quickAddCatInput.value = currentCat;
+        }
+    }
 }
 
 function findChineseMeaningFromObject(item) {
@@ -432,6 +447,7 @@ function handleConfirmBatchImport() {
 
 async function handleQuickAddWords() {
     const inputElem = document.getElementById('quickAddInput');
+    const catInputElem = document.getElementById('quickAddCategoryInput');
     const rawText = inputElem ? inputElem.value.trim() : '';
 
     if (!rawText) {
@@ -459,10 +475,12 @@ async function handleQuickAddWords() {
     const defaultCategoryName = safeT('defaultCategoryName', null, '預設字庫');
     const defaultMeaningText = safeT('progressAiParsing', null, 'AI 自動解析中...');
 
-    const activeCats = window.selectedCategories || ['ALL'];
-    const targetCategory = (activeCats.length === 1 && activeCats[0] !== 'ALL') 
-        ? activeCats[0] 
-        : defaultCategoryName;
+    // 🌟 讀取自訂/選取的目標字庫名稱
+    const userDefinedCat = catInputElem ? catInputElem.value.trim() : '';
+    const targetCategory = userDefinedCat || defaultCategoryName;
+
+    // 🌟 記憶本次選擇的字庫至 localStorage
+    localStorage.setItem('lzhcard_last_quick_add_cat', targetCategory);
 
     let addedList = [];
 
@@ -507,10 +525,6 @@ async function handleQuickAddWords() {
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof updateUI === 'function') updateUI();
 
-    if (typeof nextCard === 'function') {
-        nextCard();
-    }
-
     if (typeof showToast === 'function') showToast(safeT('toastQuickAddSuccess', { count: addedList.length }, `已新增 ${addedList.length} 個單字，AI 正在背景解析中`), 'success');
 
     if (typeof runBatchAiAutoFill === 'function') {
@@ -527,7 +541,6 @@ async function handleQuickAddWords() {
                 const updated = wordList.find(w => w.id === currentCard.id);
                 if (updated) {
                     currentCard = updated;
-                    if (typeof nextCard === 'function') nextCard();
                 }
             }
             if (typeof showToast === 'function') showToast(safeT('toastAiCompletionDone', null, 'AI 背景解析完成！'), 'success');

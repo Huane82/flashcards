@@ -209,7 +209,6 @@ auth.onAuthStateChanged(async (user) => {
     const nicknameInput = document.getElementById('settingsNicknameInput');
     if (nicknameInput) nicknameInput.value = userNickname;
 
-    // 🌟 核心修改：登入時移除 data-i18n 屬性，防止多語系引擎將暱稱重覆蓋為「訪客模式」
     if (emailEl) {
       emailEl.removeAttribute('data-i18n');
       emailEl.innerText = userNickname;
@@ -237,7 +236,6 @@ auth.onAuthStateChanged(async (user) => {
     window.userData.coins = 0;
     window.userData.friends = [];
 
-    // 未登入時還原 data-i18n 屬性以支援多語系
     if (emailEl) {
       emailEl.setAttribute('data-i18n', 'guestMode');
       emailEl.innerText = (typeof t === 'function') ? t('guestMode') : "訪客模式";
@@ -254,23 +252,101 @@ auth.onAuthStateChanged(async (user) => {
     if (loggedInEl) loggedInEl.style.display = 'none';
   }
 
-  if (typeof loadStorage === 'function') {
-    await loadStorage();
-  }
+  if (typeof loadStorage === 'function') await loadStorage();
+  if (typeof updateUI === 'function') updateUI();
+  if (typeof renderStore === 'function') renderStore();
+  if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
+  if (typeof checkAdminPermissions === 'function') checkAdminPermissions();
 
-  if (typeof updateUI === 'function') {
-    updateUI();
-  }
+  // 🚀 頁面初始化或 Google 登入完成時觸發導覽
+  const isTosAccepted = localStorage.getItem('lzhcard_tos_accepted') === 'true';
+  const isCompleted = localStorage.getItem('lzhcard_onboarding_completed') === 'true';
 
-  if (typeof renderStore === 'function') {
-    renderStore();
-  }
-
-  if (typeof updateUserCoinsUI === 'function') {
-    updateUserCoinsUI();
-  }
-
-  if (typeof checkAdminPermissions === 'function') {
-    checkAdminPermissions();
+  if (isTosAccepted && !isCompleted && typeof startOnboardingFlow === 'function') {
+    setTimeout(() => {
+      startOnboardingFlow();
+    }, 200);
   }
 });
+
+// ==========================================
+// 🔒 條款同意與新手引導流程控制 (welcomeModal)
+// ==========================================
+
+/**
+ * 1. 勾選/取消條款時，動態啟用或停用按鈕與切換樣式
+ */
+function toggleAuthButtons() {
+  const checkbox = document.getElementById('tosCheckbox');
+  const googleBtn = document.getElementById('welcomeGoogleBtn');
+  const guestBtn = document.getElementById('welcomeGuestBtn');
+
+  const isChecked = checkbox ? checkbox.checked : false;
+
+  if (googleBtn) {
+    googleBtn.disabled = !isChecked;
+    if (isChecked) {
+      googleBtn.className = "w-full py-3 bg-white dark:bg-slate-900 hover:bg-slate-100 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-600 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition cursor-pointer shadow-xs";
+    } else {
+      googleBtn.className = "w-full py-3 bg-slate-200 dark:bg-slate-700 text-slate-400 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition cursor-not-allowed";
+    }
+  }
+
+  if (guestBtn) {
+    guestBtn.disabled = !isChecked;
+    if (isChecked) {
+      guestBtn.className = "w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition cursor-pointer shadow-xs";
+    } else {
+      guestBtn.className = "w-full py-3 bg-slate-200 dark:bg-slate-700 text-slate-400 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 transition cursor-not-allowed";
+    }
+  }
+}
+
+/**
+ * 2. 點擊「使用 Google 帳號登入」
+ */
+async function handleWelcomeGoogleLogin() {
+  const user = await loginWithGoogle();
+  if (user) {
+    localStorage.setItem('lzhcard_tos_accepted', 'true');
+    if (typeof startOnboardingFlow === 'function') {
+      startOnboardingFlow();
+    } else {
+      if (typeof closeModal === 'function') closeModal('welcomeModal');
+    }
+  }
+}
+
+/**
+ * 3. 點擊「以訪客身份繼續使用」
+ */
+function handleWelcomeGuestLogin() {
+  localStorage.setItem('lzhcard_tos_accepted', 'true');
+  
+  // 先關閉條款彈窗
+  if (typeof closeModal === 'function') {
+    closeModal('welcomeModal');
+  }
+
+  // 強制啟動新手客製化教學導覽
+  setTimeout(() => {
+    if (typeof startOnboardingFlow === 'function') {
+      startOnboardingFlow();
+    }
+  }, 150);
+}
+
+/**
+ * 4. 頁面載入時檢查是否需要顯示開頭同意條款彈窗
+ */
+function checkWelcomeModalState() {
+  const isAccepted = localStorage.getItem('lzhcard_tos_accepted') === 'true';
+  const welcomeModal = document.getElementById('welcomeModal');
+  
+  if (!isAccepted && welcomeModal) {
+    welcomeModal.classList.remove('hidden');
+  }
+}
+
+// 監聽 DOM 載入後自動檢查條款狀態
+document.addEventListener('DOMContentLoaded', checkWelcomeModalState);

@@ -266,7 +266,7 @@ function handleChatSearch() {
 }
 
 /**
- * 👥 渲染好友頁面欄位（包含「待處理好友申請」、「待處理群組邀請」與「已確認好友列表」）
+ * 👥 渲染好友頁面欄位
  */
 async function renderFriendsList() {
     const container = document.getElementById('friendsListContainer');
@@ -284,7 +284,7 @@ async function renderFriendsList() {
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                         <i class="fa-solid fa-user-clock text-amber-600"></i>
-                        <span>待處理的好友申請 (${pendingRequestsList.length})</span>
+                        <span>${t('pendingRequests')} (${pendingRequestsList.length})</span>
                     </span>
                 </div>
                 <div class="space-y-2">
@@ -300,10 +300,10 @@ async function renderFriendsList() {
                 </div>
                 <div class="flex items-center space-x-1.5">
                     <button type="button" onclick="handleAcceptFriendRequest('${req.id}', '${req.fromUid}', '${encodeURIComponent(req.fromNickname)}', '${req.fromEmail || ''}', '${encodeURIComponent(req.fromAvatar || '')}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition shadow-2xs">
-                        同意
+                        ${t('btnAccept')}
                     </button>
                     <button type="button" onclick="handleRejectFriendRequest('${req.id}')" class="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg transition">
-                        拒絕
+                        ${t('btnReject')}
                     </button>
                 </div>
             </div>
@@ -318,7 +318,7 @@ async function renderFriendsList() {
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
                         <i class="fa-solid fa-users-rectangle text-purple-600"></i>
-                        <span>待處理的群組邀請 (${pendingGroupInvitesList.length})</span>
+                        <span>${t('pendingGroupInvites')} (${pendingGroupInvitesList.length})</span>
                     </span>
                 </div>
                 <div class="space-y-2">
@@ -330,14 +330,14 @@ async function renderFriendsList() {
                         <i class="fa-solid fa-users text-purple-500 text-[10px]"></i>
                         <span>${inv.groupName}</span>
                     </h4>
-                    <p class="text-[10px] text-slate-400 mt-0.5">邀請者：<span class="font-semibold text-slate-600 dark:text-slate-300">${inv.inviterNickname}</span></p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">${t('inviter')}<span class="font-semibold text-slate-600 dark:text-slate-300">${inv.inviterNickname}</span></p>
                 </div>
                 <div class="flex items-center space-x-1.5">
                     <button type="button" onclick="handleAcceptGroupInvite('${inv.id}', '${inv.groupId}', '${encodeURIComponent(inv.groupName)}')" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold rounded-lg transition shadow-2xs">
-                        加入
+                        ${t('btnJoin')}
                     </button>
                     <button type="button" onclick="handleRejectGroupInvite('${inv.id}')" class="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg transition">
-                        拒絕
+                        ${t('btnReject')}
                     </button>
                 </div>
             </div>
@@ -351,9 +351,9 @@ async function renderFriendsList() {
             <div onclick="sendFriendRequestByEmail('${query}', this)" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-300">
                     <i class="fa-solid fa-paper-plane text-sm"></i>
-                    <span class="text-xs font-bold">發送好友申請給：「${query}」</span>
+                    <span class="text-xs font-bold">${t('sendFriendReqTo', { query: query })}</span>
                 </div>
-                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">送出申請</span>
+                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">${t('btnSendReq')}</span>
             </div>
         `;
     }
@@ -389,7 +389,7 @@ async function renderFriendsList() {
                 html += `
                     <div class="text-[11px] font-bold text-brand-600 dark:text-brand-400 mb-1 flex items-center space-x-1">
                         <i class="fa-solid fa-cloud-bolt text-xs"></i>
-                        <span>雲端搜尋結果 (${cloudMatches.length})：</span>
+                        <span>${t('cloudSearchResults', { count: cloudMatches.length })}</span>
                     </div>
                 `;
                 html += cloudMatches.map(u => `
@@ -399,14 +399,14 @@ async function renderFriendsList() {
                             <div>
                                 <div class="flex items-center space-x-1">
                                     <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${u.username}</h4>
-                                    <span class="text-[9px] px-1.5 py-0.2 bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 rounded font-bold">雲端用戶</span>
+                                    <span class="text-[9px] px-1.5 py-0.2 bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 rounded font-bold">${t('cloudUser')}</span>
                                 </div>
-                                <p class="text-[10px] text-slate-400 font-mono">${u.email || '無電子郵件'}</p>
+                                <p class="text-[10px] text-slate-400 font-mono">${u.email || ''}</p>
                             </div>
                         </div>
                         <button type="button" onclick="sendFriendRequestByObject('${encodeURIComponent(JSON.stringify(u))}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
                             <i class="fa-solid fa-user-plus"></i>
-                            <span>加好友</span>
+                            <span>${t('btnAddFriend')}</span>
                         </button>
                     </div>
                 `).join('');
@@ -423,12 +423,12 @@ async function renderFriendsList() {
     );
 
     if (filteredFriends.length === 0 && !html) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">查無符合「${query}」的好友或搜尋結果</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${t('emptyFriendSearchResult', { query: query })}</div>`;
         return;
     }
 
     if (filteredFriends.length > 0) {
-        html += `<div class="text-[11px] font-bold text-slate-500 mb-1">我的好友列表：</div>`;
+        html += `<div class="text-[11px] font-bold text-slate-500 mb-1">${t('myFriendsList')}</div>`;
         html += filteredFriends.map(f => {
             const displayName = f.nickname || f.username;
             return `
@@ -437,12 +437,12 @@ async function renderFriendsList() {
                         <img src="${f.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(displayName)}`}" class="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
                         <div>
                             <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${displayName}</h4>
-                            <p class="text-[10px] text-slate-400 font-mono">${f.email || '無電子郵件'}</p>
+                            <p class="text-[10px] text-slate-400 font-mono">${f.email || ''}</p>
                         </div>
                     </div>
                     <button type="button" onclick="startPrivateChat('${encodeURIComponent(displayName)}', '${f.uid || ''}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
                         <i class="fa-solid fa-comment-dots"></i>
-                        <span>私聊</span>
+                        <span>${t('typePrivate')}</span>
                     </button>
                 </div>
             `;
@@ -918,7 +918,7 @@ async function deleteChatMessage(chatId, msgId) {
 }
 
 /**
- * 💬 渲染對話欄位 (Chats) 列表（包含「+ 建立群組」按鈕與各類對話頻道）
+ * 💬 渲染對話欄位列表
  */
 async function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
@@ -944,7 +944,6 @@ async function renderChatThreads(isAdminInspector = false) {
         }
     }
 
-    // 確保加入全站公開討論區
     if (!threads.some(t => t.id === 'chat_group_public')) {
         threads.unshift({
             id: 'chat_group_public',
@@ -961,13 +960,13 @@ async function renderChatThreads(isAdminInspector = false) {
         <div class="mb-3">
             <button type="button" onclick="createGroupPrompt()" class="w-full py-2 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-700 hover:to-purple-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center space-x-1.5">
                 <i class="fa-solid fa-users-rectangle text-sm"></i>
-                <span>+ 建立新群組</span>
+                <span>${t('btnCreateGroup')}</span>
             </button>
         </div>
     `;
 
     if (threads.length === 0) {
-        html += `<div class="text-center text-slate-400 py-8 text-xs">沒有找到對話紀錄</div>`;
+        html += `<div class="text-center text-slate-400 py-8 text-xs">${t('emptyChatThreads')}</div>`;
         container.innerHTML = html;
         return;
     }
@@ -991,14 +990,14 @@ async function renderChatThreads(isAdminInspector = false) {
                     <div>
                         <div class="flex items-center space-x-1.5">
                             <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${displayName}</h4>
-                            <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? '群組' : '私聊'}</span>
+                            <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? t('typeGroup') : t('typePrivate')}</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${c.lastMessage || '點擊開啟即時對話'}</p>
+                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${c.lastMessage || t('clickToStartChat')}</p>
                     </div>
                 </div>
 
                 ${isAdmin ? `
-                    <button type="button" onclick="event.stopPropagation(); deleteChatThread('${c.id}')" title="刪除整個對話紀錄" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition ml-2">
+                    <button type="button" onclick="event.stopPropagation(); deleteChatThread('${c.id}')" title="刪除" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition ml-2">
                         <i class="fa-solid fa-trash-can text-xs"></i>
                     </button>
                 ` : ''}
@@ -1107,7 +1106,7 @@ function renderMessagesList(messages = []) {
     const isAdmin = window.userData && window.userData.role === 'admin';
 
     if (messages.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">目前暫無訊息，發送第一條訊息開始交談吧！</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">${t('noMessages')}</div>`;
         return;
     }
 
@@ -1189,7 +1188,7 @@ async function handleSendMessage(e) {
 }
 
 /**
- * 📢 渲染公告列表 (即時從 Firestore 雲端讀取)
+ * 📢 渲染公告列表
  */
 async function renderAnnouncements() {
     const container = document.getElementById('noticeList');
@@ -1199,7 +1198,7 @@ async function renderAnnouncements() {
     let annList = window.appAnnouncements || [];
 
     if (annList.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">目前無系統公告</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${t('noAnnouncements')}</div>`;
         return;
     }
 
@@ -1210,14 +1209,14 @@ async function renderAnnouncements() {
                 <div class="flex items-center space-x-2">
                     <span class="text-[10px] text-slate-400">${ann.time || ''}</span>
                     ${isAdmin ? `
-                        <button type="button" onclick="deleteAnnouncement('${ann.id}')" title="刪除公告" class="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 rounded transition">
+                        <button type="button" onclick="deleteAnnouncement('${ann.id}')" title="刪除" class="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 rounded transition">
                             <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
                     ` : ''}
                 </div>
             </div>
             <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${ann.content}</p>
-            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">發布者：${ann.author || '管理員'}</div>
+            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">${t('authorLabel')}${ann.author || '管理員'}</div>
         </div>
     `).join('');
 }
