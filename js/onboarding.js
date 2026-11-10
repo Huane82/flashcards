@@ -100,6 +100,9 @@ function saveOnboardingSetupAndContinue() {
  * 4. 開啟高亮聚焦導覽教學
  */
 function startInteractiveTour() {
+    // 👈 確保開始導覽時自動關閉偏好設定 Modal
+    closeModal('onboardingSetupModal');
+
     currentTourIndex = 0;
     const tourOverlay = document.getElementById('onboardingTourOverlay');
     if (tourOverlay) tourOverlay.classList.remove('hidden');
