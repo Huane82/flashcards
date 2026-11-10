@@ -306,9 +306,11 @@ function toggleAuthButtons() {
  * 2. 點擊「使用 Google 帳號登入」
  */
 async function handleWelcomeGoogleLogin() {
+  // 👈 先記錄已同意條款，確保 onAuthStateChanged 監聽能即時偵測
+  localStorage.setItem('lzhcard_tos_accepted', 'true');
+
   const user = await loginWithGoogle();
   if (user) {
-    localStorage.setItem('lzhcard_tos_accepted', 'true');
     if (typeof startOnboardingFlow === 'function') {
       startOnboardingFlow();
     } else {
