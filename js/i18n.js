@@ -14,6 +14,9 @@ const I18N_DICTIONARY = {
         catAll: "全部字庫",
         defaultCategoryName: "預設字庫",
         categoryDropdownBtnText: "未選取字庫",
+        noCategorySelected: "未選取字庫",
+        selectedPrefix: "已選",
+        unitDeck: "個字庫",
 
         // 主頁 View
         homeTitle: "選擇學習模式",
@@ -379,6 +382,9 @@ const I18N_DICTIONARY = {
         catAll: "All Decks",
         defaultCategoryName: "Default Deck",
         categoryDropdownBtnText: "No Deck Selected",
+        noCategorySelected: "No Deck Selected",
+        selectedPrefix: "Selected",
+        unitDeck: "Decks",
 
         homeTitle: "Select Study Mode",
         homeDesc: "Focus on words and boost your memory effectively",
@@ -731,6 +737,9 @@ const I18N_DICTIONARY = {
         catAll: "すべての単語帳",
         defaultCategoryName: "デフォルト",
         categoryDropdownBtnText: "単語帳未選択",
+        noCategorySelected: "未選擇の單字帳",
+        selectedPrefix: "選擇中:",
+        unitDeck: "個の單字帳",
 
         homeTitle: "学習モードを選択",
         homeDesc: "効率的に記憶力を高めましょう",
