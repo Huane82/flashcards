@@ -1,5 +1,5 @@
 /**
- * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine)
+ * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine - 25字黃金穩定版)
  */
 
 window.cachedWorkingModel = null;
@@ -7,11 +7,11 @@ window.cachedWorkingModel = null;
 // 🌐 Cloudflare Worker 免費共用後端中繼站網址
 const SHARED_BACKEND_URL = "https://lzhcard.tomlin980415.workers.dev";
 
-// ⚠️ 保留原本設定的模型名稱
+// ⚠️ 標準 Gemini API 模型名稱 (全小寫、連字號)
 const GEMINI_MODELS = [
     "gemini-3.5-flash-lite",
-    "Gemini 3.6 Flash",
-    "Gemini 3.8 Flash"
+    "gemini-3.6-flash",
+    "gemini-3.8-flash"
 ];
 
 // 🛡️ 個人 API 流量控制（14 RPM 順暢流控不撞牆）
@@ -104,10 +104,8 @@ async function callGeminiApi(promptText) {
     const mode = getApiMode();
 
     if (mode === 'shared') {
-        // 🔹 模式 1：使用系統共用 Key（呼叫 Cloudflare Worker 後端代理）
         return await fetchViaSharedProxy(promptText);
     } else {
-        // 🔹 模式 2：使用個人 API Key（直連 Google，前端流控保護）
         const apiKey = getValidApiKey();
         if (!apiKey) {
             if (typeof showToast === 'function') showToast(safeT('toastNoApiKey', null, '請先設定個人 Gemini API Key 或切換為免費共用模式'), "warning");
@@ -119,9 +117,6 @@ async function callGeminiApi(promptText) {
     }
 }
 
-/**
- * 🔹 個人 Key：前端直接呼叫 Google API (支援自動切換模型與重試)
- */
 async function fetchGeminiDirectly(apiKey, promptText) {
     const cleanKey = apiKey.trim();
 
@@ -165,9 +160,6 @@ async function fetchGeminiDirectly(apiKey, promptText) {
     throw new Error(lastError || "無法連線至 AI 伺服器");
 }
 
-/**
- * 🔹 共用 Key：透過 Cloudflare Worker 後端代理伺服器轉發 (含精準 CORS / 網路報錯)
- */
 async function fetchViaSharedProxy(promptText) {
     try {
         const res = await fetch(SHARED_BACKEND_URL, {
@@ -347,13 +339,13 @@ Input Term: "${cleanWord}"
 Target Language: ${targetName}
 User Native Language: ${nativeName}
 
-LANGUAGE INSTRUCTIONS:
-1. "word": Keep EXACTLY as "${cleanWord}". Do NOT append readings, brackets, or translation.
-2. "phonetic": Pronunciation guide (IPA / Kana / Pinyin / Romaji).
-3. "pos": Parts of speech translated in User Native Language (${nativeName}).
-4. "meaning": Precise definition translated in User Native Language (${nativeName}).
-5. "sentence": A natural example sentence strictly written in Target Language (${targetName}).
-6. "translation": Sentence translation strictly written in User Native Language (${nativeName}).
+MANDATORY INSTRUCTIONS:
+1. "word": Keep EXACTLY as "${cleanWord}".
+2. "phonetic": IPA or pronunciation guide (MUST NOT BE EMPTY).
+3. "pos": Parts of speech translated in ${nativeName} (MUST NOT BE EMPTY).
+4. "meaning": Precise definition in ${nativeName} (MUST NOT BE EMPTY).
+5. "sentence": A natural example sentence written strictly in ${targetName} (MUST NOT BE EMPTY).
+6. "translation": Example sentence translation strictly written in ${nativeName} (MUST NOT BE EMPTY).
 
 Return ONLY a valid raw JSON object:
 {
@@ -375,7 +367,7 @@ Return ONLY a valid raw JSON object:
 }
 
 /**
- * 🤖 批次 AI 欄位補充核心邏輯 (含失敗重試、真報錯與不漏字保障)
+ * 🤖 批次 AI 欄位補充核心邏輯 (每批 25 字，確保效能與完整度平衡)
  */
 async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
     const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
@@ -390,7 +382,7 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 30; // 🌟 設定每批 30 字，平衡穩定度與速度
+    const batchSize = 25; // 🌟 實測最佳批次量：每批 25 字
     let completedCount = 0;
     let successUpdatedCount = 0;
 
@@ -400,22 +392,25 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
         const chunk = targetItems.slice(i, i + batchSize);
         const chunkWords = chunk.map(item => item.word);
 
-        const prompt = `Lexicographer assistant.
+        const prompt = `You are an expert lexicographer.
 Input Terms: ${JSON.stringify(chunkWords)}
 Target Language: ${targetName}
 User Native Language: ${nativeName}
 
-CRITICAL RULES:
-- "word": MUST match the exact string from the input array without adding brackets or furigana.
-- "sentence": MUST be a natural example sentence written strictly in Target Language (${targetName}).
-- "pos", "meaning", and "translation": MUST be written strictly in User Native Language (${nativeName}).
+CRITICAL RULES (STRICT COMPLIANCE REQUIRED):
+1. "word": MUST match the exact string from input.
+2. "phonetic": MUST provide IPA pronunciation guide (DO NOT LEAVE EMPTY).
+3. "pos": MUST provide part of speech in ${nativeName} (e.g. n., v., adj.).
+4. "meaning": MUST provide clear definition in ${nativeName}.
+5. "sentence": MUST provide a complete example sentence strictly in ${targetName} (DO NOT LEAVE EMPTY).
+6. "translation": MUST provide translation of sentence in ${nativeName} (DO NOT LEAVE EMPTY).
 
-Return ONLY a pure JSON array matching the input order:
+Return ONLY a pure JSON array matching input order:
 [
   {
     "word": "original term",
     "pos": "POS in ${nativeName}",
-    "phonetic": "phonetic",
+    "phonetic": "phonetic IPA",
     "meaning": "definition in ${nativeName}",
     "sentence": "example sentence in ${targetName}",
     "translation": "translation in ${nativeName}"
@@ -435,11 +430,9 @@ Return ONLY a pure JSON array matching the input order:
                 lastErrorMsg = err.message;
             }
 
-            if (!rawResponse) {
-                if (attempt < maxAttempts) {
-                    console.warn(`[AI Batch Retry] 批次解析暫時中斷 (${lastErrorMsg})，等待 ${attempt * 2} 秒後進行第 ${attempt} 次重試...`);
-                    await new Promise(r => setTimeout(r, attempt * 2000)); // 遞增冷卻時間 (2s, 4s, 6s...)
-                }
+            if (!rawResponse && attempt < maxAttempts) {
+                console.warn(`[AI Batch Retry] 批次解析暫時中斷 (${lastErrorMsg})，等待 ${attempt * 2} 秒後進行重試...`);
+                await new Promise(r => setTimeout(r, attempt * 2000));
             }
         }
 
@@ -449,12 +442,23 @@ Return ONLY a pure JSON array matching the input order:
                 results.forEach(resItem => {
                     if (!resItem || !resItem.word) return;
 
-                    const target = targetList.find(p => {
-                        if (!p || !p.word) return false;
-                        const cleanP = normalizeWord(p.word);
-                        const cleanRes = normalizeWord(resItem.word);
-                        return cleanP === cleanRes || cleanRes.startsWith(cleanP) || cleanP.startsWith(cleanRes);
-                    });
+                    const cleanRes = normalizeWord(resItem.word);
+                    if (!cleanRes) return;
+
+                    let target = chunk.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+
+                    if (!target) {
+                        target = targetList.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+                    }
+
+                    if (!target) {
+                        target = chunk.find(p => {
+                            if (!p || !p.word) return false;
+                            const cleanP = normalizeWord(p.word);
+                            if (Math.abs(cleanP.length - cleanRes.length) > 4) return false;
+                            return cleanP.includes(cleanRes) || cleanRes.includes(cleanP);
+                        });
+                    }
 
                     if (target) {
                         if ((forceOverwrite || isFieldIncomplete(target.pos, 'pos')) && resItem.pos) target.pos = resItem.pos;
@@ -479,6 +483,74 @@ Return ONLY a pure JSON array matching the input order:
 
         if (i + batchSize < total) {
             await new Promise(resolve => setTimeout(resolve, 300));
+        }
+    }
+
+    // 🔄 二次自動補掃機制 (Auto Sweep Pass)：每批 25 字二次撿漏
+    const leftoverItems = targetItems.filter(item => 
+        isFieldIncomplete(item.meaning, 'meaning') || 
+        isFieldIncomplete(item.pos, 'pos') || 
+        isFieldIncomplete(item.sentence, 'sentence') || 
+        isFieldIncomplete(item.translation, 'translation') ||
+        isFieldIncomplete(item.phonetic, 'phonetic')
+    );
+
+    if (leftoverItems.length > 0 && leftoverItems.length < total) {
+        console.log(`[AI Batch Sweep] 發現 ${leftoverItems.length} 個漏網單字，啟動二次自動補掃...`);
+        
+        for (let j = 0; j < leftoverItems.length; j += batchSize) {
+            const sweepChunk = leftoverItems.slice(j, j + batchSize);
+            const leftoverWords = sweepChunk.map(item => item.word);
+            
+            const sweepPrompt = `You are an expert lexicographer.
+Input Terms: ${JSON.stringify(leftoverWords)}
+Target Language: ${targetName}
+User Native Language: ${nativeName}
+
+CRITICAL RULES:
+1. "word": MUST match exact string.
+2. "phonetic": MUST provide IPA pronunciation guide.
+3. "pos": MUST provide POS in ${nativeName}.
+4. "meaning": MUST provide definition in ${nativeName}.
+5. "sentence": MUST provide example sentence in ${targetName}.
+6. "translation": MUST provide translation in ${nativeName}.
+
+Return ONLY a pure JSON array:
+[
+  {
+    "word": "original term",
+    "pos": "POS in ${nativeName}",
+    "phonetic": "phonetic IPA",
+    "meaning": "definition in ${nativeName}",
+    "sentence": "example sentence in ${targetName}",
+    "translation": "translation in ${nativeName}"
+  }
+]`;
+
+            try {
+                const rawSweep = await callGeminiApi(sweepPrompt);
+                if (rawSweep) {
+                    const sweepResults = safeParseJSON(rawSweep);
+                    if (Array.isArray(sweepResults)) {
+                        sweepResults.forEach(resItem => {
+                            if (!resItem || !resItem.word) return;
+                            const cleanRes = normalizeWord(resItem.word);
+                            const target = sweepChunk.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+                            if (target) {
+                                if (isFieldIncomplete(target.pos, 'pos') && resItem.pos) target.pos = resItem.pos;
+                                if (isFieldIncomplete(target.phonetic, 'phonetic') && resItem.phonetic) target.phonetic = resItem.phonetic;
+                                if (isFieldIncomplete(target.meaning, 'meaning') && resItem.meaning) target.meaning = resItem.meaning;
+                                if (isFieldIncomplete(target.sentence, 'sentence') && resItem.sentence) target.sentence = resItem.sentence;
+                                if (isFieldIncomplete(target.translation, 'translation') && resItem.translation) target.translation = resItem.translation;
+                                target.updatedAt = Date.now();
+                                successUpdatedCount++;
+                            }
+                        });
+                    }
+                }
+            } catch (sweepErr) {
+                console.warn('[AI Batch Sweep Warning]: 二次補掃嘗試失敗:', sweepErr);
+            }
         }
     }
 

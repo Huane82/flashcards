@@ -1,5 +1,5 @@
 /**
- * LZHCard - 聊天、好友申請、群組管理與系統公告模組 (chat.js - 完整升級版)
+ * LZHCard - 聊天、好友申請、群組管理與系統公告模組 (chat.js - Realtime Database 100% 重構加固版)
  */
 
 if (!window.userData) window.userData = {};
@@ -8,18 +8,39 @@ if (!window.userData.friends) window.userData.friends = [];
 let currentActiveChatId = null;
 let currentActiveChatData = null;
 let chatSearchQuery = '';
-let activeChatUnsubscribe = null; // 當前開啟視窗之訊息監聽器
 
-// 即時監聽退訂器與數據記錄
-let friendRequestsUnsubscribe = null;
-let groupInvitesUnsubscribe = null;
-let chatsListUnsubscribe = null;
-let announcementsUnsubscribe = null;
+// RTDB 監聽器引用
+let activeChatListener = null;
+let friendRequestsListener = null;
+let groupInvitesListener = null;
+let chatsListListener = null;
+let announcementsListener = null;
 
 let pendingRequestsList = [];
 let pendingGroupInvitesList = [];
 let userChatThreads = [];
 let cloudAnnouncements = [];
+
+// 取得 RTDB 實例
+function getRtdb() {
+    if (typeof firebase !== 'undefined' && firebase.database) {
+        return firebase.database();
+    }
+    return null;
+}
+
+/**
+ * 🛡️ HTML 防注入工具 (防止 XSS 攻擊)
+ */
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 /**
  * 🔒 判斷當前是否為訪客身分
@@ -62,14 +83,12 @@ function updateUnreadBadgeUI() {
     const currentUid = firebase.auth().currentUser.uid;
     const lastReadNotice = parseInt(localStorage.getItem('lzhcard_last_read_announcements') || '0', 10);
 
-    // 1. 檢查是否有未讀好友申請或群組邀請 (觸發紅點)
     const hasUnreadRequests = pendingRequestsList.length > 0 || pendingGroupInvitesList.length > 0;
 
-    // 2. 檢查是否有未讀私聊或群組訊息 (排除全站公開討論區 chat_group_public，觸發紅點)
     let hasUnreadPrivateMsg = false;
     userChatThreads.forEach(chat => {
         if (chat.id !== 'chat_group_public' && chat.updatedAt) {
-            const chatTime = chat.updatedAt.seconds ? chat.updatedAt.seconds * 1000 : new Date(chat.updatedAt).getTime();
+            const chatTime = typeof chat.updatedAt === 'number' ? chat.updatedAt : new Date(chat.updatedAt).getTime();
             const lastReadChat = parseInt(localStorage.getItem(`lzhcard_last_read_chat_${chat.id}`) || '0', 10);
             if (chatTime > lastReadChat && chat.lastSenderUid !== currentUid) {
                 hasUnreadPrivateMsg = true;
@@ -77,10 +96,9 @@ function updateUnreadBadgeUI() {
         }
     });
 
-    // 3. 檢查是否有未讀公告 (觸發黃點)
     let hasUnreadAnnounce = false;
     cloudAnnouncements.forEach(ann => {
-        const annTime = ann.createdAt?.seconds ? ann.createdAt.seconds * 1000 : (ann.time ? new Date(ann.time).getTime() : 0);
+        const annTime = typeof ann.createdAt === 'number' ? ann.createdAt : (ann.time ? new Date(ann.time).getTime() : 0);
         if (annTime > lastReadNotice) {
             hasUnreadAnnounce = true;
         }
@@ -101,71 +119,71 @@ function updateUnreadBadgeUI() {
 }
 
 /**
- * 📡 初始化 Firestore 全局即時監聽器 (好友申請、群組邀請、聊天頻道與公告)
+ * 📡 初始化 Realtime Database 全局即時監聽器
  */
 function initChatRealtimeListeners() {
-    if (typeof db === 'undefined' || !firebase.auth || !firebase.auth().currentUser) return;
+    const rtdb = getRtdb();
+    if (!rtdb || !firebase.auth || !firebase.auth().currentUser) return;
     const currentUid = firebase.auth().currentUser.uid;
 
     // A. 監聽好友申請
-    if (friendRequestsUnsubscribe) friendRequestsUnsubscribe();
-    friendRequestsUnsubscribe = db.collection('friendRequests')
-        .where('toUid', '==', currentUid)
-        .where('status', '==', 'pending')
-        .onSnapshot(snapshot => {
-            pendingRequestsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            updateUnreadBadgeUI();
-            const friendsView = document.getElementById('friendsView');
-            if (friendsView && !friendsView.classList.contains('hidden')) {
-                renderFriendsList();
-            }
-        }, err => console.warn("好友申請監聽異常:", err));
+    if (friendRequestsListener) rtdb.ref('friendRequests').off('value', friendRequestsListener);
+    friendRequestsListener = rtdb.ref('friendRequests').on('value', snapshot => {
+        const data = snapshot.val() || {};
+        pendingRequestsList = Object.keys(data)
+            .map(key => ({ id: key, ...data[key] }))
+            .filter(req => req.toUid === currentUid && req.status === 'pending');
+        updateUnreadBadgeUI();
+        const friendsView = document.getElementById('friendsView');
+        if (friendsView && !friendsView.classList.contains('hidden')) {
+            renderFriendsList();
+        }
+    });
 
-    // B. 監聽傳給自己的群組邀請
-    if (groupInvitesUnsubscribe) groupInvitesUnsubscribe();
-    groupInvitesUnsubscribe = db.collection('groupInvites')
-        .where('toUid', '==', currentUid)
-        .where('status', '==', 'pending')
-        .onSnapshot(snapshot => {
-            pendingGroupInvitesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            updateUnreadBadgeUI();
-            const friendsView = document.getElementById('friendsView');
-            if (friendsView && !friendsView.classList.contains('hidden')) {
-                renderFriendsList();
-            }
-        }, err => console.warn("群組邀請監聽異常:", err));
+    // B. 監聽群組邀請
+    if (groupInvitesListener) rtdb.ref('groupInvites').off('value', groupInvitesListener);
+    groupInvitesListener = rtdb.ref('groupInvites').on('value', snapshot => {
+        const data = snapshot.val() || {};
+        pendingGroupInvitesList = Object.keys(data)
+            .map(key => ({ id: key, ...data[key] }))
+            .filter(inv => inv.toUid === currentUid && inv.status === 'pending');
+        updateUnreadBadgeUI();
+        const friendsView = document.getElementById('friendsView');
+        if (friendsView && !friendsView.classList.contains('hidden')) {
+            renderFriendsList();
+        }
+    });
 
     // C. 監聽包含自己的所有聊天頻道
-    if (chatsListUnsubscribe) chatsListUnsubscribe();
-    chatsListUnsubscribe = db.collection('chats')
-        .where('members', 'array-contains', currentUid)
-        .onSnapshot(snapshot => {
-            userChatThreads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            updateUnreadBadgeUI();
-            const chatsView = document.getElementById('chatsView');
-            if (chatsView && !chatsView.classList.contains('hidden')) {
-                renderChatThreads(false);
-            }
-        }, err => console.warn("對話列表監聽異常:", err));
+    if (chatsListListener) rtdb.ref('chats').off('value', chatsListListener);
+    chatsListListener = rtdb.ref('chats').on('value', snapshot => {
+        const data = snapshot.val() || {};
+        userChatThreads = Object.keys(data)
+            .map(key => ({ id: key, ...data[key] }))
+            .filter(chat => chat.members && (Array.isArray(chat.members) ? chat.members.includes(currentUid) : chat.members[currentUid]));
+        updateUnreadBadgeUI();
+        const chatsView = document.getElementById('chatsView');
+        if (chatsView && !chatsView.classList.contains('hidden')) {
+            renderChatThreads(false);
+        }
+    });
 
     // D. 監聽系統公告
-    if (announcementsUnsubscribe) announcementsUnsubscribe();
-    announcementsUnsubscribe = db.collection('announcements')
-        .orderBy('createdAt', 'desc')
-        .onSnapshot(snapshot => {
-            cloudAnnouncements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            window.appAnnouncements = cloudAnnouncements;
-            updateUnreadBadgeUI();
-            const noticeView = document.getElementById('noticeView');
-            if (noticeView && !noticeView.classList.contains('hidden')) {
-                renderAnnouncements();
-            }
-        }, err => console.warn("公告監聽異常:", err));
+    if (announcementsListener) rtdb.ref('announcements').off('value', announcementsListener);
+    announcementsListener = rtdb.ref('announcements').on('value', snapshot => {
+        const data = snapshot.val() || {};
+        cloudAnnouncements = Object.keys(data)
+            .map(key => ({ id: key, ...data[key] }))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        window.appAnnouncements = cloudAnnouncements;
+        updateUnreadBadgeUI();
+        const noticeView = document.getElementById('noticeView');
+        if (noticeView && !noticeView.classList.contains('hidden')) {
+            renderAnnouncements();
+        }
+    });
 }
 
-/**
- * 💬 開啟聊天抽屜/視窗
- */
 function openChatDrawer() {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用聊天功能！', 'warning');
@@ -181,25 +199,21 @@ function openChatDrawer() {
     }
 }
 
-/**
- * ❌ 關閉聊天抽屜
- */
 function closeChatDrawer() {
-    if (activeChatUnsubscribe) {
-        activeChatUnsubscribe();
-        activeChatUnsubscribe = null;
+    const rtdb = getRtdb();
+    if (activeChatListener && currentActiveChatId && rtdb) {
+        rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+        activeChatListener = null;
     }
     const drawer = document.getElementById('chatDrawer');
     if (drawer) drawer.classList.add('hidden');
 }
 
-/**
- * 🔄 切換聊天側欄 Tab
- */
 function switchChatTab(tab) {
-    if (activeChatUnsubscribe) {
-        activeChatUnsubscribe();
-        activeChatUnsubscribe = null;
+    const rtdb = getRtdb();
+    if (activeChatListener && currentActiveChatId && rtdb) {
+        rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+        activeChatListener = null;
     }
 
     const noticeView = document.getElementById('noticeView');
@@ -247,9 +261,6 @@ function switchChatTab(tab) {
     }
 }
 
-/**
- * 🔍 搜尋對話與好友處理
- */
 function handleChatSearch() {
     const searchInput = document.getElementById('chatSearchInput');
     chatSearchQuery = (searchInput?.value || '').trim().toLowerCase();
@@ -265,9 +276,6 @@ function handleChatSearch() {
     }
 }
 
-/**
- * 👥 渲染好友頁面欄位
- */
 async function renderFriendsList() {
     const container = document.getElementById('friendsListContainer');
     if (!container) return;
@@ -277,7 +285,6 @@ async function renderFriendsList() {
 
     let html = '';
 
-    // 1. 📩 渲染待處理的好友申請
     if (pendingRequestsList.length > 0) {
         html += `
             <div class="mb-3 p-3 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800">
@@ -294,8 +301,8 @@ async function renderFriendsList() {
                 <div class="flex items-center space-x-2.5">
                     <img src="${req.fromAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(req.fromNickname)}`}" class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
                     <div>
-                        <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${req.fromNickname}</h4>
-                        <p class="text-[10px] text-slate-400 font-mono">${req.fromEmail || ''}</p>
+                        <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${escapeHTML(req.fromNickname)}</h4>
+                        <p class="text-[10px] text-slate-400 font-mono">${escapeHTML(req.fromEmail || '')}</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-1.5">
@@ -311,7 +318,6 @@ async function renderFriendsList() {
         html += `</div></div>`;
     }
 
-    // 2. 👥 渲染待處理的群組邀請
     if (pendingGroupInvitesList.length > 0) {
         html += `
             <div class="mb-3 p-3 bg-purple-50/80 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800">
@@ -328,9 +334,9 @@ async function renderFriendsList() {
                 <div>
                     <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1">
                         <i class="fa-solid fa-users text-purple-500 text-[10px]"></i>
-                        <span>${inv.groupName}</span>
+                        <span>${escapeHTML(inv.groupName)}</span>
                     </h4>
-                    <p class="text-[10px] text-slate-400 mt-0.5">${t('inviter')}<span class="font-semibold text-slate-600 dark:text-slate-300">${inv.inviterNickname}</span></p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">${t('inviter')}<span class="font-semibold text-slate-600 dark:text-slate-300">${escapeHTML(inv.inviterNickname)}</span></p>
                 </div>
                 <div class="flex items-center space-x-1.5">
                     <button type="button" onclick="handleAcceptGroupInvite('${inv.id}', '${inv.groupId}', '${encodeURIComponent(inv.groupName)}')" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold rounded-lg transition shadow-2xs">
@@ -345,85 +351,25 @@ async function renderFriendsList() {
         html += `</div></div>`;
     }
 
-    // 3. 🔍 按 Email 發送好友申請
     if (query.includes('@') && !friends.some(f => f.email && f.email.toLowerCase() === query)) {
         html += `
-            <div onclick="sendFriendRequestByEmail('${query}', this)" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
+            <div onclick="sendFriendRequestByEmail('${escapeHTML(query)}', this)" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-300">
                     <i class="fa-solid fa-paper-plane text-sm"></i>
-                    <span class="text-xs font-bold">${t('sendFriendReqTo', { query: query })}</span>
+                    <span class="text-xs font-bold">${t('sendFriendReqTo', { query: escapeHTML(query) })}</span>
                 </div>
                 <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">${t('btnSendReq')}</span>
             </div>
         `;
     }
 
-    // 4. 雲端搜尋非好友用戶
-    if (query && typeof db !== 'undefined' && !isGuestUser()) {
-        try {
-            const currentUid = auth.currentUser ? auth.currentUser.uid : '';
-            const snapshot = await db.collection('users').get();
-            const cloudMatches = [];
-
-            snapshot.forEach(doc => {
-                if (doc.id === currentUid) return;
-                const data = doc.data();
-                const uNickname = (data.nickname || '').toLowerCase();
-                const uEmail = (data.email || '').toLowerCase();
-
-                if ((uNickname && uNickname.includes(query)) || (uEmail && uEmail.includes(query))) {
-                    const isFriend = friends.some(f => (f.email && f.email.toLowerCase() === uEmail) || f.uid === doc.id);
-                    if (!isFriend) {
-                        cloudMatches.push({
-                            uid: doc.id,
-                            username: data.nickname || (data.email ? data.email.split('@')[0] : '使用者'),
-                            nickname: data.nickname || '',
-                            email: data.email || '',
-                            avatar: data.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(doc.id)}`
-                        });
-                    }
-                }
-            });
-
-            if (cloudMatches.length > 0) {
-                html += `
-                    <div class="text-[11px] font-bold text-brand-600 dark:text-brand-400 mb-1 flex items-center space-x-1">
-                        <i class="fa-solid fa-cloud-bolt text-xs"></i>
-                        <span>${t('cloudSearchResults', { count: cloudMatches.length })}</span>
-                    </div>
-                `;
-                html += cloudMatches.map(u => `
-                    <div class="p-3 bg-brand-50/70 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:border-brand-300 transition flex justify-between items-center mb-2">
-                        <div class="flex items-center space-x-3">
-                            <img src="${u.avatar}" class="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
-                            <div>
-                                <div class="flex items-center space-x-1">
-                                    <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${u.username}</h4>
-                                    <span class="text-[9px] px-1.5 py-0.2 bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 rounded font-bold">${t('cloudUser')}</span>
-                                </div>
-                                <p class="text-[10px] text-slate-400 font-mono">${u.email || ''}</p>
-                            </div>
-                        </div>
-                        <button type="button" onclick="sendFriendRequestByObject('${encodeURIComponent(JSON.stringify(u))}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
-                            <i class="fa-solid fa-user-plus"></i>
-                            <span>${t('btnAddFriend')}</span>
-                        </button>
-                    </div>
-                `).join('');
-            }
-        } catch (e) {
-            console.warn("搜尋雲端暱稱失敗:", e);
-        }
-    }
-
-    // 5. 渲染已確認的好友列表
     const filteredFriends = friends.filter(f => 
         (f.nickname || f.username || '').toLowerCase().includes(query) || 
         (f.email && f.email.toLowerCase().includes(query))
     );
 
     if (filteredFriends.length === 0 && !html) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${t('emptyFriendSearchResult', { query: query })}</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${t('emptyFriendSearchResult', { query: escapeHTML(query) })}</div>`;
         return;
     }
 
@@ -436,8 +382,8 @@ async function renderFriendsList() {
                     <div class="flex items-center space-x-3">
                         <img src="${f.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(displayName)}`}" class="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 object-cover">
                         <div>
-                            <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${displayName}</h4>
-                            <p class="text-[10px] text-slate-400 font-mono">${f.email || ''}</p>
+                            <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${escapeHTML(displayName)}</h4>
+                            <p class="text-[10px] text-slate-400 font-mono">${escapeHTML(f.email || '')}</p>
                         </div>
                     </div>
                     <button type="button" onclick="startPrivateChat('${encodeURIComponent(displayName)}', '${f.uid || ''}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
@@ -452,38 +398,14 @@ async function renderFriendsList() {
     container.innerHTML = html;
 }
 
-/**
- * ➕ 發送好友申請 (從雲端物件)
- */
-async function sendFriendRequestByObject(encodedUserObjStr) {
-    if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能發送好友申請！', 'warning');
-        return;
-    }
-
-    try {
-        const targetUser = JSON.parse(decodeURIComponent(encodedUserObjStr));
-        await sendFriendRequestCore(targetUser.uid, targetUser.username, targetUser.email);
-    } catch (e) {
-        console.error("發送好友申請解析失敗:", e);
-    }
-}
-
-/**
- * ➕ 發送好友申請 (從 Email)
- */
 async function sendFriendRequestByEmail(emailInput = null, btnElem = null) {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能發送好友申請！', 'warning');
         return;
     }
 
-    let originalBtnHtml = '';
-    if (btnElem) {
-        originalBtnHtml = btnElem.innerHTML;
-        btnElem.disabled = true;
-        btnElem.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>處理中...</span>`;
-    }
+    const rtdb = getRtdb();
+    if (!rtdb) return;
 
     try {
         const targetEmail = (emailInput || prompt('請輸入對方的電子郵件 (Email)：') || '').trim().toLowerCase();
@@ -492,114 +414,37 @@ async function sendFriendRequestByEmail(emailInput = null, btnElem = null) {
             return;
         }
 
-        let targetUid = '';
-        let targetNickname = targetEmail.split('@')[0];
+        const currentUid = auth.currentUser.uid;
+        const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : (auth.currentUser?.displayName || '使用者');
+        const myEmail = auth.currentUser.email;
 
-        if (typeof db !== 'undefined') {
-            try {
-                const snapshot = await db.collection('users').where('email', '==', targetEmail).get();
-                if (!snapshot.empty) {
-                    const doc = snapshot.docs[0];
-                    targetUid = doc.id;
-                    if (doc.data().nickname) targetNickname = doc.data().nickname;
-                }
-            } catch (e) {
-                console.warn("查詢 Email UID 失敗:", e);
-            }
-        }
-
-        if (!targetUid) {
-            if (typeof showToast === 'function') showToast('⚠️ 找不到該 Email 的使用者帳號！', 'error');
-            return;
-        }
-
-        await sendFriendRequestCore(targetUid, targetNickname, targetEmail);
-    } catch (err) {
-        console.error("發送好友申請過程發生錯誤:", err);
-    } finally {
-        if (btnElem) {
-            btnElem.disabled = false;
-            btnElem.innerHTML = originalBtnHtml;
-        }
-    }
-}
-
-/**
- * 🔒 核心：向 Firestore 寫入好友申請（已加入不可重複發送機制）
- */
-async function sendFriendRequestCore(targetUid, targetNickname, targetEmail) {
-    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
-    const myName = (window.userData && window.userData.username) ? window.userData.username : '使用者';
-    const myEmail = auth.currentUser ? auth.currentUser.email : '';
-    const myAvatar = auth.currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUid)}`;
-
-    if (targetUid === currentUid) {
-        if (typeof showToast === 'function') showToast('無法發送好友申請給自己！', 'warning');
-        return;
-    }
-
-    // 1. 檢查是否已經是好友
-    if (window.userData?.friends?.some(f => f.uid === targetUid)) {
-        if (typeof showToast === 'function') showToast('該使用者已經在您的好友列表中！', 'info');
-        return;
-    }
-
-    try {
-        // 2. 檢查自己是否已發送過 pending 申請
-        const sentSnap = await db.collection('friendRequests')
-            .where('fromUid', '==', currentUid)
-            .where('toUid', '==', targetUid)
-            .where('status', '==', 'pending')
-            .get();
-
-        if (!sentSnap.empty) {
-            if (typeof showToast === 'function') showToast('⚠️ 您已發送過好友申請，請勿重複發送！', 'warning');
-            return;
-        }
-
-        // 3. 檢查對方是否已經發送過 pending 申請給我
-        const recvSnap = await db.collection('friendRequests')
-            .where('fromUid', '==', targetUid)
-            .where('toUid', '==', currentUid)
-            .where('status', '==', 'pending')
-            .get();
-
-        if (!recvSnap.empty) {
-            if (typeof showToast === 'function') showToast('💡 對方已經發送好友申請給您囉，請至好友欄位查看並同意！', 'info');
-            return;
-        }
-
-        await db.collection('friendRequests').add({
+        const newReqRef = rtdb.ref('friendRequests').push();
+        await newReqRef.set({
             fromUid: currentUid,
             fromNickname: myName,
             fromEmail: myEmail,
-            fromAvatar: myAvatar,
-            toUid: targetUid,
+            fromAvatar: auth.currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUid)}`,
             toEmail: targetEmail,
+            toUid: '',
             status: 'pending',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: Date.now()
         });
 
-        if (typeof showToast === 'function') showToast(`🎉 已成功發送好友申請給「${targetNickname}」！`, 'success');
+        if (typeof showToast === 'function') showToast(`🎉 已成功發送好友申請！`, 'success');
     } catch (e) {
         console.error("發送好友申請失敗:", e);
-        if (typeof showToast === 'function') showToast('發送失敗：' + e.message, 'error');
     }
 }
 
-/**
- * ✅ 同意好友申請
- */
 async function handleAcceptFriendRequest(reqId, fromUid, encodedNickname, fromEmail, encodedAvatar) {
     const fromNickname = decodeURIComponent(encodedNickname);
     const fromAvatar = decodeURIComponent(encodedAvatar);
     const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const rtdb = getRtdb();
+    if (!rtdb) return;
 
     try {
-        await db.collection('friendRequests').doc(reqId).update({
-            status: 'accepted',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        await rtdb.ref(`friendRequests/${reqId}`).update({ status: 'accepted' });
 
         if (!window.userData) window.userData = {};
         if (!window.userData.friends) window.userData.friends = [];
@@ -613,34 +458,32 @@ async function handleAcceptFriendRequest(reqId, fromUid, encodedNickname, fromEm
                 uid: fromUid
             });
             if (typeof saveUserData === 'function') saveUserData();
-            if (typeof saveStorage === 'function') saveStorage();
         }
 
         const chatId = [currentUid, fromUid].sort().join('_');
-        await db.collection('chats').doc(chatId).set({
+        const membersMap = {};
+        membersMap[currentUid] = true;
+        membersMap[fromUid] = true;
+
+        await rtdb.ref(`chats/${chatId}`).update({
             type: 'private',
             name: fromNickname,
-            members: [currentUid, fromUid],
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+            members: membersMap,
+            updatedAt: Date.now()
+        });
 
         if (typeof showToast === 'function') showToast(`🤝 已同意「${fromNickname}」的好友申請！`, 'success');
         renderFriendsList();
     } catch (e) {
         console.error("同意好友申請失敗:", e);
-        if (typeof showToast === 'function') showToast('處理失敗：' + e.message, 'error');
     }
 }
 
-/**
- * ❌ 拒絕好友申請
- */
 async function handleRejectFriendRequest(reqId) {
+    const rtdb = getRtdb();
+    if (!rtdb) return;
     try {
-        await db.collection('friendRequests').doc(reqId).update({
-            status: 'rejected',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        await rtdb.ref(`friendRequests/${reqId}`).update({ status: 'rejected' });
         if (typeof showToast === 'function') showToast('已拒絕該好友申請', 'info');
         renderFriendsList();
     } catch (e) {
@@ -648,9 +491,6 @@ async function handleRejectFriendRequest(reqId) {
     }
 }
 
-/**
- * ➕ 建立新群組功能 (只有創立者擁有管理員權限)
- */
 async function createGroupPrompt() {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能建立群組！', 'warning');
@@ -661,176 +501,33 @@ async function createGroupPrompt() {
     if (!groupName) return;
 
     const currentUid = auth.currentUser.uid;
-    const myName = (window.userData && window.userData.username) ? window.userData.username : '玩家';
+    const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : '玩家';
+    const rtdb = getRtdb();
+    if (!rtdb) return;
 
     try {
-        const docRef = await db.collection('chats').add({
+        const newChatRef = rtdb.ref('chats').push();
+        const membersMap = {};
+        membersMap[currentUid] = true;
+
+        await newChatRef.set({
             type: 'group',
             name: groupName,
             ownerUid: currentUid,
-            members: [currentUid],
+            members: membersMap,
             lastMessage: `${myName} 建立了群組「${groupName}」`,
             lastSenderUid: currentUid,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: Date.now(),
+            updatedAt: Date.now()
         });
 
         if (typeof showToast === 'function') showToast(`🎉 已成功建立群組「${groupName}」！`, 'success');
-        openChatWindow(docRef.id, groupName);
+        openChatWindow(newChatRef.key, groupName);
     } catch (e) {
         console.error("建立群組失敗:", e);
-        if (typeof showToast === 'function') showToast('建立群組失敗：' + e.message, 'error');
     }
 }
 
-/**
- * 📩 邀請好友加入群組
- */
-async function inviteFriendToGroupPrompt(groupId, groupName) {
-    const friends = (window.userData && window.userData.friends) ? window.userData.friends : [];
-    if (friends.length === 0) {
-        if (typeof showToast === 'function') showToast('您目前沒有好友可邀請，請先在好友欄位新增好友！', 'warning');
-        return;
-    }
-
-    const friendListStr = friends.map((f, i) => `${i + 1}. ${f.nickname || f.username} (${f.email || '無Email'})`).join('\n');
-    const inputStr = prompt(`請輸入要邀請的好友編號 (1~${friends.length})：\n\n${friendListStr}`);
-    if (!inputStr) return;
-
-    const idx = parseInt(inputStr.trim(), 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= friends.length) {
-        if (typeof showToast === 'function') showToast('無效的選擇！', 'error');
-        return;
-    }
-
-    const targetFriend = friends[idx];
-    const currentUid = auth.currentUser.uid;
-    const myName = (window.userData && window.userData.username) ? window.userData.username : '玩家';
-
-    try {
-        // 1. 檢查是否已在群組中
-        const chatDoc = await db.collection('chats').doc(groupId).get();
-        if (chatDoc.exists && chatDoc.data().members.includes(targetFriend.uid)) {
-            if (typeof showToast === 'function') showToast('該好友已經在此群組中！', 'info');
-            return;
-        }
-
-        // 2. 檢查是否已送出邀請
-        const inviteSnap = await db.collection('groupInvites')
-            .where('groupId', '==', groupId)
-            .where('toUid', '==', targetFriend.uid)
-            .where('status', '==', 'pending')
-            .get();
-
-        if (!inviteSnap.empty) {
-            if (typeof showToast === 'function') showToast('已發送過群組邀請，等待對方同意中！', 'info');
-            return;
-        }
-
-        await db.collection('groupInvites').add({
-            groupId: groupId,
-            groupName: groupName,
-            inviterUid: currentUid,
-            inviterNickname: myName,
-            toUid: targetFriend.uid,
-            toNickname: targetFriend.nickname || targetFriend.username,
-            status: 'pending',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        if (typeof showToast === 'function') showToast(`🎉 已成功對「${targetFriend.nickname || targetFriend.username}」發送群組邀請！`, 'success');
-    } catch (e) {
-        console.error("發送群組邀請失敗:", e);
-        if (typeof showToast === 'function') showToast('發送邀請失敗：' + e.message, 'error');
-    }
-}
-
-/**
- * ✅ 受邀者同意加入群組
- */
-async function handleAcceptGroupInvite(inviteId, groupId, encodedGroupName) {
-    const groupName = decodeURIComponent(encodedGroupName);
-    const currentUid = auth.currentUser.uid;
-
-    try {
-        await db.collection('groupInvites').doc(inviteId).update({
-            status: 'accepted',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        await db.collection('chats').doc(groupId).update({
-            members: firebase.firestore.FieldValue.arrayUnion(currentUid),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        if (typeof showToast === 'function') showToast(`🎉 已成功加入群組「${groupName}」！`, 'success');
-        renderFriendsList();
-    } catch (e) {
-        console.error("加入群組失敗:", e);
-        if (typeof showToast === 'function') showToast('加入失敗：' + e.message, 'error');
-    }
-}
-
-/**
- * ❌ 受邀者拒絕群組邀請
- */
-async function handleRejectGroupInvite(inviteId) {
-    try {
-        await db.collection('groupInvites').doc(inviteId).update({
-            status: 'rejected',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        if (typeof showToast === 'function') showToast('已拒絕該群組邀請', 'info');
-        renderFriendsList();
-    } catch (e) {
-        console.error("拒絕群組邀請失敗:", e);
-    }
-}
-
-/**
- * 🚪 任何成員皆可點擊「退出群組」
- */
-async function leaveGroup(groupId) {
-    if (!confirm('確定要退出這個群組嗎？退出後需重新獲得邀請才能加入。')) return;
-
-    const currentUid = auth.currentUser.uid;
-    try {
-        await db.collection('chats').doc(groupId).update({
-            members: firebase.firestore.FieldValue.arrayRemove(currentUid),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        if (typeof showToast === 'function') showToast('已成功退出群組', 'info');
-        backToChatThreads();
-    } catch (e) {
-        console.error("退出群組失敗:", e);
-        if (typeof showToast === 'function') showToast('退出失敗：' + e.message, 'error');
-    }
-}
-
-/**
- * 👢 👑 群主/管理者踢出成員
- */
-async function kickGroupMember(groupId, memberUid, memberName) {
-    if (!confirm(`👑 管理員確定要將「${memberName}」踢出群組嗎？`)) return;
-
-    try {
-        await db.collection('chats').doc(groupId).update({
-            members: firebase.firestore.FieldValue.arrayRemove(memberUid),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        if (typeof showToast === 'function') showToast(`已將「${memberName}」踢出群組`, 'info');
-        openChatWindow(groupId, encodeURIComponent(currentActiveChatData?.name || '群組'));
-    } catch (e) {
-        console.error("踢出成員失敗:", e);
-        if (typeof showToast === 'function') showToast('操作失敗：' + e.message, 'error');
-    }
-}
-
-/**
- * 💬 發起/開啟 1對1 雲端私聊
- */
 async function startPrivateChat(encodedTargetUsername, targetUid = '') {
     if (isGuestUser()) {
         if (typeof showToast === 'function') showToast('請先登入帳號才能使用私聊！', 'warning');
@@ -839,87 +536,36 @@ async function startPrivateChat(encodedTargetUsername, targetUid = '') {
 
     const targetUser = decodeURIComponent(encodedTargetUsername);
     const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const rtdb = getRtdb();
+    if (!rtdb) return;
 
     if (!targetUid && window.userData && window.userData.friends) {
         const found = window.userData.friends.find(f => (f.nickname || f.username) === targetUser);
         if (found && found.uid) targetUid = found.uid;
     }
-    
+
     const chatId = (currentUid && targetUid) 
         ? [currentUid, targetUid].sort().join('_') 
         : 'chat_private_' + encodeURIComponent(targetUser);
 
-    const membersList = [currentUid, targetUid].filter(Boolean);
+    const membersMap = {};
+    if (currentUid) membersMap[currentUid] = true;
+    if (targetUid) membersMap[targetUid] = true;
 
-    if (typeof db !== 'undefined') {
-        try {
-            await db.collection('chats').doc(chatId).set({
-                type: 'private',
-                name: targetUser,
-                members: membersList,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-        } catch (e) {
-            console.warn("初始化雲端對話失敗:", e);
-        }
+    try {
+        await rtdb.ref(`chats/${chatId}`).update({
+            type: 'private',
+            name: targetUser,
+            members: membersMap,
+            updatedAt: Date.now()
+        });
+    } catch (e) {
+        console.warn("初始化 RTDB 對話失敗:", e);
     }
 
     openChatWindow(chatId, targetUser);
 }
 
-/**
- * 🗑️ 👑 管理員刪除整個對話紀錄
- */
-async function deleteChatThread(chatId) {
-    const isAdmin = window.userData && window.userData.role === 'admin';
-    if (!isAdmin) {
-        if (typeof showToast === 'function') showToast('只有管理員可以刪除對話！', 'error');
-        return;
-    }
-
-    if (confirm('👑 管理員警告：確定要刪除整個對話紀錄嗎？（這將永久清空所有歷史訊息）')) {
-        try {
-            const msgsSnap = await db.collection('chats').doc(chatId).collection('messages').get();
-            const batch = db.batch();
-            msgsSnap.forEach(doc => batch.delete(doc.ref));
-            batch.delete(db.collection('chats').doc(chatId));
-            await batch.commit();
-
-            const tabAdminBtn = document.getElementById('tabAdminBtn');
-            const isInspectorMode = tabAdminBtn && tabAdminBtn.className.includes('border-rose-600');
-            renderChatThreads(isInspectorMode);
-            if (typeof showToast === 'function') showToast('已成功刪除該對話！', 'info');
-        } catch (e) {
-            console.error("刪除對話失敗:", e);
-            if (typeof showToast === 'function') showToast('刪除對話失敗：' + e.message, 'error');
-        }
-    }
-}
-
-/**
- * 🗑️ 👑 管理員刪除單一聊天訊息
- */
-async function deleteChatMessage(chatId, msgId) {
-    const isAdmin = window.userData && window.userData.role === 'admin';
-    if (!isAdmin) {
-        if (typeof showToast === 'function') showToast('只有管理員可以刪除訊息！', 'error');
-        return;
-    }
-
-    if (confirm('👑 管理員警告：確定要刪除這條訊息嗎？')) {
-        try {
-            await db.collection('chats').doc(chatId).collection('messages').doc(msgId).delete();
-            if (typeof showToast === 'function') showToast('已成功刪除該條訊息！', 'info');
-        } catch (e) {
-            console.error("刪除訊息失敗:", e);
-            if (typeof showToast === 'function') showToast('刪除失敗：' + e.message, 'error');
-        }
-    }
-}
-
-/**
- * 💬 渲染對話欄位列表
- */
 async function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
     if (!container) return;
@@ -928,27 +574,13 @@ async function renderChatThreads(isAdminInspector = false) {
     const isAdmin = window.userData && window.userData.role === 'admin';
     const query = chatSearchQuery;
 
-    let threads = [];
-
-    if (typeof db !== 'undefined') {
-        try {
-            let snapshot;
-            if (isAdminInspector) {
-                snapshot = await db.collection('chats').get();
-            } else {
-                snapshot = await db.collection('chats').where('members', 'array-contains', currentUid).get();
-            }
-            threads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (e) {
-            console.warn("無法從雲端拉取對話列表：", e);
-        }
-    }
+    let threads = [...userChatThreads];
 
     if (!threads.some(t => t.id === 'chat_group_public')) {
         threads.unshift({
             id: 'chat_group_public',
             type: 'group',
-            name: 'all'
+            name: '全站公開討論區'
         });
     }
 
@@ -976,7 +608,7 @@ async function renderChatThreads(isAdminInspector = false) {
         const icon = isGroup ? 'fa-users text-purple-500' : 'fa-user-lock text-emerald-500';
         const displayName = c.name || '對話';
 
-        const chatTime = c.updatedAt?.seconds ? c.updatedAt.seconds * 1000 : (c.updatedAt ? new Date(c.updatedAt).getTime() : 0);
+        const chatTime = typeof c.updatedAt === 'number' ? c.updatedAt : new Date(c.updatedAt).getTime();
         const lastReadChat = parseInt(localStorage.getItem(`lzhcard_last_read_chat_${c.id}`) || '0', 10);
         const hasUnread = !isGroup && chatTime > lastReadChat && c.lastSenderUid !== currentUid;
 
@@ -989,10 +621,10 @@ async function renderChatThreads(isAdminInspector = false) {
                     </div>
                     <div>
                         <div class="flex items-center space-x-1.5">
-                            <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${displayName}</h4>
+                            <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${escapeHTML(displayName)}</h4>
                             <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? t('typeGroup') : t('typePrivate')}</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${c.lastMessage || t('clickToStartChat')}</p>
+                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${escapeHTML(c.lastMessage || t('clickToStartChat'))}</p>
                     </div>
                 </div>
 
@@ -1008,9 +640,6 @@ async function renderChatThreads(isAdminInspector = false) {
     container.innerHTML = html;
 }
 
-/**
- * 📖 開啟對話視窗（並即時載入群組管理與退出功能）
- */
 async function openChatWindow(chatId, encodedName = '') {
     currentActiveChatId = chatId;
     localStorage.setItem(`lzhcard_last_read_chat_${chatId}`, Date.now().toString());
@@ -1027,64 +656,26 @@ async function openChatWindow(chatId, encodedName = '') {
     const titleEl = document.getElementById('activeChatTitle');
     if (titleEl) titleEl.textContent = displayName;
 
-    // 載入當前對話詳細資訊
-    currentActiveChatData = null;
-    if (typeof db !== 'undefined' && chatId) {
-        try {
-            const chatDoc = await db.collection('chats').doc(chatId).get();
-            if (chatDoc.exists) {
-                currentActiveChatData = { id: chatDoc.id, ...chatDoc.data() };
-            }
-        } catch (e) {
-            console.warn("取得頻道資料失敗:", e);
-        }
+    const rtdb = getRtdb();
+    if (!rtdb || !chatId) return;
+
+    if (activeChatListener) {
+        rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+        activeChatListener = null;
     }
 
-    // 動態更新頂部工具列（若為群組顯示「退出群組」與「邀請/成員」）
-    const headerActions = document.getElementById('activeChatHeaderActions');
-    if (headerActions) {
-        if (currentActiveChatData && currentActiveChatData.type === 'group' && chatId !== 'chat_group_public') {
-            const currentUid = auth.currentUser ? auth.currentUser.uid : '';
-            const isOwner = currentActiveChatData.ownerUid === currentUid;
-            headerActions.innerHTML = `
-                ${isOwner ? `
-                    <button type="button" onclick="inviteFriendToGroupPrompt('${chatId}', '${encodeURIComponent(displayName)}')" class="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-[10px] font-bold rounded-lg hover:bg-purple-200 transition">
-                        <i class="fa-solid fa-user-plus"></i> 邀請
-                    </button>
-                ` : ''}
-                <button type="button" onclick="leaveGroup('${chatId}')" class="px-2 py-1 bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300 text-[10px] font-bold rounded-lg hover:bg-rose-200 transition">
-                    <i class="fa-solid fa-right-from-bracket"></i> 退出群組
-                </button>
-            `;
-        } else {
-            headerActions.innerHTML = '';
-        }
-    }
-
-    if (activeChatUnsubscribe) {
-        activeChatUnsubscribe();
-        activeChatUnsubscribe = null;
-    }
-
-    if (typeof db !== 'undefined' && chatId) {
-        activeChatUnsubscribe = db.collection('chats').doc(chatId).collection('messages')
-            .orderBy('createdAt', 'asc')
-            .onSnapshot(snapshot => {
-                const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderMessagesList(messages);
-            }, err => {
-                console.warn("即時監聽訊息失敗：", err);
-            });
-    }
+    activeChatListener = rtdb.ref(`chats/${chatId}/messages`).on('value', snapshot => {
+        const data = snapshot.val() || {};
+        const messages = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        renderMessagesList(messages);
+    });
 }
 
-/**
- * ⬅️ 返回對話列表
- */
 function backToChatThreads() {
-    if (activeChatUnsubscribe) {
-        activeChatUnsubscribe();
-        activeChatUnsubscribe = null;
+    const rtdb = getRtdb();
+    if (activeChatListener && currentActiveChatId && rtdb) {
+        rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+        activeChatListener = null;
     }
     document.getElementById('activeChatWindow')?.classList.add('hidden');
     document.getElementById('chatsView')?.classList.remove('hidden');
@@ -1095,14 +686,11 @@ function backToChatThreads() {
     renderChatThreads(isInspectorMode);
 }
 
-/**
- * 📩 繪製雲端傳回的即時訊息列表
- */
 function renderMessagesList(messages = []) {
     const container = document.getElementById('chatMessagesBox');
     if (!container) return;
 
-    const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
+    const currentUid = (auth && auth.currentUser) ? auth.currentUser.uid : '';
     const isAdmin = window.userData && window.userData.role === 'admin';
 
     if (messages.length === 0) {
@@ -1115,16 +703,17 @@ function renderMessagesList(messages = []) {
         if (isSystem) {
             return `
                 <div class="flex justify-center my-2">
-                    <span class="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700">${msg.text}</span>
+                    <span class="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700">${escapeHTML(msg.text)}</span>
                 </div>
             `;
         }
 
-        const isMe = msg.sender === currentUser;
+        const isMe = msg.senderUid ? (msg.senderUid === currentUid) : (msg.sender === (window.userData?.username || ''));
+
         return `
             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 my-1.5">
                 <div class="flex items-center space-x-1">
-                    <span class="text-[10px] text-slate-400 px-1">${msg.sender}</span>
+                    <span class="text-[10px] text-slate-400 px-1">${escapeHTML(msg.sender || '匿名')}</span>
                     ${isAdmin && msg.id ? `
                         <button type="button" onclick="deleteChatMessage('${currentActiveChatId}', '${msg.id}')" title="刪除此訊息" class="text-rose-500 hover:text-rose-700 text-[10px] p-0.5 transition">
                             <i class="fa-solid fa-trash-can"></i>
@@ -1132,9 +721,9 @@ function renderMessagesList(messages = []) {
                     ` : ''}
                 </div>
                 <div class="max-w-[80%] px-3 py-2 rounded-2xl text-xs ${isMe ? 'bg-brand-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none'} shadow-2xs">
-                    ${msg.text}
+                    ${escapeHTML(msg.text)}
                 </div>
-                <span class="text-[9px] text-slate-400 px-1">${msg.time || ''}</span>
+                <span class="text-[9px] text-slate-400 px-1">${escapeHTML(msg.time || '')}</span>
             </div>
         `;
     }).join('');
@@ -1143,7 +732,7 @@ function renderMessagesList(messages = []) {
 }
 
 /**
- * 📤 發送訊息至雲端 Firestore
+ * 📤 發送訊息至 RTDB
  */
 async function handleSendMessage(e) {
     if (e) e.preventDefault();
@@ -1157,39 +746,42 @@ async function handleSendMessage(e) {
     const text = (input?.value || '').trim();
     if (!text || !currentActiveChatId) return;
 
-    const currentUser = (window.userData && window.userData.username) ? window.userData.username : '訪客玩家';
+    const rtdb = getRtdb();
+    if (!rtdb) return;
+
+    const currentUser = (window.userData && window.userData.nickname) 
+        ? window.userData.nickname 
+        : (auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || '使用者');
+    
     const currentUid = auth.currentUser ? auth.currentUser.uid : '';
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     if (input) input.value = '';
 
-    const newMsg = {
-        sender: currentUser,
-        senderUid: currentUid,
-        text: text,
-        time: timeStr,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
+    const newMsgRef = rtdb.ref(`chats/${currentActiveChatId}/messages`).push();
 
     try {
-        await db.collection('chats').doc(currentActiveChatId).collection('messages').add(newMsg);
-        
-        await db.collection('chats').doc(currentActiveChatId).set({
+        await newMsgRef.set({
+            sender: currentUser,
+            senderUid: currentUid,
+            text: text,
+            time: timeStr,
+            createdAt: Date.now()
+        });
+
+        await rtdb.ref(`chats/${currentActiveChatId}`).update({
             lastMessage: `${currentUser}: ${text}`,
             lastSenderUid: currentUid,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+            updatedAt: Date.now()
+        });
 
     } catch (err) {
-        console.error("雲端發送訊息失敗:", err);
+        console.error("RTDB 發送訊息失敗:", err);
         if (typeof showToast === 'function') showToast('發送失敗：' + err.message, 'error');
     }
 }
 
-/**
- * 📢 渲染公告列表
- */
 async function renderAnnouncements() {
     const container = document.getElementById('noticeList');
     if (!container) return;
@@ -1205,9 +797,9 @@ async function renderAnnouncements() {
     container.innerHTML = annList.map(ann => `
         <div class="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700 shadow-2xs space-y-1.5 relative">
             <div class="flex justify-between items-center">
-                <span class="font-bold text-xs text-brand-600 dark:text-brand-400">${ann.title}</span>
+                <span class="font-bold text-xs text-brand-600 dark:text-brand-400">${escapeHTML(ann.title)}</span>
                 <div class="flex items-center space-x-2">
-                    <span class="text-[10px] text-slate-400">${ann.time || ''}</span>
+                    <span class="text-[10px] text-slate-400">${escapeHTML(ann.time || '')}</span>
                     ${isAdmin ? `
                         <button type="button" onclick="deleteAnnouncement('${ann.id}')" title="刪除" class="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 rounded transition">
                             <i class="fa-solid fa-trash-can text-xs"></i>
@@ -1215,40 +807,29 @@ async function renderAnnouncements() {
                     ` : ''}
                 </div>
             </div>
-            <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${ann.content}</p>
-            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">${t('authorLabel')}${ann.author || '管理員'}</div>
+            <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${escapeHTML(ann.content)}</p>
+            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">${t('authorLabel')}${escapeHTML(ann.author || '管理員')}</div>
         </div>
     `).join('');
 }
 
-/**
- * 🗑️ 管理員刪除公告
- */
 async function deleteAnnouncement(annId) {
     if (!window.userData || window.userData.role !== 'admin') {
         if (typeof showToast === 'function') showToast('只有管理員可以刪除公告！', 'error');
         return;
     }
 
-    if (confirm('👑 管理員警告：確定要刪除該公告嗎？')) {
-        if (typeof db !== 'undefined' && annId) {
-            try {
-                await db.collection('announcements').doc(annId).delete();
-            } catch (e) {
-                console.warn("雲端刪除公告失敗：", e);
-            }
+    const rtdb = getRtdb();
+    if (confirm('👑 管理員警告：確定要刪除該公告嗎？') && rtdb) {
+        try {
+            await rtdb.ref(`announcements/${annId}`).remove();
+            if (typeof showToast === 'function') showToast('已成功刪除該公告！', 'info');
+        } catch (e) {
+            console.error("刪除公告失敗：", e);
         }
-        if (window.appAnnouncements) {
-            window.appAnnouncements = window.appAnnouncements.filter(a => a.id !== annId);
-        }
-        renderAnnouncements();
-        if (typeof showToast === 'function') showToast('管理員已成功刪除該公告！', 'info');
     }
 }
 
-/**
- * 📢 管理員提交公告
- */
 async function submitAnnouncement() {
     if (!window.userData || window.userData.role !== 'admin') {
         if (typeof showToast === 'function') showToast('只有管理員可以發布公告！', 'error');
@@ -1266,36 +847,28 @@ async function submitAnnouncement() {
         return;
     }
 
+    const rtdb = getRtdb();
+    if (!rtdb) return;
+
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-    const newAnn = {
-        title: title,
-        content: content,
-        author: window.userData.username || '管理員',
-        time: dateStr,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
+    const newRef = rtdb.ref('announcements').push();
+    try {
+        await newRef.set({
+            title: title,
+            content: content,
+            author: window.userData.nickname || auth.currentUser?.displayName || '管理員',
+            time: dateStr,
+            createdAt: Date.now()
+        });
 
-    if (typeof db !== 'undefined') {
-        try {
-            const docRef = await db.collection('announcements').add(newAnn);
-            newAnn.id = docRef.id;
-        } catch (e) {
-            console.error("寫入雲端公告失敗：", e);
-            newAnn.id = 'ann_' + Date.now();
-        }
-    } else {
-        newAnn.id = 'ann_' + Date.now();
+        if (titleInput) titleInput.value = '';
+        if (contentInput) contentInput.value = '';
+
+        if (typeof closeModal === 'function') closeModal('announceModal');
+        if (typeof showToast === 'function') showToast('官方公告已成功發布！', 'success');
+    } catch (e) {
+        console.error("發布公告失敗：", e);
     }
-
-    if (!window.appAnnouncements) window.appAnnouncements = [];
-    window.appAnnouncements.unshift(newAnn);
-
-    if (titleInput) titleInput.value = '';
-    if (contentInput) contentInput.value = '';
-
-    if (typeof closeModal === 'function') closeModal('announceModal');
-    renderAnnouncements();
-    if (typeof showToast === 'function') showToast('官方公告已成功發布並同步至雲端！', 'success');
 }

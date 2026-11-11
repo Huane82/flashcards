@@ -1,3 +1,6 @@
+import { handleGeminiAi } from "./src/aiHandler.js";
+import { handleBuyDeck } from "./src/shopHandler.js";
+
 export default {
   async fetch(request, env) {
     const corsHeaders = {
@@ -7,79 +10,24 @@ export default {
       "Access-Control-Max-Age": "86400",
     };
 
-    // 1. 優先處理 CORS OPTIONS 預檢請求
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders,
-      });
+      return new Response(null, { status: 204, headers: corsHeaders });
     }
 
+    const url = new URL(request.url);
+
     try {
-      // 2. 檢查 API Key 變數
-      const apiKey = env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return new Response(
-          JSON.stringify({ error: "伺服器未設定 GEMINI_API_KEY 環境變數" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      // 🔀 路由 1：商店金幣交易
+      if (url.pathname.endsWith("/buy-deck") && request.method === "POST") {
+        return await handleBuyDeck(request, env, corsHeaders);
       }
 
-      // 3. 解析 Body
-      let body;
-      try {
-        body = await request.json();
-      } catch (e) {
-        return new Response(
-          JSON.stringify({ error: "無效的 JSON 請求內容" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // 🌟 修正後的標準 Gemini API 模型代號 (全小寫、無空格)
-      const GEMINI_MODELS = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.6-flash",
-        "gemini-3.8-flash"
-      ];
-
-      let lastErrorData = null;
-
-      // 4. 依序嘗試呼叫指定模型
-      for (const model of GEMINI_MODELS) {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        
-        try {
-          const response = await fetch(geminiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: body.contents }),
-          });
-
-          const data = await response.json();
-
-          if (response.ok) {
-            return new Response(JSON.stringify(data), {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-
-          lastErrorData = data;
-        } catch (e) {
-          lastErrorData = { error: e.message };
-        }
-      }
-
-      // 若所有模型嘗試後皆失敗，回傳最後的報錯資料
-      return new Response(
-        JSON.stringify(lastErrorData || { error: "所有 Gemini 模型皆回應失敗" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // 🔀 預設路由：Gemini AI 萬能解析
+      return await handleGeminiAi(request, env, corsHeaders);
 
     } catch (err) {
       return new Response(
-        JSON.stringify({ error: "Worker 執行例外: " + err.message }),
+        JSON.stringify({ error: "Worker 內部例外: " + err.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

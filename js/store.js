@@ -324,68 +324,49 @@ async function purchaseStoreDeck(deckId) {
     if (!deck) return;
 
     const price = deck.price || 0;
-    const buyerUid = auth.currentUser ? auth.currentUser.uid : '';
-    const userCoins = window.userData ? (window.userData.coins || 0) : 0;
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
 
-    if (deck.authorId && deck.authorId === buyerUid) {
+    // 1. 自己發布的字庫免費取得
+    if (deck.authorId && deck.authorId === currentUser.uid) {
         if (typeof showToast === 'function') showToast('這是您發布的字庫，無需花費金幣即可直接取得！', 'info');
         importStoreDeck(deckId);
         return;
     }
 
-    if (userCoins < price) {
-        if (typeof showToast === 'function') showToast(`金幣不足！需要 ${price} 金幣，您目前有 ${userCoins} 金幣`, 'error');
-        return;
-    }
-
-    const sellerEarnings = Math.floor(price * 0.7);
-
     if (confirm(`確認花費 ${price} 金幣購買「${deck.title}」？`)) {
         try {
-            if (window.userData) window.userData.coins -= price;
-            
-            if (typeof db !== 'undefined' && buyerUid) {
-                await db.collection('users').doc(buyerUid).set({
-                    coins: firebase.firestore.FieldValue.increment(-price)
-                }, { merge: true });
-            }
+            // 2. 取得 Firebase 簽發的個人 ID Token（防偽造身分憑證）
+            const idToken = await currentUser.getIdToken();
 
-            if (typeof db !== 'undefined' && deck.authorId && sellerEarnings > 0) {
-                await db.collection('users').doc(deck.authorId).set({
-                    coins: firebase.firestore.FieldValue.increment(sellerEarnings)
-                }, { merge: true });
-            }
-
-            let addedCount = 0;
-            (deck.words || []).forEach(w => {
-                const exists = wordList.some(item => item.word.toLowerCase() === w.word.toLowerCase() && item.category === deck.title);
-                if (!exists) {
-                    wordList.push({
-                        id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                        category: deck.title,
-                        word: w.word,
-                        pos: w.pos || '',
-                        phonetic: w.phonetic || '',
-                        meaning: w.meaning || '',
-                        sentence: w.sentence || '',
-                        translation: w.translation || '',
-                        level: 1,
-                        knowStreak: 0,
-                        updatedAt: Date.now()
-                    });
-                    addedCount++;
-                }
+            // 3. 發送交易請求給 Cloudflare Worker 後端進行真實扣款
+            const res = await fetch(`${SHARED_BACKEND_URL}/buy-deck`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ 
+                    deckId: deckId,
+                    price: price,
+                    authorId: deck.authorId || ''
+                })
             });
 
-            if (typeof saveUserData === 'function') saveUserData();
-            if (typeof saveStorage === 'function') saveStorage();
-            if (typeof updateCategorySelects === 'function') updateCategorySelects();
-            if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
-            if (typeof updateUI === 'function') updateUI();
-            
-            renderStore();
+            const result = await res.json();
 
-            if (typeof showToast === 'function') showToast(`成功花費 ${price} 金幣購買「${deck.title}」！`, 'success');
+            if (!res.ok || !result.success) {
+                throw new Error(result.error || '交易失敗');
+            }
+
+            // 4. 後端驗證扣款成功後，同步更新前端金幣顯示並匯入字庫
+            if (window.userData) window.userData.coins = result.newCoins;
+            
+            importStoreDeck(deckId);
+
+            if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
+            if (typeof showToast === 'function') showToast(`成功花費 ${price} 金幣購買「${deck.title}」！剩餘金幣：${result.newCoins}`, 'success');
+
         } catch (err) {
             console.error("交易失敗:", err);
             if (typeof showToast === 'function') showToast('交易失敗：' + err.message, 'error');

@@ -1345,6 +1345,12 @@
         </div>
     </div>
 
+    <!-- Firebase 官方 SDK CDN (必須放在 js/firebase.js 之前) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script> <!-- 👈 剛新增的 RTDB SDK -->
+    
     <!-- 正確腳本載入順序 -->
     <script src="js/firebase.js"></script>
     <script src="js/storage.js"></script>

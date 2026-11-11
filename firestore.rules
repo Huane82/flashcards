@@ -1,17 +1,71 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 🛍️ 字庫商店集合：所有人皆可公開讀取，登入者可發布
-    match /storeDecks/{deckId} {
-      allow read: if true;
-      allow create, update: if request.auth != null;
-      allow delete: if request.auth != null && (resource == null || resource.data.authorId == request.auth.uid);
+
+    // 🛠️ 輔助函式：檢查是否已登入
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // 👤 其他全域功能：需登入帳號
-    match /{path=**} {
-      allow read, write: if request.auth != null;
+    // 🛠️ 輔助函式：從雲端資料庫驗證是否為真正的管理員 (非前端記憶體變數)
+    function isAdmin() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // 👤 使用者資料庫 (金幣、角色與暱稱)
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      // 使用者可修改自己的資料，但「絕對無法」自行修改 role (權限) 與 coins (金幣)
+      allow create, update: if isSignedIn() && request.auth.uid == userId 
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'coins']));
+      // 管理員擁有最高寫入權限 (發放金幣、調整角色)
+      allow write: if isAdmin();
+    }
+
+    // 🛍️ 社群字庫商店 (storeDecks)
+    match /storeDecks/{deckId} {
+      allow read: if true; // 所有人（含訪客）皆可公開瀏覽商店
+      allow create: if isSignedIn(); // 登入使用者皆可發布新字庫
+      // 只有原作者或管理員可以修改與刪除字庫
+      allow update, delete: if isSignedIn() && 
+        (resource == null || resource.data.authorId == request.auth.uid || isAdmin());
+    }
+
+    // 📢 官方公告集合 (announcements)
+    match /announcements/{annId} {
+      allow read: if true; // 所有人可看
+      allow write: if isAdmin(); // 只有資料庫認證的 Admin 能發布與刪除
+    }
+
+    // 💬 交流聊天室與訊息防禦 (chats)
+    match /chats/{chatId} {
+      allow read, create: if isSignedIn();
+      allow update: if isSignedIn() && (request.auth.uid in resource.data.members || isAdmin());
+      allow delete: if isAdmin();
+
+      // 💬 聊天室子訊息集合
+      match /messages/{msgId} {
+        allow read: if isSignedIn();
+        // 發送訊息時，必須夾帶本人真實 senderUid，防止 F12 主控台冒充他人發言
+        allow create: if isSignedIn() && request.resource.data.senderUid == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+    }
+
+    // 📩 好友申請與群組邀請
+    match /friendRequests/{reqId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /groupInvites/{invId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 🌐 預設安全備援：其他未明確定義的路徑
+    match /{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }
