@@ -100,7 +100,6 @@
                 <p class="text-[11px] text-amber-600 dark:text-amber-400 text-center font-bold pt-1">
                     <i class="fa-solid fa-lock mr-1"></i>注意：訪客模式將封鎖「聊天室」與「商店下載/發布」功能
                 </p>
-
             </div>
 
         </div>
@@ -156,21 +155,22 @@
                     </select>
                 </div>
 
-            <!-- 4. Gemini API Key (雙軌模式選擇) -->
-            <div>
-                <label class="block font-bold mb-1" data-i18n="lblApiModeTitle">Gemini AI Key 模式</label>
-                <div class="grid grid-cols-2 gap-2 mb-2">
-                    <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" checked onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
-                        <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModePersonal">個人 Key</span>
-                    </label>
-                    <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
-                        <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModeShared">免費共用 Key</span>
-                    </label>
-                </div>
-                <div id="obApiKeyBox">
-                    <input type="password" id="obApiKey" placeholder="AIzaSy..." data-i18n-placeholder="phApiKeyInput" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-mono">
+                <!-- 4. Gemini API Key (雙軌模式選擇) -->
+                <div>
+                    <label class="block font-bold mb-1" data-i18n="lblApiModeTitle">Gemini AI Key 模式</label>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" checked onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModePersonal">個人 Key</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModeShared">免費共用 Key</span>
+                        </label>
+                    </div>
+                    <div id="obApiKeyBox">
+                        <input type="password" id="obApiKey" placeholder="AIzaSy..." data-i18n-placeholder="phApiKeyInput" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-mono">
+                    </div>
                 </div>
             </div>
 
@@ -414,7 +414,7 @@
                 <div class="text-xs text-slate-400 font-medium"><span data-i18n="accuracyRate">精熟率:</span> <span id="quizScore" class="font-bold text-slate-700 dark:text-slate-200">0/0</span></div>
             </div>
 
-                    <!-- 📍【新增在這裡】測驗語言選擇頁籤 -->
+            <!-- 📍 測驗語言選擇頁籤 -->
             <div class="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
                 <button type="button" id="qlang-en" onclick="setQuizLanguage('en')" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition bg-white dark:bg-slate-700 text-brand-600 dark:text-brand-400 shadow-2xs" data-i18n="quizLangEn">
                     🇬🇧 英文
@@ -1003,32 +1003,31 @@
                 選擇 API 金鑰模式以啟用自動生成單字音標、詞性、母語釋義及例句翻譯功能。
             </p>
 
-                <!-- 🌟 雙軌模式切換選單 -->
-                <div class="space-y-3">
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300" data-i18n="lblApiKeySource">API 金鑰來源</label>
-                    <div class="grid grid-cols-2 gap-2.5">
-                        <label class="flex items-center space-x-2 border border-slate-200 dark:border-slate-700 rounded-xl p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
-                            <input type="radio" name="apiMode" value="personal" id="apiModePersonal" onchange="switchApiMode('personal')" class="text-brand-600 focus:ring-brand-500">
-                            <div class="text-xs font-bold text-slate-800 dark:text-slate-100">
-                                <span data-i18n="lblApiPersonalKey">個人 API Key</span>
-                                <div class="text-[10px] text-slate-400 font-normal" data-i18n="lblApiPersonalKeyDesc">獨享 200 字大批次</div>
-                            </div>
-                        </label>
-                        <label class="flex items-center space-x-2 border border-slate-200 dark:border-slate-700 rounded-xl p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
-                            <input type="radio" name="apiMode" value="shared" id="apiModeShared" onchange="switchApiMode('shared')" class="text-brand-600 focus:ring-brand-500">
-                            <div class="text-xs font-bold text-slate-800 dark:text-slate-100">
-                                <span data-i18n="lblApiSharedKey">免費共用 Key</span>
-                                <div class="text-[10px] text-slate-400 font-normal" data-i18n="lblApiSharedKeyDesc">免設定，全站共享</div>
-                            </div>
-                        </label>
-                    </div>
+            <!-- 🌟 雙軌模式切換選單 -->
+            <div class="space-y-3">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300" data-i18n="lblApiKeySource">API 金鑰來源</label>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <label class="flex items-center space-x-2 border border-slate-200 dark:border-slate-700 rounded-xl p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                        <input type="radio" name="apiMode" value="personal" id="apiModePersonal" onchange="switchApiMode('personal')" class="text-brand-600 focus:ring-brand-500">
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            <span data-i18n="lblApiPersonalKey">個人 API Key</span>
+                            <div class="text-[10px] text-slate-400 font-normal" data-i18n="lblApiPersonalKeyDesc">獨享 200 字大批次</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center space-x-2 border border-slate-200 dark:border-slate-700 rounded-xl p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                        <input type="radio" name="apiMode" value="shared" id="apiModeShared" onchange="switchApiMode('shared')" class="text-brand-600 focus:ring-brand-500">
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            <span data-i18n="lblApiSharedKey">免費共用 Key</span>
+                            <div class="text-[10px] text-slate-400 font-normal" data-i18n="lblApiSharedKeyDesc">免設定，全站共享</div>
+                        </div>
+                    </label>
                 </div>
+            </div>
 
-                <!-- 個人 Key 輸入框 (選免費共用時會自動隱藏) -->
-                <div id="personalKeyInputBox" class="pt-1">
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblApiKeyInput">個人 API Key</label>
-                    <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm font-mono outline-none">
-                </div>
+            <!-- 個人 Key 輸入框 (選免費共用時會自動隱藏) -->
+            <div id="personalKeyInputBox" class="pt-1">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblApiKeyInput">個人 API Key</label>
+                <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm font-mono outline-none">
             </div>
 
             <div class="pt-2 flex justify-end space-x-2">
@@ -1193,12 +1192,6 @@
                 <div>
                     <label class="block text-xs font-bold text-slate-500 mb-1" data-i18n="lblPubPrice">下載所需金幣 (0 表示免費分享)</label>
                     <input type="number" id="pubPrice" value="0" min="0" data-i18n-placeholder="phPubPrice" placeholder="例如：100" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
-                </div>
-
-                <!-- 🪙 設定字庫下載價格 -->
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1" data-i18n="lblPubPrice">下載所需金幣 (0 表示免費分享)</label>
-                    <input type="number" id="pubPrice" value="0" min="0" data-i18n-placeholder="phPubPrice" placeholder="例如：100" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
                     <!-- 💡 抽成 30% 提示標籤 -->
                     <p class="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1" data-i18n="descPubPriceTax">
                         💡 提示：商店將扣除 30% 平台抽成，創作者實際獲得 70% 金幣收益。
@@ -1280,6 +1273,28 @@
                     </div>
                 </div>
 
+                <!-- 🌐 線上人數與在線名單區塊 (歸位至抽屜內部) -->
+                <div class="p-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <!-- 線上人數統計標籤 -->
+                        <span id="onlineUserCountText" class="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                            <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                            線上人數：0 人
+                        </span>
+                    </div>
+                    
+                    <!-- 一般玩家可見的在線使用者列表 -->
+                    <div id="onlineUsersListContainer" class="max-h-24 overflow-y-auto space-y-1 custom-scrollbar">
+                        <!-- JS 動態渲染線上使用者 -->
+                    </div>
+
+                    <!-- 👑 管理員專用透視監控面板 (預設隱藏) -->
+                    <div id="adminOnlineMonitorPanel" class="hidden mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <div class="text-[10px] font-bold text-rose-500 dark:text-rose-400 mb-1">👑 管理員全站線上監控面板</div>
+                        <div id="adminOnlineMonitorList" class="max-h-32 overflow-y-auto space-y-1"></div>
+                    </div>
+                </div>
+
                 <!-- 3. 抽屜內容區域 -->
                 <div class="flex-1 overflow-y-auto p-4 relative space-y-3">
 
@@ -1348,28 +1363,6 @@
                 <button type="button" onclick="closeModal('announceModal')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-xs font-bold rounded-xl" data-i18n="btnCancel">取消</button>
                 <button type="button" onclick="submitAnnouncement()" class="px-4 py-2 bg-rose-600 text-white text-xs font-bold rounded-xl" data-i18n="btnPubAnnounceSubmit">發布公告</button>
             </div>
-        </div>
-    </div>
-
-    <!-- 🌐 線上人數與在線名單區塊 -->
-<div class="p-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
-    <div class="flex items-center justify-between mb-2">
-        <!-- 線上人數統計標籤 -->
-        <span id="onlineUserCountText" class="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-            <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-            線上人數：0 人
-        </span>
-    </div>
-    
-    <!-- 一般玩家可見的在線使用者列表 -->
-    <div id="onlineUsersListContainer" class="max-h-24 overflow-y-auto space-y-1 custom-scrollbar">
-            <!-- JS 動態渲染線上使用者 -->
-        </div>
-
-        <!-- 👑 管理員專用透視監控面板 (預設隱藏) -->
-        <div id="adminOnlineMonitorPanel" class="hidden mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-            <div class="text-[10px] font-bold text-rose-500 dark:text-rose-400 mb-1">👑 管理員全站線上監控面板</div>
-            <div id="adminOnlineMonitorList" class="max-h-32 overflow-y-auto space-y-1"></div>
         </div>
     </div>
 
