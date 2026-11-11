@@ -289,14 +289,11 @@ function handleWelcomeGuestLogin() {
         if (typeof saveUserData === 'function') saveUserData();
     }
 
+    // 1. 關閉歡迎與條款彈窗
     closeWelcomeModal();
     
-    // 🚀 關鍵修復：關閉歡迎彈窗後，立刻檢查並開啟新手設定/導覽
-    if (typeof checkOnboardingStatus === 'function') {
-        checkOnboardingStatus();
-    } else if (typeof startInteractiveTour === 'function') {
-        startInteractiveTour();
-    }
+    // 2. 立刻檢查並開啟新手設定彈窗
+    checkAndOpenOnboardingModal();
 
     if (typeof showToast === 'function') showToast('已以訪客身份進入系統！', 'success');
 }
@@ -327,10 +324,8 @@ function checkAuthAndTosState() {
                 closeWelcomeModal();
                 syncSettingsUI();
 
-                // 🚀 關鍵修復：登入成功後，立刻檢查並開啟新手設定/導覽
-                if (typeof checkOnboardingStatus === 'function') {
-                    checkOnboardingStatus();
-                }
+                // 🟢 登入成功時，立刻檢查並開啟新手設定彈窗
+                checkAndOpenOnboardingModal();
             } else if (isGuest && tosAccepted) {
                 closeWelcomeModal();
             } else {
@@ -387,3 +382,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+/**
+ * 🚀 檢查是否已完成新手設定，若未完成則自動開啟設定彈窗
+ */
+function checkAndOpenOnboardingModal() {
+    const onboardingCompleted = localStorage.getItem('lzhcard_onboarding_completed') === 'true';
+    
+    // 若尚未完成新手設定，則打開 onboardingSetupModal
+    if (!onboardingCompleted) {
+        const setupModal = document.getElementById('onboardingSetupModal');
+        if (setupModal) {
+            setupModal.classList.remove('hidden');
+            setupModal.classList.add('flex');
+        }
+    }
+}
