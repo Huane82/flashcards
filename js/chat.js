@@ -291,7 +291,7 @@ async function renderFriendsList() {
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                         <i class="fa-solid fa-user-clock text-amber-600"></i>
-                        <span>${t('pendingRequests')} (${pendingRequestsList.length})</span>
+                        <span>${typeof t === 'function' ? t('pendingRequests') : '好友申請'} (${pendingRequestsList.length})</span>
                     </span>
                 </div>
                 <div class="space-y-2">
@@ -307,10 +307,10 @@ async function renderFriendsList() {
                 </div>
                 <div class="flex items-center space-x-1.5">
                     <button type="button" onclick="handleAcceptFriendRequest('${req.id}', '${req.fromUid}', '${encodeURIComponent(req.fromNickname)}', '${req.fromEmail || ''}', '${encodeURIComponent(req.fromAvatar || '')}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition shadow-2xs">
-                        ${t('btnAccept')}
+                        ${typeof t === 'function' ? t('btnAccept') : '接受'}
                     </button>
                     <button type="button" onclick="handleRejectFriendRequest('${req.id}')" class="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg transition">
-                        ${t('btnReject')}
+                        ${typeof t === 'function' ? t('btnReject') : '拒絕'}
                     </button>
                 </div>
             </div>
@@ -324,7 +324,7 @@ async function renderFriendsList() {
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
                         <i class="fa-solid fa-users-rectangle text-purple-600"></i>
-                        <span>${t('pendingGroupInvites')} (${pendingGroupInvitesList.length})</span>
+                        <span>${typeof t === 'function' ? t('pendingGroupInvites') : '群組邀請'} (${pendingGroupInvitesList.length})</span>
                     </span>
                 </div>
                 <div class="space-y-2">
@@ -336,14 +336,14 @@ async function renderFriendsList() {
                         <i class="fa-solid fa-users text-purple-500 text-[10px]"></i>
                         <span>${escapeHTML(inv.groupName)}</span>
                     </h4>
-                    <p class="text-[10px] text-slate-400 mt-0.5">${t('inviter')}<span class="font-semibold text-slate-600 dark:text-slate-300">${escapeHTML(inv.inviterNickname)}</span></p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">${typeof t === 'function' ? t('inviter') : '邀請者：'}<span class="font-semibold text-slate-600 dark:text-slate-300">${escapeHTML(inv.inviterNickname)}</span></p>
                 </div>
                 <div class="flex items-center space-x-1.5">
                     <button type="button" onclick="handleAcceptGroupInvite('${inv.id}', '${inv.groupId}', '${encodeURIComponent(inv.groupName)}')" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold rounded-lg transition shadow-2xs">
-                        ${t('btnJoin')}
+                        ${typeof t === 'function' ? t('btnJoin') : '加入'}
                     </button>
                     <button type="button" onclick="handleRejectGroupInvite('${inv.id}')" class="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-lg transition">
-                        ${t('btnReject')}
+                        ${typeof t === 'function' ? t('btnReject') : '拒絕'}
                     </button>
                 </div>
             </div>
@@ -356,9 +356,9 @@ async function renderFriendsList() {
             <div onclick="sendFriendRequestByEmail('${escapeHTML(query)}', this)" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-300">
                     <i class="fa-solid fa-paper-plane text-sm"></i>
-                    <span class="text-xs font-bold">${t('sendFriendReqTo', { query: escapeHTML(query) })}</span>
+                    <span class="text-xs font-bold">發送好友申請給：${escapeHTML(query)}</span>
                 </div>
-                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">${t('btnSendReq')}</span>
+                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">發送申請</span>
             </div>
         `;
     }
@@ -369,12 +369,12 @@ async function renderFriendsList() {
     );
 
     if (filteredFriends.length === 0 && !html) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${t('emptyFriendSearchResult', { query: escapeHTML(query) })}</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">查無符合「${escapeHTML(query)}」的好友</div>`;
         return;
     }
 
     if (filteredFriends.length > 0) {
-        html += `<div class="text-[11px] font-bold text-slate-500 mb-1">${t('myFriendsList')}</div>`;
+        html += `<div class="text-[11px] font-bold text-slate-500 mb-1">我的好友列表</div>`;
         html += filteredFriends.map(f => {
             const displayName = f.nickname || f.username;
             return `
@@ -388,7 +388,7 @@ async function renderFriendsList() {
                     </div>
                     <button type="button" onclick="startPrivateChat('${encodeURIComponent(displayName)}', '${f.uid || ''}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
                         <i class="fa-solid fa-comment-dots"></i>
-                        <span>${t('typePrivate')}</span>
+                        <span>發送私訊</span>
                     </button>
                 </div>
             `;
@@ -592,13 +592,13 @@ async function renderChatThreads(isAdminInspector = false) {
         <div class="mb-3">
             <button type="button" onclick="createGroupPrompt()" class="w-full py-2 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-700 hover:to-purple-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center space-x-1.5">
                 <i class="fa-solid fa-users-rectangle text-sm"></i>
-                <span>${t('btnCreateGroup')}</span>
+                <span>建立新群組</span>
             </button>
         </div>
     `;
 
     if (threads.length === 0) {
-        html += `<div class="text-center text-slate-400 py-8 text-xs">${t('emptyChatThreads')}</div>`;
+        html += `<div class="text-center text-slate-400 py-8 text-xs">目前沒有可顯示的對話頻道</div>`;
         container.innerHTML = html;
         return;
     }
@@ -622,9 +622,9 @@ async function renderChatThreads(isAdminInspector = false) {
                     <div>
                         <div class="flex items-center space-x-1.5">
                             <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${escapeHTML(displayName)}</h4>
-                            <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? t('typeGroup') : t('typePrivate')}</span>
+                            <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? '群組' : '私訊'}</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${escapeHTML(c.lastMessage || t('clickToStartChat'))}</p>
+                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${escapeHTML(c.lastMessage || '點擊開始對話...')}</p>
                     </div>
                 </div>
 
@@ -694,7 +694,7 @@ function renderMessagesList(messages = []) {
     const isAdmin = window.userData && window.userData.role === 'admin';
 
     if (messages.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">${t('noMessages')}</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">尚無聊天訊息，輸入第一條訊息開始交流吧！</div>`;
         return;
     }
 
@@ -790,7 +790,7 @@ async function renderAnnouncements() {
     let annList = window.appAnnouncements || [];
 
     if (annList.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${t('noAnnouncements')}</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">目前尚無系統公告</div>`;
         return;
     }
 
@@ -808,7 +808,7 @@ async function renderAnnouncements() {
                 </div>
             </div>
             <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${escapeHTML(ann.content)}</p>
-            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">${t('authorLabel')}${escapeHTML(ann.author || '管理員')}</div>
+            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">發布者：${escapeHTML(ann.author || '管理員')}</div>
         </div>
     `).join('');
 }
@@ -826,13 +826,21 @@ async function deleteAnnouncement(annId) {
             if (typeof showToast === 'function') showToast('已成功刪除該公告！', 'info');
         } catch (e) {
             console.error("刪除公告失敗：", e);
+            if (typeof showToast === 'function') showToast('刪除失敗：' + e.message, 'error');
         }
     }
 }
 
+/**
+ * 📢 發布公告核心邏輯（加強除錯與權限驗證）
+ */
 async function submitAnnouncement() {
+    // 1. 驗證前端角色權限
     if (!window.userData || window.userData.role !== 'admin') {
-        if (typeof showToast === 'function') showToast('只有管理員可以發布公告！', 'error');
+        const currentRole = window.userData?.role || '訪客';
+        if (typeof showToast === 'function') {
+            showToast(`只有管理員可以發布公告！(目前前端身分：${currentRole})`, 'error');
+        }
         return;
     }
 
@@ -843,13 +851,14 @@ async function submitAnnouncement() {
     const content = (contentInput?.value || '').trim();
 
     if (!title || !content) {
-        if (typeof showToast === 'function') showToast('請填寫完整公告內容！', 'warning');
+        if (typeof showToast === 'function') showToast('請填寫完整公告標題與內容！', 'warning');
         return;
     }
 
+    // 2. 檢查 RTDB 實例
     const rtdb = getRtdb();
     if (!rtdb) {
-        if (typeof showToast === 'function') showToast('資料庫未成功連線！', 'error');
+        if (typeof showToast === 'function') showToast('Realtime Database SDK 未成功初始化！', 'error');
         return;
     }
 
@@ -861,7 +870,7 @@ async function submitAnnouncement() {
         await newRef.set({
             title: title,
             content: content,
-            author: window.userData.nickname || auth.currentUser?.displayName || '管理員',
+            author: window.userData.nickname || firebase.auth()?.currentUser?.displayName || '官方管理員',
             time: dateStr,
             createdAt: Date.now()
         });
@@ -870,9 +879,11 @@ async function submitAnnouncement() {
         if (contentInput) contentInput.value = '';
 
         if (typeof closeModal === 'function') closeModal('announceModal');
-        if (typeof showToast === 'function') showToast('官方公告已成功發布！', 'success');
+        if (typeof showToast === 'function') showToast('🎉 官方公告已成功發布！', 'success');
     } catch (e) {
         console.error("發布公告失敗：", e);
-        if (typeof showToast === 'function') showToast('發布公告失敗：' + e.message, 'error');
+        if (typeof showToast === 'function') {
+            showToast(`發布公告失敗 (${e.code || 'PERMISSION_DENIED'}): ${e.message}`, 'error');
+        }
     }
 }
