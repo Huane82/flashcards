@@ -1,5 +1,5 @@
 /**
- * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine - 25字黃金穩定版)
+ * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine - 40字高效版)
  */
 
 window.cachedWorkingModel = null;
@@ -7,7 +7,7 @@ window.cachedWorkingModel = null;
 // 🌐 Cloudflare Worker 免費共用後端中繼站網址
 const SHARED_BACKEND_URL = "https://lzhcard.tomlin980415.workers.dev";
 
-// ⚠️ 標準 Gemini API 模型名稱 (全小寫、連字號)
+// ⚠️ 保留您指定使用的模型陣列
 const GEMINI_MODELS = [
     "gemini-3.5-flash-lite",
     "gemini-3.6-flash",
@@ -382,7 +382,7 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 20; // 🌟 每批 30 字
+    const batchSize = 40; // 🌟 設定為每批 40 字
     let completedCount = 0;
     let successUpdatedCount = 0;
 
@@ -431,8 +431,8 @@ Return ONLY a pure JSON array matching input order:
             }
 
             if (!rawResponse && attempt < maxAttempts) {
-                console.warn(`[AI Batch Retry] 批次解析暫時中斷 (${lastErrorMsg})，等待 ${attempt * 2} 秒後進行重試...`);
-                await new Promise(r => setTimeout(r, 1500));
+                console.warn(`[AI Batch Retry] 批次解析暫時中斷 (${lastErrorMsg})，等待 1.5 秒後進行重試...`);
+                await new Promise(r => setTimeout(r, 1500)); // 🌟 已改為固定 1500 ms
             }
         }
 
@@ -471,7 +471,7 @@ Return ONLY a pure JSON array matching input order:
                     }
                 });
 
-                // 💾 🌟 核心修改點：每完成一批（20字），立刻寫入 LocalStorage 存檔並即時更新 UI
+                // 💾 🌟 核心：每完成一批（40字），立刻寫入 LocalStorage 存檔並即時更新 UI
                 if (typeof saveStorage === 'function') {
                     saveStorage();
                 }
