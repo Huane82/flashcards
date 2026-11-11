@@ -1,5 +1,5 @@
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -7,6 +7,7 @@ export default {
       "Access-Control-Max-Age": "86400",
     };
 
+    // 1. 處理預檢請求 (OPTIONS)
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -15,6 +16,7 @@ export default {
     }
 
     try {
+      // 2. 檢查 API Key 變數
       const apiKey = env.GEMINI_API_KEY;
       if (!apiKey) {
         return new Response(
@@ -23,9 +25,19 @@ export default {
         );
       }
 
-      const body = await request.json();
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      // 3. 讀取 Body
+      let body;
+      try {
+        body = await request.json();
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: "無效的 JSON 請求內容" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
+      // 4. 呼叫 Google Gemini API
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
       const response = await fetch(geminiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,7 +53,7 @@ export default {
 
     } catch (err) {
       return new Response(
-        JSON.stringify({ error: "Worker 內部錯誤: " + err.message }),
+        JSON.stringify({ error: "Worker 執行例外: " + err.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
