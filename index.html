@@ -128,13 +128,13 @@
             <!-- 📍 步驟 1：語言偏好設定 (優先確認語言) -->
             <div id="obStep1" class="space-y-4 text-xs">
                 <div class="flex items-center justify-between font-bold text-brand-600 dark:text-brand-400 pb-1 border-b border-slate-100 dark:border-slate-700">
-                    <span>步驟 1 / 2：選擇語言 (Step 1/2)</span>
+                    <span data-i18n="obStep1Title">步驟 1 / 2：選擇語言</span>
                 </div>
 
                 <!-- 1. 母語 -->
                 <div>
                     <label class="block font-bold mb-1" data-i18n="lblNativeLang">使用者母語 (Native Language)</label>
-                    <select id="obNativeLang" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold">
+                    <select id="obNativeLang" onchange="handleObNativeChange(this.value)" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold">
                         <option value="zh-TW">🇹🇼 繁體中文</option>
                         <option value="en">🇺🇸 English</option>
                         <option value="ja">🇯🇵 日本語</option>
@@ -166,7 +166,7 @@
             <!-- 📍 步驟 2：顯示模式與 API Key 模式設定 (預設隱藏) -->
             <div id="obStep2" class="hidden space-y-4 text-xs">
                 <div class="flex items-center justify-between font-bold text-brand-600 dark:text-brand-400 pb-1 border-b border-slate-100 dark:border-slate-700">
-                    <span>步驟 2 / 2：顯示模式與 API 偏好 (Step 2/2)</span>
+                    <span data-i18n="obStep2Title">步驟 2 / 2：顯示模式與 API 偏好</span>
                 </div>
 
                 <!-- 3. 卡片顯示模式 -->
