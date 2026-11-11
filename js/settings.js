@@ -325,7 +325,12 @@ function checkAuthAndTosState() {
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
                 closeWelcomeModal();
-                syncSettingsUI(); // 🟢 登入成功時同步設定區 UI 開關狀態
+                syncSettingsUI();
+
+                // 🚀 關鍵修復：登入成功後，立刻檢查並開啟新手設定/導覽
+                if (typeof checkOnboardingStatus === 'function') {
+                    checkOnboardingStatus();
+                }
             } else if (isGuest && tosAccepted) {
                 closeWelcomeModal();
             } else {
