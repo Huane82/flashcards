@@ -84,6 +84,8 @@ const I18N_DICTIONARY = {
         descNickname: "登入後固定綁定帳號，防止他人盜用身份發布",
         phNicknameInput: "設定您的固定暱稱...",
         btnSaveNickname: "儲存暱稱",
+        lblPrivacyStatus: "隱藏線上狀態與訊息已讀",
+        descPrivacyStatus: "開啟後其他玩家將無法看到您的在線狀態",
         guestMode: "訪客模式",
         notLinkedGoogle: "目前未連結 Google 帳號",
         btnLoginGoogle: "使用 Google 帳號登入",
@@ -204,6 +206,9 @@ const I18N_DICTIONARY = {
         phPubTitle: "例如：JLPT N3 高頻動詞 100 選",
         lblPubPrice: "下載所需金幣 (0 表示免費分享)",
         phPubPrice: "例如：100",
+        descPubPriceTax: "💡 提示：商店將扣除 30% 平台手續費，創作者實際獲得 70% 金幣收益。",
+        lblPubTags: "字庫標籤 (Tags)",
+        phPubTags: "例如：JLPT, N3, 動詞 (用逗號隔開)",
         lblPubAuthor: "發布者暱稱 (已鎖定帳號)：",
         lblPubDesc: "字庫簡介",
         phPubDesc: "簡短說明這個字庫包含什麼內容...",
@@ -372,24 +377,17 @@ const I18N_DICTIONARY = {
         descTourGuide: "重新開啟新手介面指引教學",
         btnStartTour: "開啟導覽",
         tourCatTitle: "字庫選擇器",
-        
         tourCatDesc: "點擊可切換或多選要學習的單字庫，彈性過濾學習目標。",
-
         tourChatTitle: "交流聊天室",
         tourChatDesc: "開啟全站公開討論區或 1-on-1 私訊，與其他創作者交流或尋求幫助。",
-
         tourHomeTitle: "核心學習模式",
         tourHomeDesc: "提供「卡片輪播 (艾賓浩斯演算法)」與「多元隨堂測驗」兩種高效記憶模式。",
-
         tourListTitle: "字庫管理",
         tourListDesc: "管理您的單字清單，支援 Gemini AI 智慧補齊、批量貼上解析與 JSON 備份。",
-
         tourStoreTitle: "字庫商店",
         tourStoreDesc: "探索、預覽與下載社群創作者分享的優秀字庫，亦可發布自製字庫賺取金幣。",
-
         tourStatsTitle: "學習成果統計",
         tourStatsDesc: "視覺化圖表呈現總單字累積量、掌握率及艾賓浩斯 5 級熟練度分佈。",
-
         tourSettingsTitle: "帳號與系統設定",
         tourSettingsDesc: "設定固定暱稱、母語/學習目標語言、卡片正面顯示模式及 Gemini API Key。"
     },
@@ -433,8 +431,8 @@ const I18N_DICTIONARY = {
         btnSubmit: "Submit",
         btnNext: "Next",
 
-        btnAddWord: "add one",
-        btnBatchImport: "Add words",
+        btnAddWord: "Add One",
+        btnBatchImport: "Add Words",
         btnBackup: "JSON Backup",
         btnSplit: "Split",
         btnClear: "Clear All",
@@ -468,6 +466,8 @@ const I18N_DICTIONARY = {
         descNickname: "Bound to account once set to prevent impersonation",
         phNicknameInput: "Set your fixed nickname...",
         btnSaveNickname: "Save Nickname",
+        lblPrivacyStatus: "Hide Online Status & Read Receipts",
+        descPrivacyStatus: "Hide your online status from other players when enabled",
         guestMode: "Guest Mode",
         notLinkedGoogle: "Google Account not linked",
         btnLoginGoogle: "Sign in with Google",
@@ -585,6 +585,9 @@ const I18N_DICTIONARY = {
         phPubTitle: "e.g. JLPT N3 Essential Verbs",
         lblPubPrice: "Coins Required (0 = Free)",
         phPubPrice: "e.g. 100",
+        descPubPriceTax: "💡 Note: A 30% platform fee is deducted. Creators receive 70% of proceeds.",
+        lblPubTags: "Deck Tags",
+        phPubTags: "e.g., JLPT, N3, Verbs (separated by commas)",
         lblPubAuthor: "Publisher Nickname:",
         lblPubDesc: "Description",
         phPubDesc: "Short summary of this deck...",
@@ -747,25 +750,18 @@ const I18N_DICTIONARY = {
         lblTourGuide: "App Feature Tour",
         descTourGuide: "Reopen the interactive beginner tutorial",
         btnStartTour: "Start Tour",
-
         tourCatTitle: "Deck Selector",
         tourCatDesc: "Click to switch or multi-select word decks to customize your study scope.",
-
         tourChatTitle: "Community Chat",
         tourChatDesc: "Open public forums or 1-on-1 private messaging to discuss and connect with others.",
-
         tourHomeTitle: "Learning Modes",
         tourHomeDesc: "Includes Interactive Flashcards (Ebbinghaus algorithm) and Multiple-mode Quizzes.",
-
         tourListTitle: "Deck Management",
         tourListDesc: "Manage your vocabulary list with AI auto-fill, batch text import, and JSON backup.",
-
         tourStoreTitle: "Deck Store",
         tourStoreDesc: "Explore and download community decks, or publish your own to earn coins.",
-
         tourStatsTitle: "Learning Analytics",
         tourStatsDesc: "Visualized charts showing vocabulary growth, mastery rate, and level distributions.",
-
         tourSettingsTitle: "System Settings",
         tourSettingsDesc: "Configure your nickname, native/target languages, card display mode, and Gemini API Key."
     },
@@ -779,9 +775,9 @@ const I18N_DICTIONARY = {
         catAll: "すべての単語帳",
         defaultCategoryName: "デフォルト",
         categoryDropdownBtnText: "単語帳未選択",
-        noCategorySelected: "未選擇の單字帳",
-        selectedPrefix: "選擇中:",
-        unitDeck: "個の單字帳",
+        noCategorySelected: "未選択の単語帳",
+        selectedPrefix: "選択中:",
+        unitDeck: "個の単語帳",
 
         homeTitle: "学習モードを選択",
         homeDesc: "効率的に記憶力を高めましょう",
@@ -844,6 +840,8 @@ const I18N_DICTIONARY = {
         descNickname: "ストア公開やチャットで使用されます",
         phNicknameInput: "ニックネームを入力...",
         btnSaveNickname: "保存",
+        lblPrivacyStatus: "オンライン状態と既読を非表示",
+        descPrivacyStatus: "有効にすると他のユーザーからオンライン状態が見えなくなります",
         guestMode: "ゲストモード",
         notLinkedGoogle: "Googleアカウント未連携",
         btnLoginGoogle: "Googleでログイン",
@@ -961,6 +959,9 @@ const I18N_DICTIONARY = {
         phPubTitle: "例: JLPT N3 重要動詞",
         lblPubPrice: "必要コイン (0 = 無料)",
         phPubPrice: "例: 100",
+        descPubPriceTax: "💡 ヒント：プラットフォーム手数料30%が引き落とされ、クリエイターには70%が還元されます。",
+        lblPubTags: "単語帳タグ",
+        phPubTags: "例：JLPT, N3, 動詞 (カンマ区切り)",
         lblPubAuthor: "作者ニックネーム：",
         lblPubDesc: "説明文",
         phPubDesc: "この単語帳の概要...",
@@ -1123,25 +1124,18 @@ const I18N_DICTIONARY = {
         lblTourGuide: "機能ガイド",
         descTourGuide: "初心者向けのチュートリアルを再開します",
         btnStartTour: "ツアーを開始",
-
         tourCatTitle: "単語帳セレクター",
         tourCatDesc: "クリックして学習したい単語帳を切り替え・複数選択できます。",
-
         tourChatTitle: "交流チャットルーム",
         tourChatDesc: "全体チャットや1対1のメッセージで他の学習者と交流できます。",
-
         tourHomeTitle: "コア学習モード",
         tourHomeDesc: "エビングハウス暗記カードと多様なクイズモードで効率的に学習します。",
-
         tourListTitle: "単語帳管理",
         tourListDesc: "AI自動補完、一括テキスト解析、JSONバックアップに対応した単語管理画面です。",
-
         tourStoreTitle: "単語帳ストア",
         tourStoreDesc: "コミュニティの単語帳を試聴・ダウンロードしたり、自作単語帳を販売できます。",
-
         tourStatsTitle: "学習成果統計",
         tourStatsDesc: "総単語数、習得率、エビングハウスレベルの分布をグラフで視覚化します。",
-
         tourSettingsTitle: "アカウント＆設定",
         tourSettingsDesc: "ニックネーム、母国語・目標言語、カード表示モード、Gemini API Keyを設定します。"
     }

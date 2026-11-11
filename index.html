@@ -1182,6 +1182,16 @@
                     <input type="number" id="pubPrice" value="0" min="0" data-i18n-placeholder="phPubPrice" placeholder="例如：100" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
                 </div>
 
+                <!-- 🪙 設定字庫下載價格 -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1" data-i18n="lblPubPrice">下載所需金幣 (0 表示免費分享)</label>
+                    <input type="number" id="pubPrice" value="0" min="0" data-i18n-placeholder="phPubPrice" placeholder="例如：100" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <!-- 💡 抽成 30% 提示標籤 -->
+                    <p class="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1" data-i18n="descPubPriceTax">
+                        💡 提示：商店將扣除 30% 平台抽成，創作者實際獲得 70% 金幣收益。
+                    </p>
+                </div>
+
                 <div class="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-center text-xs">
                     <span class="font-bold text-slate-500" data-i18n="lblPubAuthor">發布者暱稱 (已鎖定帳號)：</span>
                     <span id="pubAuthorDisplay" class="font-extrabold text-brand-600 dark:text-brand-400">載入中...</span>
