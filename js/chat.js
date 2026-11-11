@@ -848,7 +848,10 @@ async function submitAnnouncement() {
     }
 
     const rtdb = getRtdb();
-    if (!rtdb) return;
+    if (!rtdb) {
+        if (typeof showToast === 'function') showToast('資料庫未成功連線！', 'error');
+        return;
+    }
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -870,5 +873,6 @@ async function submitAnnouncement() {
         if (typeof showToast === 'function') showToast('官方公告已成功發布！', 'success');
     } catch (e) {
         console.error("發布公告失敗：", e);
+        if (typeof showToast === 'function') showToast('發布公告失敗：' + e.message, 'error');
     }
 }
