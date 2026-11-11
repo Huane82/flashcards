@@ -156,22 +156,21 @@
                     </select>
                 </div>
 
-                <!-- 4. Gemini API Key (雙軌模式選擇) -->
-                <div>
-                    <label class="block font-bold mb-1" data-i18n="lblApiKey">Gemini AI Key 模式</label>
-                    <div class="grid grid-cols-2 gap-2 mb-2">
-                        <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                            <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" checked onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
-                            <span class="font-bold text-slate-800 dark:text-slate-100">個人 Key</span>
-                        </label>
-                        <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                            <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
-                            <span class="font-bold text-slate-800 dark:text-slate-100">免費共用 Key</span>
-                        </label>
-                    </div>
-                    <div id="obApiKeyBox">
-                        <input type="password" id="obApiKey" placeholder="AIzaSy..." class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-mono">
-                    </div>
+            <!-- 4. Gemini API Key (雙軌模式選擇) -->
+            <div>
+                <label class="block font-bold mb-1" data-i18n="lblApiModeTitle">Gemini AI Key 模式</label>
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" checked onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
+                        <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModePersonal">個人 Key</span>
+                    </label>
+                    <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
+                        <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModeShared">免費共用 Key</span>
+                    </label>
+                </div>
+                <div id="obApiKeyBox">
+                    <input type="password" id="obApiKey" placeholder="AIzaSy..." data-i18n-placeholder="phApiKeyInput" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-mono">
                 </div>
             </div>
 

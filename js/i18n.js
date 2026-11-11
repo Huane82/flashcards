@@ -46,6 +46,29 @@ const I18N_DICTIONARY = {
         btnSubmit: "提交答案",
         btnNext: "下一題",
 
+        // 隨堂測驗獨有 i18n
+        quizNoSentenceWarning: "⚠️ 當前選取的字庫中尚無具備英文例句的單字！",
+        quizNoSentenceDesc: "隨堂測驗已開啟過濾保護（僅考有英文例句的單字）。<br>沒有例句的單字可先至「<span class=\"font-bold text-brand-600 dark:text-brand-400\">卡片輪播</span>」背誦，或點擊「批量貼上」使用 AI 補齊例句。",
+        quizBadgeWaiting: "等待例句補齊",
+        quizBadgeMode1: "模式 1：純英文上下文聯想",
+        quizTitleMode1: "英文上下文提示 (填出挖空單字)：",
+        quizHintMask: "[提示遮罩: {word}]",
+        quizBadgeMode2: "模式 2：詞性與繁中釋義對照",
+        quizTitleMode2: "中文釋義與詞性提示：",
+        quizNoMeaningFilled: "（未填寫釋義）",
+        quizBadgeMode3: "模式 3：🎯 句意對照挖空",
+        quizTitleMode3: "中英文句意對照：",
+        quizNoTranslation: "（無翻譯對照）",
+        quizTranslationPrefix: "中文對照: ",
+        quizCorrectMsg: "恭喜答對！",
+        quizWrongMsg: "答錯了！正確答案是：",
+        quizMeaningLabel: "釋義：",
+        quizLangEn: "🇬🇧 英文",
+        quizLangZh: "🇹🇼 中文 (開發中)",
+        quizLangJa: "🇯🇵 日文 (開發中)",
+        quizDevTitle: "🚧 功能開發中",
+        quizDevDesc: "中文與日文隨堂測驗模式正在全力開發中，敬請期待！",
+
         // 字庫管理 View
         btnAddWord: "個別填入",
         btnBatchImport: "批量單字",
@@ -101,6 +124,10 @@ const I18N_DICTIONARY = {
         lblTheme: "外觀主題設定",
         descTheme: "可手動切換或跟隨手機系統預設",
         lblApiKey: "Gemini AI Key",
+        lblApiModeTitle: "Gemini AI Key 模式",
+        lblApiModePersonal: "個人 Key",
+        lblApiModeShared: "免費共用 Key",
+        phApiKeyInput: "輸入您的 Gemini API Key (AIzaSy...)",
         descApiKey: "用於自動帶入音標與例句",
         btnSetKey: "設定 Key",
         optTargetFront: "目標語言在正面，母語在背面",
@@ -228,7 +255,7 @@ const I18N_DICTIONARY = {
         tosCheckLabel: "我已閱讀並完全同意上述使用者服務與隱私條款",
         btnGuestContinue: "以訪客身份繼續使用",
 
-        // 聊天室
+        // 聊天室與社群獨有 i18n
         chatDrawerTitle: "交流聊天室",
         badgeAdmin: "管理員",
         phChatSearch: "搜尋群組、固定暱稱或 Email...",
@@ -245,8 +272,54 @@ const I18N_DICTIONARY = {
         phAnnContent: "公告內容...",
         btnPubAnnounceSubmit: "發布公告",
 
-        // 群組
-        btnCreateGroup: "+ 建立新群組",
+        badgeStealth: "開隱身",
+        noEmail: "無 Email",
+        toastPrivacyOn: "🔒 已開啟隱私模式：已隱藏您的線上狀態與已讀標記",
+        toastPrivacyOff: "🌐 已關閉隱私模式：恢復公開線上狀態與已讀",
+        toastLoginRequiredChat: "請先登入帳號才能使用聊天功能！",
+        sendFriendReqTo: "發送好友申請給：",
+        btnSendReq: "發送申請",
+        noFriendsFound: "查無符合「{query}」的好友",
+        lblMyFriends: "我的好友列表",
+        btnSendPrivateMsg: "發送私訊",
+        toastLoginRequiredFriend: "請先登入帳號才能發送好友申請！",
+        promptEnterFriendEmail: "請輸入對方的電子郵件 (Email)：",
+        toastInvalidEmail: "請輸入有效的電子郵件格式！",
+        toastFriendReqSent: "🎉 已成功發送好友申請！",
+        toastFriendAccepted: "🤝 已同意「{name}」的好友申請！",
+        toastFriendRejected: "已拒絕該好友申請",
+        toastLoginRequiredGroup: "請先登入帳號才能建立群組！",
+        promptNewGroupName: "請輸入新群組名稱：",
+        defaultPlayerName: "玩家",
+        msgGroupCreated: "{name} 建立了群組「{group}」",
+        toastGroupCreated: "🎉 已成功建立群組「{name}」！",
+        publicChatRoom: "全站公開討論區",
+        btnCreateGroup: "建立新群組",
+        noChatChannels: "目前沒有可顯示的對話頻道",
+        defaultChatTitle: "對話",
+        badgeGroup: "群組",
+        badgePrivate: "私訊",
+        clickToChat: "點擊開始對話...",
+        noChatMessages: "尚無聊天訊息，輸入第一條訊息開始交流吧！",
+        systemNotice: "系統提示",
+        anonymousUser: "匿名",
+        badgeRead: "已讀",
+        toastLoginRequiredMessage: "請先登入帳號才能發送訊息！",
+        toastSendFailed: "發送失敗：",
+        noAnnouncementsYet: "目前尚無系統公告",
+        publisher: "發布者：",
+        defaultAdminAuthor: "官方管理員",
+        toastAdminDeleteNoticeOnly: "只有管理員可以刪除公告！",
+        confirmDeleteNotice: "👑 管理員警告：確定要刪除該公告嗎？",
+        toastNoticeDeleted: "已成功刪除該公告！",
+        toastNoticeDeleteFailed: "刪除失敗：",
+        toastAdminPubNoticeOnly: "只有管理員可以發布公告！(目前前端身分：{role})",
+        toastFillNoticeFields: "請填寫完整公告標題與內容！",
+        toastRtdbUninit: "Realtime Database SDK 未成功初始化！",
+        toastNoticePublished: "🎉 官方公告已成功發布！",
+        toastNoticePubFailed: "發布公告失敗 ({code}): {msg}",
+
+        // 群組與請求
         btnLeaveGroup: "退出群組",
         btnInviteMember: "邀請",
         pendingRequests: "待處理的好友申請",
@@ -341,7 +414,6 @@ const I18N_DICTIONARY = {
         cloudSearchResults: "雲端搜尋結果 ({count})：",
         cloudUser: "雲端用戶",
         btnAddFriend: "加好友",
-        sendFriendReqTo: "發送好友申請給：「{query}」",
         btnSendReq: "送出申請",
         btnAccept: "同意",
         btnReject: "拒絕",
@@ -394,12 +466,7 @@ const I18N_DICTIONARY = {
         onlineUserHidden: "線上人數：已隱藏 (隱私模式開啟中)",
         onlineListEmpty: "目前沒有其他在線使用者",
         privacyListNotice: "您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）",
-        toastEarnCoin10Cards: "🎉 累積刷滿 10 張字卡，獲得 1 金幣！",
-        quizLangEn: "🇬🇧 英文",
-        quizLangZh: "🇹🇼 中文 (開發中)",
-        quizLangJa: "🇯🇵 日文 (開發中)",
-        quizDevTitle: "🚧 功能開發中",
-        quizDevDesc: "中文與日文隨堂測驗模式正在全力開發中，敬請期待！"
+        toastEarnCoin10Cards: "🎉 累積刷滿 10 張字卡，獲得 1 金幣！"
     },
     'en': {
         appSubtitle: "Exam Prep Flashcards",
@@ -440,6 +507,28 @@ const I18N_DICTIONARY = {
         quizInputPlaceholder: "Type your answer here...",
         btnSubmit: "Submit",
         btnNext: "Next",
+
+        quizNoSentenceWarning: "⚠️ Selected decks contain no words with English sentences!",
+        quizNoSentenceDesc: "Quiz filter is active (only tests words with sentences).<br>For words without sentences, practice in <span class=\"font-bold text-brand-600 dark:text-brand-400\">Flashcards</span> or use AI batch fill.",
+        quizBadgeWaiting: "Awaiting Sentences",
+        quizBadgeMode1: "Mode 1: Context Recall",
+        quizTitleMode1: "Context Hint (Fill in the blank):",
+        quizHintMask: "[Hint Mask: {word}]",
+        quizBadgeMode2: "Mode 2: POS & Definition",
+        quizTitleMode2: "Definition & POS Hint:",
+        quizNoMeaningFilled: "(No definition)",
+        quizBadgeMode3: "Mode 3: 🎯 Sentence Translation Blank",
+        quizTitleMode3: "Sentence & Translation Comparison:",
+        quizNoTranslation: "(No translation)",
+        quizTranslationPrefix: "Translation: ",
+        quizCorrectMsg: "Correct!",
+        quizWrongMsg: "Wrong! Correct answer is: ",
+        quizMeaningLabel: "Definition: ",
+        quizLangEn: "🇬🇧 English",
+        quizLangZh: "🇹🇼 Chinese (Dev)",
+        quizLangJa: "🇯🇵 Japanese (Dev)",
+        quizDevTitle: "🚧 Under Development",
+        quizDevDesc: "Chinese and Japanese quiz modes are currently under active development. Stay tuned!",
 
         btnAddWord: "Add One",
         btnBatchImport: "Add Words",
@@ -493,6 +582,10 @@ const I18N_DICTIONARY = {
         lblTheme: "Appearance Theme",
         descTheme: "Switch manually or follow system default",
         lblApiKey: "Gemini AI Key",
+        lblApiModeTitle: "Gemini AI Key Mode",
+        lblApiModePersonal: "Personal Key",
+        lblApiModeShared: "Free Shared Key",
+        phApiKeyInput: "Enter your Gemini API Key (AIzaSy...)",
         descApiKey: "Used for auto-generating phonetics & sentences",
         btnSetKey: "Set Key",
         optTargetFront: "Target Front, Native Back",
@@ -632,8 +725,53 @@ const I18N_DICTIONARY = {
         phAnnContent: "Content...",
         btnPubAnnounceSubmit: "Post Notice",
 
-        // Groups
-        btnCreateGroup: "+ Create New Group",
+        badgeStealth: "Incognito",
+        noEmail: "No Email",
+        toastPrivacyOn: "🔒 Privacy mode enabled: Online status & read receipts hidden",
+        toastPrivacyOff: "🌐 Privacy mode disabled: Online status & read receipts restored",
+        toastLoginRequiredChat: "Please log in to use chat!",
+        sendFriendReqTo: "Send friend request to:",
+        btnSendReq: "Send Request",
+        noFriendsFound: "No friends found matching '{query}'",
+        lblMyFriends: "My Friends List",
+        btnSendPrivateMsg: "Send DM",
+        toastLoginRequiredFriend: "Please log in to send friend requests!",
+        promptEnterFriendEmail: "Please enter friend's Email:",
+        toastInvalidEmail: "Please enter a valid email address!",
+        toastFriendReqSent: "🎉 Friend request sent successfully!",
+        toastFriendAccepted: "🤝 Accepted friend request from '{name}'!",
+        toastFriendRejected: "Friend request rejected",
+        toastLoginRequiredGroup: "Please log in to create groups!",
+        promptNewGroupName: "Please enter new group name:",
+        defaultPlayerName: "Player",
+        msgGroupCreated: "{name} created group '{group}'",
+        toastGroupCreated: "🎉 Group '{name}' created successfully!",
+        publicChatRoom: "Public Lounge",
+        btnCreateGroup: "Create New Group",
+        noChatChannels: "No chat channels available",
+        defaultChatTitle: "Chat",
+        badgeGroup: "Group",
+        badgePrivate: "Direct",
+        clickToChat: "Click to start chat...",
+        noChatMessages: "No messages yet. Send the first message to start talking!",
+        systemNotice: "System Notice",
+        anonymousUser: "Anonymous",
+        badgeRead: "Read",
+        toastLoginRequiredMessage: "Please log in to send messages!",
+        toastSendFailed: "Send failed: ",
+        noAnnouncementsYet: "No system announcements at this time",
+        publisher: "Author: ",
+        defaultAdminAuthor: "Official Admin",
+        toastAdminDeleteNoticeOnly: "Only admins can delete announcements!",
+        confirmDeleteNotice: "👑 Admin Warning: Are you sure you want to delete this announcement?",
+        toastNoticeDeleted: "Announcement deleted successfully!",
+        toastNoticeDeleteFailed: "Delete failed: ",
+        toastAdminPubNoticeOnly: "Only admins can post announcements! (Current role: {role})",
+        toastFillNoticeFields: "Please fill in title and content!",
+        toastRtdbUninit: "Realtime Database SDK failed to initialize!",
+        toastNoticePublished: "🎉 Official announcement published successfully!",
+        toastNoticePubFailed: "Failed to publish notice ({code}): {msg}",
+
         btnLeaveGroup: "Leave Group",
         btnInviteMember: "Invite",
         pendingRequests: "Pending Friend Requests",
@@ -725,7 +863,6 @@ const I18N_DICTIONARY = {
         cloudSearchResults: "Cloud Search Results ({count}):",
         cloudUser: "Cloud User",
         btnAddFriend: "Add Friend",
-        sendFriendReqTo: "Send friend request to: \"{query}\"",
         btnSendReq: "Send Request",
         btnAccept: "Accept",
         btnReject: "Reject",
@@ -735,7 +872,6 @@ const I18N_DICTIONARY = {
         noAnnouncements: "No announcements at this time",
         authorLabel: "Author:",
 
-        // Onboarding Setup & Tour
         onboardingSetupTitle: "Personal Preferences",
         onboardingSetupDesc: "Spend 10 seconds setting up your study habits. You can change these anytime in Settings:",
         btnSkipAll: "Skip Setup ✕",
@@ -778,12 +914,7 @@ const I18N_DICTIONARY = {
         onlineUserHidden: "Online Users: Hidden (Privacy Mode)",
         onlineListEmpty: "No other online users",
         privacyListNotice: "Privacy mode enabled (Cannot view others' online status)",
-        toastEarnCoin10Cards: "🎉 Reviewed 10 cards and earned 1 coin!",
-        quizLangEn: "🇬🇧 English",
-        quizLangZh: "🇹🇼 Chinese (Dev)",
-        quizLangJa: "🇯🇵 Japanese (Dev)",
-        quizDevTitle: "🚧 Under Development",
-        quizDevDesc: "Chinese and Japanese quiz modes are currently under active development. Stay tuned!"
+        toastEarnCoin10Cards: "🎉 Reviewed 10 cards and earned 1 coin!"
     },
     'ja': {
         appSubtitle: "単語暗記ツール",
@@ -825,7 +956,29 @@ const I18N_DICTIONARY = {
         btnSubmit: "回答する",
         btnNext: "次の問題",
 
-        btnAddWord: "単数",
+        quizNoSentenceWarning: "⚠️ 選択中の単語帳には英語の例文がある単語がありません！",
+        quizNoSentenceDesc: "クイズフィルタ有効（例文のある単語のみ試題）。<br>例文のない単語は「<span class=\"font-bold text-brand-600 dark:text-brand-400\">暗記カード</span>」で練習するか、AIで自動補完してください。",
+        quizBadgeWaiting: "例文補完待ち",
+        quizBadgeMode1: "モード 1：文脈連想",
+        quizTitleMode1: "文脈ヒント（空欄を埋めてください）：",
+        quizHintMask: "[ヒントマスク: {word}]",
+        quizBadgeMode2: "モード 2：品詞と意味の対照",
+        quizTitleMode2: "意味と品詞のヒント：",
+        quizNoMeaningFilled: "（意味未入力）",
+        quizBadgeMode3: "モード 3：🎯 訳文対照穴埋め",
+        quizTitleMode3: "原文と訳文の対照：",
+        quizNoTranslation: "（翻訳対照なし）",
+        quizTranslationPrefix: "訳文対照: ",
+        quizCorrectMsg: "正解です！",
+        quizWrongMsg: "不正解！正解は：",
+        quizMeaningLabel: "意味：",
+        quizLangEn: "🇬🇧 英語",
+        quizLangZh: "🇹🇼 中國語 (開発中)",
+        quizLangJa: "🇯🇵 日本語 (開発中)",
+        quizDevTitle: "🚧 開発中機能",
+        quizDevDesc: "中國語と日本語のクイズモードは現在積極開発中です。お楽しみに！",
+
+        btnAddWord: "単數",
         btnBatchImport: "複数",
         btnBackup: "バックアップ",
         btnSplit: "分割",
@@ -877,6 +1030,10 @@ const I18N_DICTIONARY = {
         lblTheme: "テーマ設定",
         descTheme: "手動切り替えまたはシステム設定に従う",
         lblApiKey: "Gemini API キー",
+        lblApiModeTitle: "Gemini API Key モード",
+        lblApiModePersonal: "個人 Key",
+        lblApiModeShared: "無料共有 Key",
+        phApiKeyInput: "Gemini API Key を入力 (AIzaSy...)",
         descApiKey: "発音記号や例文の自動生成に使用",
         btnSetKey: "APIキー設定",
         optTargetFront: "表面：学習言語 / 裏面：母国語",
@@ -1016,8 +1173,53 @@ const I18N_DICTIONARY = {
         phAnnContent: "内容...",
         btnPubAnnounceSubmit: "投稿",
 
-        // Groups
-        btnCreateGroup: "+ グループを作成",
+        badgeStealth: "ステルス",
+        noEmail: "Emailなし",
+        toastPrivacyOn: "🔒 プライバシーモード有効：オンライン状態と既読を非表示にしました",
+        toastPrivacyOff: "🌐 プライバシーモード解除：オンライン状態と既読を公開に戻しました",
+        toastLoginRequiredChat: "チャット機能を使用するにはログインしてください！",
+        sendFriendReqTo: "フレンド申請を送信：",
+        btnSendReq: "申請送信",
+        noFriendsFound: "「{query}」に一致するフレンドが見つかりません",
+        lblMyFriends: "フレンドリスト",
+        btnSendPrivateMsg: "DMを送信",
+        toastLoginRequiredFriend: "フレンド申請を送るにはログインしてください！",
+        promptEnterFriendEmail: "相手のメールアドレス(Email)を入力してください：",
+        toastInvalidEmail: "有効なメールアドレス形式を入力してください！",
+        toastFriendReqSent: "🎉 フレンド申請を送信しました！",
+        toastFriendAccepted: "🤝 「{name}」のフレンド申請を承認しました！",
+        toastFriendRejected: "フレンド申請を拒否しました",
+        toastLoginRequiredGroup: "グループを作成するにはログインしてください！",
+        promptNewGroupName: "新しいグループ名を入力してください：",
+        defaultPlayerName: "プレイヤー",
+        msgGroupCreated: "{name} がグループ「{group}」を作成しました",
+        toastGroupCreated: "🎉 グループ「{name}」を作成しました！",
+        publicChatRoom: "全体公開チャット",
+        btnCreateGroup: "グループ新規作成",
+        noChatChannels: "表示できるチャットチャンネルがありません",
+        defaultChatTitle: "チャット",
+        badgeGroup: "グループ",
+        badgePrivate: "個チャ",
+        clickToChat: "クリックしてチャットを開始...",
+        noChatMessages: "メッセージはまだありません。送信して交流を始めましょう！",
+        systemNotice: "システム通知",
+        anonymousUser: "匿名",
+        badgeRead: "既読",
+        toastLoginRequiredMessage: "メッセージを送信するにはログインしてください！",
+        toastSendFailed: "送信失敗：",
+        noAnnouncementsYet: "現在システムお知らせはありません",
+        publisher: "投稿者：",
+        defaultAdminAuthor: "公式管理者",
+        toastAdminDeleteNoticeOnly: "管理者のみお知らせを削除できます！",
+        confirmDeleteNotice: "👑 管理者警告：このお知らせを削除してもよろしいですか？",
+        toastNoticeDeleted: "お知らせを削除しました！",
+        toastNoticeDeleteFailed: "削除失敗：",
+        toastAdminPubNoticeOnly: "管理者のみお知らせを投稿できます！（現在のロール：{role}）",
+        toastFillNoticeFields: "タイトルと内容を両方入力してください！",
+        toastRtdbUninit: "Realtime Database SDKの初期化に失敗しました！",
+        toastNoticePublished: "🎉 公式お知らせを投稿しました！",
+        toastNoticePubFailed: "お知らせの投稿に失敗しました ({code}): {msg}",
+
         btnLeaveGroup: "グループを脱退",
         btnInviteMember: "招待",
         pendingRequests: "保留中のフレンド申請",
@@ -1119,7 +1321,6 @@ const I18N_DICTIONARY = {
         noAnnouncements: "現在お知らせはありません",
         authorLabel: "投稿者：",
 
-        // 初心者オンボーディング・ガイド
         onboardingSetupTitle: "個人設定の作成",
         onboardingSetupDesc: "学習の習慣を10秒で設定しましょう。後からいつでも「設定」で変更できます：",
         btnSkipAll: "設定をスキップ ✕",
@@ -1162,12 +1363,7 @@ const I18N_DICTIONARY = {
         onlineUserHidden: "オンライン人数：非表示 (プライバシーモード)",
         onlineListEmpty: "現在オンラインのユーザーはいません",
         privacyListNotice: "プライバシーモード有効（他人のオンラインステータスを表示できません）",
-        toastEarnCoin10Cards: "🎉 10枚のカードを復習して1コインを獲得しました！",
-        quizLangEn: "🇬🇧 英語",
-        quizLangZh: "🇹🇼 中國語 (開発中)",
-        quizLangJa: "🇯🇵 日本語 (開発中)",
-        quizDevTitle: "🚧 開発中機能",
-        quizDevDesc: "中國語と日本語のクイズモードは現在積極開発中です。お楽しみに！"
+        toastEarnCoin10Cards: "🎉 10枚のカードを復習して1コインを獲得しました！"
     }
 };
 
@@ -1205,12 +1401,10 @@ function t(key, params = {}) {
 
     let text = dict[key] || I18N_DICTIONARY['zh-TW'][key] || key;
 
-    // 若 params 為字串（舊版相容）
     if (typeof params === 'string') {
         return text || params;
     }
 
-    // 自動執行 {name}, {count} 等動態變數替換
     if (params && typeof params === 'object') {
         Object.keys(params).forEach(p => {
             text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
@@ -1258,20 +1452,15 @@ function applyLanguageUI() {
         }
     });
 
-    // 3. 同步刷新字庫下拉選單的語系與單位
     if (typeof updateCategorySelects === 'function') {
         updateCategorySelects();
     }
 
-    // 4. 同步更新批量輸入與快速新增的範例提示
     if (typeof updateBatchPlaceholders === 'function') {
         updateBatchPlaceholders();
     }
 }
 
-/**
- * 相容別名函式
- */
 function updatePageTranslations() {
     applyLanguageUI();
 }

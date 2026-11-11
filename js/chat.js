@@ -140,17 +140,15 @@ function initUserPresenceTracker() {
     connectedRef.on('value', snapshot => {
         if (snapshot.val() === false) return;
 
-        // 當斷線時自動改為 offline
         userStatusRef.onDisconnect().set({
             state: 'offline',
             last_changed: firebase.database.ServerValue.TIMESTAMP
         }).then(() => {
-            // 連線時設定為 online，並寫入隱身與暱稱資訊
             userStatusRef.set({
                 state: 'online',
-                nickname: window.userData.nickname || firebase.auth().currentUser.displayName || '玩家',
+                nickname: window.userData.nickname || firebase.auth().currentUser.displayName || (typeof t === 'function' ? t('defaultPlayerName') : '玩家'),
                 email: firebase.auth().currentUser.email || '',
-                hidePrivacy: !!(window.userData.privacyHideStatus), // 雙向隱私設定
+                hidePrivacy: !!(window.userData.privacyHideStatus),
                 last_changed: firebase.database.ServerValue.TIMESTAMP
             });
         });
@@ -165,17 +163,14 @@ function initChatRealtimeListeners() {
     if (!rtdb || !firebase.auth || !firebase.auth().currentUser) return;
     const currentUid = firebase.auth().currentUser.uid;
 
-    // A. 啟動 Presence 追蹤
     initUserPresenceTracker();
 
-    // B. 監聽全站線上狀態
     if (presenceStatusListener) rtdb.ref('status').off('value', presenceStatusListener);
     presenceStatusListener = rtdb.ref('status').on('value', snapshot => {
         onlineUsersMap = snapshot.val() || {};
         renderOnlineStatusUI();
     });
 
-    // C. 監聽好友申請
     if (friendRequestsListener) rtdb.ref('friendRequests').off('value', friendRequestsListener);
     friendRequestsListener = rtdb.ref('friendRequests').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -189,7 +184,6 @@ function initChatRealtimeListeners() {
         }
     });
 
-    // D. 監聽群組邀請
     if (groupInvitesListener) rtdb.ref('groupInvites').off('value', groupInvitesListener);
     groupInvitesListener = rtdb.ref('groupInvites').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -203,7 +197,6 @@ function initChatRealtimeListeners() {
         }
     });
 
-    // E. 監聽包含自己的所有聊天頻道
     if (chatsListListener) rtdb.ref('chats').off('value', chatsListListener);
     chatsListListener = rtdb.ref('chats').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -217,7 +210,6 @@ function initChatRealtimeListeners() {
         }
     });
 
-    // F. 監聽系統公告
     if (announcementsListener) rtdb.ref('announcements').off('value', announcementsListener);
     announcementsListener = rtdb.ref('announcements').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -262,7 +254,6 @@ function renderOnlineStatusUI() {
         }
     });
 
-    // A. 渲染線上人數標籤
     if (onlineCountEl) {
         if (myPrivacyHide) {
             onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-slate-400 rounded-full inline-block"></span> ${typeof t === 'function' ? t('onlineUserHidden') : '線上人數：已隱藏 (隱私模式開啟中)'}`;
@@ -271,7 +262,6 @@ function renderOnlineStatusUI() {
         }
     }
 
-    // B. 渲染普通使用者可見的線上名單
     if (onlineListContainer) {
         if (myPrivacyHide) {
             onlineListContainer.innerHTML = `<div class="p-2 text-center text-slate-400 text-xs">${typeof t === 'function' ? t('privacyListNotice') : '您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）'}</div>`;
@@ -287,7 +277,6 @@ function renderOnlineStatusUI() {
         }
     }
 
-    // C. 👑 管理員透視面板 (強制顯示全站線上使用者，標註誰開了隱身)
     if (adminMonitorContainer && isAdmin) {
         adminMonitorContainer.innerHTML = allOnlineUsersForAdmin.map(u => `
             <div class="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 text-xs my-1">
@@ -296,12 +285,12 @@ function renderOnlineStatusUI() {
                     <div>
                         <div class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                             <span>${escapeHTML(u.nickname)}</span>
-                            ${u.hidePrivacy ? `<span class="px-1.5 py-0.2 bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 text-[9px] rounded-full font-semibold">開隱身</span>` : ''}
+                            ${u.hidePrivacy ? `<span class="px-1.5 py-0.2 bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 text-[9px] rounded-full font-semibold">${typeof t === 'function' ? t('badgeStealth') : '開隱身'}</span>` : ''}
                         </div>
                         <p class="text-[10px] text-slate-400 font-mono">UID: ${u.uid}</p>
                     </div>
                 </div>
-                <span class="text-[10px] text-slate-400">${u.email || '無 Email'}</span>
+                <span class="text-[10px] text-slate-400">${u.email || (typeof t === 'function' ? t('noEmail') : '無 Email')}</span>
             </div>
         `).join('');
     }
@@ -323,7 +312,7 @@ async function togglePrivacyHideStatus(enableHide) {
             await rtdb.ref(`status/${currentUid}/hidePrivacy`).set(enableHide);
             renderOnlineStatusUI();
             if (typeof showToast === 'function') {
-                showToast(enableHide ? '🔒 已開啟隱私模式：已隱藏您的線上狀態與已讀標記' : '🌐 已關閉隱私模式：恢復公開線上狀態與已讀', 'info');
+                showToast(enableHide ? (typeof t === 'function' ? t('toastPrivacyOn') : '🔒 已開啟隱私模式：已隱藏您的線上狀態與已讀標記') : (typeof t === 'function' ? t('toastPrivacyOff') : '🌐 已關閉隱私模式：恢復公開線上狀態與已讀'), 'info');
             }
         } catch (e) {
             console.error("更新隱私設定失敗:", e);
@@ -333,7 +322,7 @@ async function togglePrivacyHideStatus(enableHide) {
 
 function openChatDrawer() {
     if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能使用聊天功能！', 'warning');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastLoginRequiredChat') : '請先登入帳號才能使用聊天功能！', 'warning');
         return;
     }
 
@@ -507,9 +496,9 @@ async function renderFriendsList() {
             <div onclick="sendFriendRequestByEmail('${escapeHTML(query)}', this)" class="p-3 bg-brand-50 dark:bg-brand-950/40 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-100 transition cursor-pointer flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-2 text-brand-700 dark:text-brand-300">
                     <i class="fa-solid fa-paper-plane text-sm"></i>
-                    <span class="text-xs font-bold">發送好友申請給：${escapeHTML(query)}</span>
+                    <span class="text-xs font-bold">${typeof t === 'function' ? t('sendFriendReqTo') : '發送好友申請給：'}${escapeHTML(query)}</span>
                 </div>
-                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">發送申請</span>
+                <span class="text-xs font-bold bg-brand-600 text-white px-2 py-0.5 rounded-lg">${typeof t === 'function' ? t('btnSendReq') : '發送申請'}</span>
             </div>
         `;
     }
@@ -520,12 +509,12 @@ async function renderFriendsList() {
     );
 
     if (filteredFriends.length === 0 && !html) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">查無符合「${escapeHTML(query)}」的好友</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${typeof t === 'function' ? t('noFriendsFound', { query: escapeHTML(query) }) : `查無符合「${escapeHTML(query)}」的好友`}</div>`;
         return;
     }
 
     if (filteredFriends.length > 0) {
-        html += `<div class="text-[11px] font-bold text-slate-500 mb-1">我的好友列表</div>`;
+        html += `<div class="text-[11px] font-bold text-slate-500 mb-1">${typeof t === 'function' ? t('lblMyFriends') : '我的好友列表'}</div>`;
         html += filteredFriends.map(f => {
             const displayName = f.nickname || f.username;
             return `
@@ -539,7 +528,7 @@ async function renderFriendsList() {
                     </div>
                     <button type="button" onclick="startPrivateChat('${encodeURIComponent(displayName)}', '${f.uid || ''}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1">
                         <i class="fa-solid fa-comment-dots"></i>
-                        <span>發送私訊</span>
+                        <span>${typeof t === 'function' ? t('btnSendPrivateMsg') : '發送私訊'}</span>
                     </button>
                 </div>
             `;
@@ -551,7 +540,7 @@ async function renderFriendsList() {
 
 async function sendFriendRequestByEmail(emailInput = null, btnElem = null) {
     if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能發送好友申請！', 'warning');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastLoginRequiredFriend') : '請先登入帳號才能發送好友申請！', 'warning');
         return;
     }
 
@@ -559,14 +548,14 @@ async function sendFriendRequestByEmail(emailInput = null, btnElem = null) {
     if (!rtdb) return;
 
     try {
-        const targetEmail = (emailInput || prompt('請輸入對方的電子郵件 (Email)：') || '').trim().toLowerCase();
+        const targetEmail = (emailInput || prompt(typeof t === 'function' ? t('promptEnterFriendEmail') : '請輸入對方的電子郵件 (Email)：') || '').trim().toLowerCase();
         if (!targetEmail || !targetEmail.includes('@')) {
-            if (targetEmail && typeof showToast === 'function') showToast('請輸入有效的電子郵件格式！', 'warning');
+            if (targetEmail && typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastInvalidEmail') : '請輸入有效的電子郵件格式！', 'warning');
             return;
         }
 
         const currentUid = firebase.auth().currentUser.uid;
-        const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : (firebase.auth().currentUser?.displayName || '使用者');
+        const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : (firebase.auth().currentUser?.displayName || (typeof t === 'function' ? t('defaultPlayerName') : '使用者'));
         const myEmail = firebase.auth().currentUser.email;
 
         const newReqRef = rtdb.ref('friendRequests').push();
@@ -581,7 +570,7 @@ async function sendFriendRequestByEmail(emailInput = null, btnElem = null) {
             createdAt: Date.now()
         });
 
-        if (typeof showToast === 'function') showToast(`🎉 已成功發送好友申請！`, 'success');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastFriendReqSent') : '🎉 已成功發送好友申請！', 'success');
     } catch (e) {
         console.error("發送好友申請失敗:", e);
     }
@@ -623,7 +612,7 @@ async function handleAcceptFriendRequest(reqId, fromUid, encodedNickname, fromEm
             updatedAt: Date.now()
         });
 
-        if (typeof showToast === 'function') showToast(`🤝 已同意「${fromNickname}」的好友申請！`, 'success');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastFriendAccepted', { name: fromNickname }) : `🤝 已同意「${fromNickname}」的好友申請！`, 'success');
         renderFriendsList();
     } catch (e) {
         console.error("同意好友申請失敗:", e);
@@ -635,7 +624,7 @@ async function handleRejectFriendRequest(reqId) {
     if (!rtdb) return;
     try {
         await rtdb.ref(`friendRequests/${reqId}`).update({ status: 'rejected' });
-        if (typeof showToast === 'function') showToast('已拒絕該好友申請', 'info');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastFriendRejected') : '已拒絕該好友申請', 'info');
         renderFriendsList();
     } catch (e) {
         console.error("拒絕好友申請失敗:", e);
@@ -644,15 +633,15 @@ async function handleRejectFriendRequest(reqId) {
 
 async function createGroupPrompt() {
     if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能建立群組！', 'warning');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastLoginRequiredGroup') : '請先登入帳號才能建立群組！', 'warning');
         return;
     }
 
-    const groupName = (prompt('請輸入新群組名稱：') || '').trim();
+    const groupName = (prompt(typeof t === 'function' ? t('promptNewGroupName') : '請輸入新群組名稱：') || '').trim();
     if (!groupName) return;
 
     const currentUid = firebase.auth().currentUser.uid;
-    const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : '玩家';
+    const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : (typeof t === 'function' ? t('defaultPlayerName') : '玩家');
     const rtdb = getRtdb();
     if (!rtdb) return;
 
@@ -666,13 +655,13 @@ async function createGroupPrompt() {
             name: groupName,
             ownerUid: currentUid,
             members: membersMap,
-            lastMessage: `${myName} 建立了群組「${groupName}」`,
+            lastMessage: typeof t === 'function' ? t('msgGroupCreated', { name: myName, group: groupName }) : `${myName} 建立了群組「${groupName}」`,
             lastSenderUid: currentUid,
             createdAt: Date.now(),
             updatedAt: Date.now()
         });
 
-        if (typeof showToast === 'function') showToast(`🎉 已成功建立群組「${groupName}」！`, 'success');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastGroupCreated', { name: groupName }) : `🎉 已成功建立群組「${groupName}」！`, 'success');
         openChatWindow(newChatRef.key, groupName);
     } catch (e) {
         console.error("建立群組失敗:", e);
@@ -681,7 +670,7 @@ async function createGroupPrompt() {
 
 async function startPrivateChat(encodedTargetUsername, targetUid = '') {
     if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能使用私聊！', 'warning');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastLoginRequiredChat') : '請先登入帳號才能使用私聊！', 'warning');
         return;
     }
 
@@ -731,7 +720,7 @@ async function renderChatThreads(isAdminInspector = false) {
         threads.unshift({
             id: 'chat_group_public',
             type: 'group',
-            name: '全站公開討論區'
+            name: typeof t === 'function' ? t('publicChatRoom') : '全站公開討論區'
         });
     }
 
@@ -743,13 +732,13 @@ async function renderChatThreads(isAdminInspector = false) {
         <div class="mb-3">
             <button type="button" onclick="createGroupPrompt()" class="w-full py-2 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-700 hover:to-purple-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center space-x-1.5">
                 <i class="fa-solid fa-users-rectangle text-sm"></i>
-                <span>建立新群組</span>
+                <span>${typeof t === 'function' ? t('btnCreateGroup') : '建立新群組'}</span>
             </button>
         </div>
     `;
 
     if (threads.length === 0) {
-        html += `<div class="text-center text-slate-400 py-8 text-xs">目前沒有可顯示的對話頻道</div>`;
+        html += `<div class="text-center text-slate-400 py-8 text-xs">${typeof t === 'function' ? t('noChatChannels') : '目前沒有可顯示的對話頻道'}</div>`;
         container.innerHTML = html;
         return;
     }
@@ -757,7 +746,7 @@ async function renderChatThreads(isAdminInspector = false) {
     html += threads.map(c => {
         const isGroup = c.type === 'group';
         const icon = isGroup ? 'fa-users text-purple-500' : 'fa-user-lock text-emerald-500';
-        const displayName = c.name || '對話';
+        const displayName = c.name || (typeof t === 'function' ? t('defaultChatTitle') : '對話');
 
         const chatTime = typeof c.updatedAt === 'number' ? c.updatedAt : new Date(c.updatedAt).getTime();
         const lastReadChat = parseInt(localStorage.getItem(`lzhcard_last_read_chat_${c.id}`) || '0', 10);
@@ -773,14 +762,14 @@ async function renderChatThreads(isAdminInspector = false) {
                     <div>
                         <div class="flex items-center space-x-1.5">
                             <h4 class="font-bold text-xs text-slate-800 dark:text-slate-100">${escapeHTML(displayName)}</h4>
-                            <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? '群組' : '私訊'}</span>
+                            <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${isGroup ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/40' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40'}">${isGroup ? (typeof t === 'function' ? t('badgeGroup') : '群組') : (typeof t === 'function' ? t('badgePrivate') : '私訊')}</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${escapeHTML(c.lastMessage || '點擊開始對話...')}</p>
+                        <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${escapeHTML(c.lastMessage || (typeof t === 'function' ? t('clickToChat') : '點擊開始對話...'))}</p>
                     </div>
                 </div>
 
                 ${isAdmin ? `
-                    <button type="button" onclick="event.stopPropagation(); deleteChatThread('${c.id}')" title="刪除" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition ml-2">
+                    <button type="button" onclick="event.stopPropagation(); deleteChatThread('${c.id}')" title="${typeof t === 'function' ? t('btnBatchDelete') : '刪除'}" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition ml-2">
                         <i class="fa-solid fa-trash-can text-xs"></i>
                     </button>
                 ` : ''}
@@ -802,7 +791,7 @@ async function openChatWindow(chatId, encodedName = '') {
     localStorage.setItem(`lzhcard_last_read_chat_${chatId}`, Date.now().toString());
     updateUnreadBadgeUI();
 
-    const displayName = encodedName ? decodeURIComponent(encodedName) : '對話';
+    const displayName = encodedName ? decodeURIComponent(encodedName) : (typeof t === 'function' ? t('defaultChatTitle') : '對話');
 
     document.getElementById('chatsView')?.classList.add('hidden');
     document.getElementById('friendsView')?.classList.add('hidden');
@@ -815,7 +804,6 @@ async function openChatWindow(chatId, encodedName = '') {
 
     if (!rtdb || !chatId) return;
 
-    // 寫入自己的最後已讀時間戳記
     if (currentUid) {
         rtdb.ref(`chats/${chatId}/readBy/${currentUid}`).set(Date.now());
     }
@@ -823,14 +811,12 @@ async function openChatWindow(chatId, encodedName = '') {
     if (activeChatListener) rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
     if (activeChatReadListener) rtdb.ref(`chats/${currentActiveChatId}/readBy`).off('value', activeChatReadListener);
 
-    // 監聽訊息列表
     activeChatListener = rtdb.ref(`chats/${chatId}/messages`).on('value', snapshot => {
         const data = snapshot.val() || {};
         const messages = Object.keys(data).map(key => ({ id: key, ...data[key] }));
         renderMessagesList(messages);
     });
 
-    // 監聽成員已讀時間
     activeChatReadListener = rtdb.ref(`chats/${chatId}/readBy`).on('value', snapshot => {
         chatReadByMap = snapshot.val() || {};
         rtdb.ref(`chats/${chatId}/messages`).once('value', snapshot => {
@@ -859,7 +845,7 @@ function backToChatThreads() {
 }
 
 /**
- * 📖 6. 渲染訊息與計算已讀狀態 (雙向隱私開關保護)
+ * 📖 6. 渲染訊息與計算已讀狀態
  */
 function renderMessagesList(messages = []) {
     const container = document.getElementById('chatMessagesBox');
@@ -870,12 +856,12 @@ function renderMessagesList(messages = []) {
     const myPrivacyHide = !isAdmin && !!(window.userData && window.userData.privacyHideStatus);
 
     if (messages.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">尚無聊天訊息，輸入第一條訊息開始交流吧！</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">${typeof t === 'function' ? t('noChatMessages') : '尚無聊天訊息，輸入第一條訊息開始交流吧！'}</div>`;
         return;
     }
 
     container.innerHTML = messages.map(msg => {
-        const isSystem = msg.sender === '系統提示';
+        const isSystem = msg.sender === '系統提示' || msg.sender === (typeof t === 'function' ? t('systemNotice') : '系統提示');
         if (isSystem) {
             return `
                 <div class="flex justify-center my-2">
@@ -886,7 +872,6 @@ function renderMessagesList(messages = []) {
 
         const isMe = msg.senderUid ? (msg.senderUid === currentUid) : (msg.sender === (window.userData?.username || ''));
 
-        // 計算對手是否已讀
         let isReadByOther = false;
         if (isMe) {
             Object.keys(chatReadByMap).forEach(memberUid => {
@@ -897,9 +882,6 @@ function renderMessagesList(messages = []) {
                     const targetPrivacyHide = !!targetStatus.hidePrivacy;
 
                     if (readTime >= msgTime) {
-                        // 雙向隱私規則：
-                        // 1. 管理員永遠看得見「已讀」
-                        // 2. 若自己或對手任何一方開了隱身（隱私模式），則非管理員不顯示已讀標記
                         if (isAdmin) {
                             isReadByOther = true;
                         } else if (!myPrivacyHide && !targetPrivacyHide) {
@@ -913,9 +895,9 @@ function renderMessagesList(messages = []) {
         return `
             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 my-1.5">
                 <div class="flex items-center space-x-1">
-                    <span class="text-[10px] text-slate-400 px-1">${escapeHTML(msg.sender || '匿名')}</span>
+                    <span class="text-[10px] text-slate-400 px-1">${escapeHTML(msg.sender || (typeof t === 'function' ? t('anonymousUser') : '匿名'))}</span>
                     ${isAdmin && msg.id ? `
-                        <button type="button" onclick="deleteChatMessage('${currentActiveChatId}', '${msg.id}')" title="刪除此訊息" class="text-rose-500 hover:text-rose-700 text-[10px] p-0.5 transition">
+                        <button type="button" onclick="deleteChatMessage('${currentActiveChatId}', '${msg.id}')" title="${typeof t === 'function' ? t('btnBatchDelete') : '刪除'}" class="text-rose-500 hover:text-rose-700 text-[10px] p-0.5 transition">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     ` : ''}
@@ -924,7 +906,7 @@ function renderMessagesList(messages = []) {
                     ${escapeHTML(msg.text)}
                 </div>
                 <div class="flex items-center space-x-1 px-1">
-                    ${isMe && isReadByOther ? `<span class="text-[9px] text-brand-500 dark:text-brand-400 font-bold">已讀</span>` : ''}
+                    ${isMe && isReadByOther ? `<span class="text-[9px] text-brand-500 dark:text-brand-400 font-bold">${typeof t === 'function' ? t('badgeRead') : '已讀'}</span>` : ''}
                     <span class="text-[9px] text-slate-400">${escapeHTML(msg.time || '')}</span>
                 </div>
             </div>
@@ -941,7 +923,7 @@ async function handleSendMessage(e) {
     if (e) e.preventDefault();
 
     if (isGuestUser()) {
-        if (typeof showToast === 'function') showToast('請先登入帳號才能發送訊息！', 'warning');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastLoginRequiredMessage') : '請先登入帳號才能發送訊息！', 'warning');
         return;
     }
 
@@ -954,7 +936,7 @@ async function handleSendMessage(e) {
 
     const currentUser = (window.userData && window.userData.nickname) 
         ? window.userData.nickname 
-        : (firebase.auth().currentUser?.displayName || firebase.auth().currentUser?.email?.split('@')[0] || '使用者');
+        : (firebase.auth().currentUser?.displayName || firebase.auth().currentUser?.email?.split('@')[0] || (typeof t === 'function' ? t('defaultPlayerName') : '使用者'));
     
     const currentUid = firebase.auth().currentUser.uid;
     const now = new Date();
@@ -979,12 +961,11 @@ async function handleSendMessage(e) {
             updatedAt: Date.now()
         });
 
-        // 發訊息時自動更新自己的已讀時間戳記
         await rtdb.ref(`chats/${currentActiveChatId}/readBy/${currentUid}`).set(Date.now());
 
     } catch (err) {
         console.error("RTDB 發送訊息失敗:", err);
-        if (typeof showToast === 'function') showToast('發送失敗：' + err.message, 'error');
+        if (typeof showToast === 'function') showToast((typeof t === 'function' ? t('toastSendFailed') : '發送失敗：') + err.message, 'error');
     }
 }
 
@@ -996,7 +977,7 @@ async function renderAnnouncements() {
     let annList = window.appAnnouncements || [];
 
     if (annList.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">目前尚無系統公告</div>`;
+        container.innerHTML = `<div class="text-center text-slate-400 py-8 text-xs">${typeof t === 'function' ? t('noAnnouncementsYet') : '目前尚無系統公告'}</div>`;
         return;
     }
 
@@ -1007,32 +988,32 @@ async function renderAnnouncements() {
                 <div class="flex items-center space-x-2">
                     <span class="text-[10px] text-slate-400">${escapeHTML(ann.time || '')}</span>
                     ${isAdmin ? `
-                        <button type="button" onclick="deleteAnnouncement('${ann.id}')" title="刪除" class="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 rounded transition">
+                        <button type="button" onclick="deleteAnnouncement('${ann.id}')" title="${typeof t === 'function' ? t('btnBatchDelete') : '刪除'}" class="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 p-1 rounded transition">
                             <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
                     ` : ''}
                 </div>
             </div>
             <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${escapeHTML(ann.content)}</p>
-            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">發布者：${escapeHTML(ann.author || '管理員')}</div>
+            <div class="text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-50 dark:border-slate-800">${typeof t === 'function' ? t('publisher') : '發布者：'}${escapeHTML(ann.author || (typeof t === 'function' ? t('defaultAdminAuthor') : '管理員'))}</div>
         </div>
     `).join('');
 }
 
 async function deleteAnnouncement(annId) {
     if (!window.userData || window.userData.role !== 'admin') {
-        if (typeof showToast === 'function') showToast('只有管理員可以刪除公告！', 'error');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastAdminDeleteNoticeOnly') : '只有管理員可以刪除公告！', 'error');
         return;
     }
 
     const rtdb = getRtdb();
-    if (confirm('👑 管理員警告：確定要刪除該公告嗎？') && rtdb) {
+    if (confirm(typeof t === 'function' ? t('confirmDeleteNotice') : '👑 管理員警告：確定要刪除該公告嗎？') && rtdb) {
         try {
             await rtdb.ref(`announcements/${annId}`).remove();
-            if (typeof showToast === 'function') showToast('已成功刪除該公告！', 'info');
+            if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastNoticeDeleted') : '已成功刪除該公告！', 'info');
         } catch (e) {
             console.error("刪除公告失敗：", e);
-            if (typeof showToast === 'function') showToast('刪除失敗：' + e.message, 'error');
+            if (typeof showToast === 'function') showToast((typeof t === 'function' ? t('toastNoticeDeleteFailed') : '刪除失敗：') + e.message, 'error');
         }
     }
 }
@@ -1041,7 +1022,7 @@ async function submitAnnouncement() {
     if (!window.userData || window.userData.role !== 'admin') {
         const currentRole = window.userData?.role || '訪客';
         if (typeof showToast === 'function') {
-            showToast(`只有管理員可以發布公告！(目前前端身分：${currentRole})`, 'error');
+            showToast(typeof t === 'function' ? t('toastAdminPubNoticeOnly', { role: currentRole }) : `只有管理員可以發布公告！(目前前端身分：${currentRole})`, 'error');
         }
         return;
     }
@@ -1053,13 +1034,13 @@ async function submitAnnouncement() {
     const content = (contentInput?.value || '').trim();
 
     if (!title || !content) {
-        if (typeof showToast === 'function') showToast('請填寫完整公告標題與內容！', 'warning');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastFillNoticeFields') : '請填寫完整公告標題與內容！', 'warning');
         return;
     }
 
     const rtdb = getRtdb();
     if (!rtdb) {
-        if (typeof showToast === 'function') showToast('Realtime Database SDK 未成功初始化！', 'error');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastRtdbUninit') : 'Realtime Database SDK 未成功初始化！', 'error');
         return;
     }
 
@@ -1071,7 +1052,7 @@ async function submitAnnouncement() {
         await newRef.set({
             title: title,
             content: content,
-            author: window.userData.nickname || firebase.auth()?.currentUser?.displayName || '官方管理員',
+            author: window.userData.nickname || firebase.auth()?.currentUser?.displayName || (typeof t === 'function' ? t('defaultAdminAuthor') : '官方管理員'),
             time: dateStr,
             createdAt: Date.now()
         });
@@ -1080,11 +1061,11 @@ async function submitAnnouncement() {
         if (contentInput) contentInput.value = '';
 
         if (typeof closeModal === 'function') closeModal('announceModal');
-        if (typeof showToast === 'function') showToast('🎉 官方公告已成功發布！', 'success');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('toastNoticePublished') : '🎉 官方公告已成功發布！', 'success');
     } catch (e) {
         console.error("發布公告失敗：", e);
         if (typeof showToast === 'function') {
-            showToast(`發布公告失敗 (${e.code || 'PERMISSION_DENIED'}): ${e.message}`, 'error');
+            showToast(typeof t === 'function' ? t('toastNoticePubFailed', { code: e.code || 'PERMISSION_DENIED', msg: e.message }) : `發布公告失敗 (${e.code || 'PERMISSION_DENIED'}): ${e.message}`, 'error');
         }
     }
 }
