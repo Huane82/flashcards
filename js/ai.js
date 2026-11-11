@@ -367,7 +367,7 @@ Return ONLY a valid raw JSON object:
 }
 
 /**
- * 🤖 批次 AI 欄位補充核心邏輯 (每批 20 字，即時邊跑邊存檔)
+ * 🤖 批次 AI 欄位補充核心邏輯 (每批 40 字，即時邊跑邊存檔)
  */
 async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
     const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
@@ -382,7 +382,7 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 20; // 🌟 每批 20 字
+    const batchSize = 40; // 🌟 每批 40 字
     let completedCount = 0;
     let successUpdatedCount = 0;
 
@@ -419,7 +419,7 @@ Return ONLY a pure JSON array matching input order:
 
         let rawResponse = null;
         let attempt = 0;
-        const maxAttempts = 5;
+        const maxAttempts = 3;
         let lastErrorMsg = '';
 
         while (!rawResponse && attempt < maxAttempts) {
@@ -432,7 +432,7 @@ Return ONLY a pure JSON array matching input order:
 
             if (!rawResponse && attempt < maxAttempts) {
                 console.warn(`[AI Batch Retry] 批次解析暫時中斷 (${lastErrorMsg})，等待 ${attempt * 2} 秒後進行重試...`);
-                await new Promise(r => setTimeout(r, attempt * 2000));
+                await new Promise(r => setTimeout(r, 1500));
             }
         }
 
