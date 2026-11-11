@@ -767,7 +767,7 @@ async function handleBatchAiFillLibraryWords() {
             return;
         }
 
-        const MAX_LIMIT = typeof MAX_AI_BATCH_LIMIT !== 'undefined' ? MAX_AI_BATCH_LIMIT : 50;
+        const MAX_LIMIT = typeof MAX_AI_BATCH_LIMIT !== 'undefined' ? MAX_AI_BATCH_LIMIT : 200;
 
         if (targetBatch.length > MAX_LIMIT) {
             if (typeof showToast === 'function') showToast(safeT('toastBatchLimitExceeded', { count: targetBatch.length }, `一次最多僅支援批次補齊 ${MAX_LIMIT} 筆單字！`), 'error');

@@ -18,7 +18,7 @@ let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
 
-const MAX_AI_BATCH_LIMIT = 50;
+const MAX_AI_BATCH_LIMIT = 200;
 
 /**
  * ✨ 全域 Toast 浮態提示訊息系統

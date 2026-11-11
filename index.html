@@ -100,7 +100,7 @@
                     <span data-i18n="btnGuestContinue">以訪客身份繼續使用</span>
                 </button>
 
-                                <!-- 🔒 訪客功能限制警示標籤 -->
+                <!-- 🔒 訪客功能限制警示標籤 -->
                 <p class="text-[11px] text-amber-600 dark:text-amber-400 text-center font-bold pt-1">
                     <i class="fa-solid fa-lock mr-1"></i>注意：訪客模式將封鎖「聊天室」與「商店下載/發布」功能
                 </p>
@@ -110,7 +110,7 @@
         </div>
     </div>
 
-        <!-- ⚙️ 步驟 1：新手快速客製化設定 Modal (z-[62]) -->
+    <!-- ⚙️ 步驟 1：新手快速客製化設定 Modal (z-[62]) -->
     <div id="onboardingSetupModal" class="hidden fixed inset-0 z-[62] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-5">
             
@@ -160,14 +160,26 @@
                     </select>
                 </div>
 
-                <!-- 4. Gemini API Key (選填) -->
+                <!-- 4. Gemini API Key (雙軌模式選擇) -->
                 <div>
-                    <label class="block font-bold mb-1" data-i18n="lblApiKey">Gemini AI Key (選填，可之後設定)</label>
-                    <input type="password" id="obApiKey" placeholder="AIzaSy..." class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-mono">
+                    <label class="block font-bold mb-1" data-i18n="lblApiKey">Gemini AI Key 模式</label>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" checked onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <span class="font-bold text-slate-800 dark:text-slate-100">個人 Key</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <span class="font-bold text-slate-800 dark:text-slate-100">免費共用 Key</span>
+                        </label>
+                    </div>
+                    <div id="obApiKeyBox">
+                        <input type="password" id="obApiKey" placeholder="AIzaSy..." class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-mono">
+                    </div>
                 </div>
             </div>
 
-            <!-- 🚀 修正後的底部按鈕：點擊儲存或略過都會開啟導覽並自動關閉此視窗 -->
+            <!-- 🚀 底部按鈕 -->
             <div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end space-x-2">
                 <button type="button" onclick="skipOnboardingSetup()" class="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition">
                     <span data-i18n="btnSkip">略過</span>
@@ -231,7 +243,7 @@
             </div>
 
             <div class="flex items-center space-x-3">
-                <!-- 💬 聊天室按鈕 (加上 id="headerChatBtn") -->
+                <!-- 💬 聊天室按鈕 -->
                 <div class="flex items-center space-x-2">
                     <button type="button" id="headerChatBtn" onclick="openChatDrawer()" class="relative p-2 rounded-xl bg-brand-50 dark:bg-brand-950/50 hover:bg-brand-100 dark:hover:bg-brand-900 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition shadow-2xs">
                         <i class="fa-solid fa-comments text-base"></i>
@@ -585,7 +597,7 @@
                 <div class="space-y-1">
                     <div class="flex items-center space-x-2.5">
                         <h2 class="text-xl font-bold text-slate-900 dark:text-white" data-i18n="navStore">字庫商店</h2>
-                        <!-- 🪙 金幣數顯示 (僅在商城頁面顯示) -->
+                        <!-- 🪙 金幣數顯示 -->
                         <div class="flex items-center space-x-1 px-2.5 py-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-600 dark:text-amber-400 text-xs font-extrabold shadow-2xs">
                             <i class="fa-solid fa-coins text-amber-500"></i>
                             <span id="userCoinsDisplay">500</span>
@@ -609,7 +621,7 @@
             <div id="storeContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
         </section>
 
-                <!-- 區塊 5：設定頁面 (點擊頭像跳轉) -->
+        <!-- 區塊 5：設定頁面 -->
         <section id="sec-settings" class="hidden space-y-6">
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-2xs space-y-6 max-w-lg mx-auto">
                 <div class="border-b border-slate-100 dark:border-slate-700 pb-4">
@@ -743,7 +755,7 @@
                     </button>
                 </div>
 
-                <!-- 🚀 新增：頁面功能導覽教學 -->
+                <!-- 🚀 頁面功能導覽教學 -->
                 <div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
                     <div>
                         <div class="text-xs font-bold text-slate-800 dark:text-slate-100" data-i18n="lblTourGuide">頁面功能導覽</div>
@@ -954,7 +966,7 @@
         </div>
     </div>
 
-    <!-- 彈窗 3: Gemini API Key Modal -->
+    <!-- 彈窗 3: Gemini API Key Modal (雙軌模式) -->
     <div id="keyModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100 dark:border-slate-700">
             <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
@@ -968,20 +980,68 @@
             </div>
 
             <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed" data-i18n="modalKeyDesc">
-                輸入您的 Google Gemini API Key 以啟用自動生成單字音標、詞性、母語釋義及例句翻譯功能。
+                選擇 API 金鑰模式以啟用自動生成單字音標、詞性、母語釋義及例句翻譯功能。
             </p>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblApiKeyInput">API Key</label>
-                <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm font-mono outline-none">
+            <!-- 🌟 雙軌模式切換選單 -->
+            <div class="space-y-3">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">API 金鑰來源</label>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <label class="flex items-center space-x-2 border border-slate-200 dark:border-slate-700 rounded-xl p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                        <input type="radio" name="apiMode" value="personal" id="apiModePersonal" onchange="switchApiMode('personal')" class="text-brand-600 focus:ring-brand-500">
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            個人 API Key
+                            <div class="text-[10px] text-slate-400 font-normal">獨享 200 字大批次</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center space-x-2 border border-slate-200 dark:border-slate-700 rounded-xl p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                        <input type="radio" name="apiMode" value="shared" id="apiModeShared" onchange="switchApiMode('shared')" class="text-brand-600 focus:ring-brand-500">
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            免費共用 Key
+                            <div class="text-[10px] text-slate-400 font-normal">免設定，全站共享</div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- 個人 Key 輸入框 (選免費共用時會自動隱藏) -->
+                <div id="personalKeyInputBox" class="pt-1">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblApiKeyInput">個人 API Key</label>
+                    <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm font-mono outline-none">
+                </div>
             </div>
 
             <div class="pt-2 flex justify-end space-x-2">
                 <button type="button" onclick="closeModal('keyModal')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" data-i18n="btnCancel">取消</button>
-                <button type="button" onclick="handleSaveApiKey()" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm" data-i18n="btnSaveKey">儲存金鑰</button>
+                <button type="button" onclick="handleSaveApiKey()" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm" data-i18n="btnSaveKey">儲存設定</button>
             </div>
         </div>
     </div>
+
+    <script>
+    // 🎛️ 控制 API 切換選單的顯隱與存檔
+    function switchApiMode(mode) {
+        localStorage.setItem('lzhcard_api_mode', mode);
+        const box = document.getElementById('personalKeyInputBox');
+        if (box) {
+            if (mode === 'shared') {
+                box.classList.add('hidden');
+            } else {
+                box.classList.remove('hidden');
+            }
+        }
+        if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
+    }
+
+    // 頁面載入時讀取預設模式
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedMode = localStorage.getItem('lzhcard_api_mode') || 'personal';
+        const radShared = document.getElementById('apiModeShared');
+        const radPersonal = document.getElementById('apiModePersonal');
+        if (savedMode === 'shared' && radShared) radShared.checked = true;
+        if (savedMode === 'personal' && radPersonal) radPersonal.checked = true;
+        switchApiMode(savedMode);
+    });
+    </script>
 
     <!-- 彈窗 4: 字庫 JSON 備份與還原 Modal -->
     <div id="backupModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -1072,7 +1132,7 @@
                 輸入單字（多個單字可以用逗號、空白或換行隔開），AI 將會自動加入字庫！(此功能自訂語言無法使用)
             </p>
 
-            <!-- 🌟 新增：指定/選擇儲存字庫欄位 -->
+            <!-- 指定/選擇儲存字庫欄位 -->
             <div>
                 <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">儲存至字庫：</label>
                 <input type="text" id="quickAddCategoryInput" data-i18n-placeholder="phFormCategory" placeholder="預設字庫 / 或輸入新字庫名稱" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold">
@@ -1174,7 +1234,7 @@
 
                 <!-- 2. 搜尋列與 Tab 功能頁籤 -->
                 <div class="p-3 border-b border-slate-100 dark:border-slate-700 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
-                    <!-- 🔍 搜尋框 (支援搜尋群組、好友或輸入 Email) -->
+                    <!-- 🔍 搜尋框 -->
                     <div class="relative">
                         <input type="text" id="chatSearchInput" oninput="handleChatSearch()" data-i18n-placeholder="phChatSearch" placeholder="搜尋群組、固定暱稱或 Email..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
                         <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>

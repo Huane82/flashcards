@@ -101,7 +101,6 @@ function initLanguageSettings() {
 
     syncSettingsUI();
 
-    // 🌟 初始化時同步更新批量輸入提示
     if (typeof updateBatchPlaceholders === 'function') {
         updateBatchPlaceholders();
     }
@@ -133,7 +132,6 @@ function handleTargetLangChange(lang) {
     localStorage.setItem('lzhcard_target_lang', lang);
     syncSettingsUI();
 
-    // 🌟 當使用者切換學習目標語言時，立即更新批量/快速新增視窗的 Placeholder
     if (typeof updateBatchPlaceholders === 'function') {
         updateBatchPlaceholders();
     }
@@ -184,17 +182,22 @@ function handlePhoneticPosChange(mode) {
 }
 
 /**
- * 🔑 儲存 Gemini API Key
+ * 🔑 儲存 Gemini API Key (支援個人 Key / 免費共用 Key 雙軌存檔)
  */
 function handleSaveApiKey() {
-    const keyInput = document.getElementById('geminiApiKeyInput');
-    const key = keyInput ? keyInput.value.trim() : '';
-    if (!key) {
-        if (typeof showToast === 'function') showToast(t('toastEnterApiKey'), 'warning');
-        return;
+    const selectedMode = document.querySelector('input[name="apiMode"]:checked')?.value || 'personal';
+    localStorage.setItem('lzhcard_api_mode', selectedMode);
+
+    if (selectedMode === 'personal') {
+        const keyInput = document.getElementById('geminiApiKeyInput');
+        const key = keyInput ? keyInput.value.trim() : '';
+        if (!key) {
+            if (typeof showToast === 'function') showToast(t('toastEnterApiKey') || '請輸入個人 API Key！', 'warning');
+            return;
+        }
+        localStorage.setItem(API_KEY_STORAGE_NAME, key);
     }
-    localStorage.setItem(API_KEY_STORAGE_NAME, key);
-    
+
     if (typeof updateApiKeyStatusUI === 'function') {
         updateApiKeyStatusUI();
     }
@@ -204,7 +207,7 @@ function handleSaveApiKey() {
     }
 
     if (typeof closeModal === 'function') closeModal('keyModal');
-    if (typeof showToast === 'function') showToast(t('toastKeySaved'), 'success');
+    if (typeof showToast === 'function') showToast(t('toastKeySaved') || '設定已儲存！', 'success');
 }
 
 /* ==========================================================================

@@ -70,6 +70,14 @@ function startOnboardingFlow() {
     if (nativeSelect) nativeSelect.value = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
     if (targetSelect) targetSelect.value = localStorage.getItem('lzhcard_target_lang') || 'en';
     if (cardSelect) cardSelect.value = localStorage.getItem('lzhcard_display_mode') || 'target_front';
+    
+    // 🌟 同步 API 模式與 Key 內容
+    const savedMode = localStorage.getItem('lzhcard_api_mode') || 'personal';
+    const radShared = document.getElementById('obApiModeShared');
+    const radPersonal = document.getElementById('obApiModePersonal');
+    if (savedMode === 'shared' && radShared) radShared.checked = true;
+    if (savedMode === 'personal' && radPersonal) radPersonal.checked = true;
+
     if (keyInput) keyInput.value = (typeof getValidApiKey === 'function') ? (getValidApiKey() || '') : '';
 
     if (typeof openModal === 'function') openModal('onboardingSetupModal');
@@ -92,17 +100,23 @@ function saveOnboardingSetupAndContinue() {
     const cardMode = document.getElementById('obCardDisplayMode')?.value || 'target_front';
     const apiKey = document.getElementById('obApiKey')?.value.trim();
 
+    // 🌟 讀取新手設定選擇的 API 模式 (個人 / 共用)
+    const apiMode = document.querySelector('input[name="obApiMode"]:checked')?.value || 'personal';
+
     // 寫入儲存
     localStorage.setItem('lzhcard_native_lang', nativeLang);
     localStorage.setItem('lzhcard_target_lang', targetLang);
     localStorage.setItem('lzhcard_display_mode', cardMode);
+    localStorage.setItem('lzhcard_api_mode', apiMode);
 
-    if (apiKey) {
-        localStorage.setItem('gemini_api_key', apiKey);
+    // 🌟 使用統一的名稱 flashcard_gemini_key_v1 儲存
+    if (apiMode === 'personal' && apiKey) {
+        localStorage.setItem('flashcard_gemini_key_v1', apiKey);
     }
 
-    // 更新介面 UI 語系
+    // 更新介面 UI 語系與 API 圖示狀態
     if (typeof applyLanguageUI === 'function') applyLanguageUI();
+    if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
 
     if (typeof closeModal === 'function') closeModal('onboardingSetupModal');
     startInteractiveTour();
@@ -112,7 +126,6 @@ function saveOnboardingSetupAndContinue() {
  * 4. 開啟高亮聚焦導覽教學
  */
 function startInteractiveTour() {
-    // 確保開始導覽時強制關閉設定彈窗
     if (typeof closeModal === 'function') closeModal('onboardingSetupModal');
 
     currentTourIndex = 0;
@@ -133,7 +146,6 @@ function renderTourStep(index) {
 
     const step = TOUR_STEPS[index];
 
-    // 如果該步驟需要切換 Tab，自動切換
     if (step.tab && typeof switchTab === 'function') {
         switchTab(step.tab);
     }
@@ -144,16 +156,13 @@ function renderTourStep(index) {
 
     if (!targetElem || !highlightBox || !popover) return;
 
-    // 取得目標元素的螢幕位置
     const rect = targetElem.getBoundingClientRect();
 
-    // 1. 設定高亮框的位置與大小
     highlightBox.style.top = `${rect.top - 6}px`;
     highlightBox.style.left = `${rect.left - 6}px`;
     highlightBox.style.width = `${rect.width + 12}px`;
     highlightBox.style.height = `${rect.height + 12}px`;
 
-    // 2. 更新標題與內容
     const badgeText = `${index + 1} / ${TOUR_STEPS.length}`;
     const titleText = (typeof t === 'function') ? t(step.titleKey) : step.titleKey;
     const descText = (typeof t === 'function') ? t(step.descKey) : step.descKey;
@@ -166,7 +175,6 @@ function renderTourStep(index) {
     if (titleElem) titleElem.innerText = titleText;
     if (descElem) descElem.innerText = descText;
 
-    // 3. 計算浮動卡片 Popover 位置 (判斷擺在目標上方或下方)
     const windowHeight = window.innerHeight;
     const windowWidth = window.innerWidth;
     const popoverHeight = popover.offsetHeight || 180;
@@ -175,19 +183,16 @@ function renderTourStep(index) {
     let popoverTop = rect.bottom + 16;
     let popoverLeft = rect.left + (rect.width / 2) - (popoverWidth / 2);
 
-    // 若下方空間不足，改顯示在目標上方
     if (popoverTop + popoverHeight > windowHeight - 20) {
         popoverTop = rect.top - popoverHeight - 16;
     }
 
-    // 邊界修正，防止超出螢幕左右兩側
     if (popoverLeft < 10) popoverLeft = 10;
     if (popoverLeft + popoverWidth > windowWidth - 10) popoverLeft = windowWidth - popoverWidth - 10;
 
     popover.style.top = `${Math.max(10, popoverTop)}px`;
     popover.style.left = `${popoverLeft}px`;
 
-    // 4. 更新按鈕狀態
     const prevBtn = document.getElementById('tourPrevBtn');
     const nextBtn = document.getElementById('tourNextBtn');
 
@@ -207,9 +212,6 @@ function renderTourStep(index) {
     }
 }
 
-/**
- * 上一步
- */
 function prevTourStep() {
     if (currentTourIndex > 0) {
         currentTourIndex--;
@@ -217,9 +219,6 @@ function prevTourStep() {
     }
 }
 
-/**
- * 下一步 / 完成
- */
 function nextTourStep() {
     if (currentTourIndex < TOUR_STEPS.length - 1) {
         currentTourIndex++;
@@ -229,16 +228,10 @@ function nextTourStep() {
     }
 }
 
-/**
- * 結束/略過導覽
- */
 function finishTour() {
     const tourOverlay = document.getElementById('onboardingTourOverlay');
     if (tourOverlay) tourOverlay.classList.add('hidden');
 
-    // 標記已完成，下次登入不再自動彈出
     localStorage.setItem('lzhcard_onboarding_completed', 'true');
-    
-    // 重置回到主頁
     if (typeof switchTab === 'function') switchTab('home');
 }

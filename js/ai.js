@@ -4,13 +4,48 @@
 
 window.cachedWorkingModel = null;
 
+// 🌐 Cloudflare Worker 免費共用後端中繼站網址
+const SHARED_BACKEND_URL = "https://lzhcard.tomlin980415.workers.dev";
+
+// ⚠️ 保留原本設定的模型名稱
 const GEMINI_MODELS = [
     "gemini-3.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash"
+    "Gemini 3.6 Flash",
+    "Gemini 3.8 Flash"
 ];
 
-// 🛡️ 安全翻譯輔助函式：防止 t() 未定義時造成 JS 執行階段崩潰
+// 🛡️ 個人 API 流量控制（14 RPM 順暢流控不撞牆）
+const GLOBAL_AI_MAX_RPM = 14;
+const GLOBAL_AI_WINDOW_MS = 60 * 1000;
+window.geminiApiCallTimestamps = window.geminiApiCallTimestamps || [];
+
+/**
+ * ⏳ 個人 API Key 自動排隊機制
+ */
+async function waitForRateLimitSlot() {
+    while (true) {
+        const now = Date.now();
+        window.geminiApiCallTimestamps = window.geminiApiCallTimestamps.filter(
+            ts => now - ts < GLOBAL_AI_WINDOW_MS
+        );
+
+        if (window.geminiApiCallTimestamps.length < GLOBAL_AI_MAX_RPM) {
+            window.geminiApiCallTimestamps.push(now);
+            return;
+        }
+
+        const oldestCall = window.geminiApiCallTimestamps[0];
+        const waitMs = GLOBAL_AI_WINDOW_MS - (now - oldestCall) + 100;
+        
+        console.log(`[AI Rate Limiter] 個人配額達 14 RPM，自動排隊 ${Math.ceil(waitMs / 1000)} 秒...`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+    }
+}
+
+function getApiMode() {
+    return localStorage.getItem('lzhcard_api_mode') || 'personal';
+}
+
 function safeT(key, params, fallbackStr) {
     if (typeof t === 'function') {
         try {
@@ -29,6 +64,13 @@ function safeT(key, params, fallbackStr) {
 function updateApiKeyStatusUI() {
     const icon = document.getElementById('apiKeyIcon');
     if (!icon) return;
+
+    const mode = getApiMode();
+    if (mode === 'shared') {
+        icon.classList.remove('text-amber-500');
+        icon.classList.add('text-emerald-500');
+        return;
+    }
 
     const rawKey = localStorage.getItem('flashcard_gemini_key_v1');
     const isValid = rawKey && rawKey.trim() && rawKey.trim() !== 'undefined' && rawKey.trim() !== 'null';
@@ -55,33 +97,43 @@ function getValidApiKey() {
     return rawKey.trim();
 }
 
-async function callGeminiApi(apiKey, promptText) {
+/**
+ * 🌐 全域底層 API 呼叫函式 (雙軌模式入口)
+ */
+async function callGeminiApi(promptText) {
+    const mode = getApiMode();
+
+    if (mode === 'shared') {
+        // 🔹 模式 1：使用系統共用 Key（呼叫 Cloudflare Worker 後端代理）
+        return await fetchViaSharedProxy(promptText);
+    } else {
+        // 🔹 模式 2：使用個人 API Key（直連 Google，前端流控保護）
+        const apiKey = getValidApiKey();
+        if (!apiKey) {
+            if (typeof showToast === 'function') showToast(safeT('toastNoApiKey', null, '請先設定個人 Gemini API Key 或切換為免費共用模式'), "warning");
+            if (typeof openModal === 'function') openModal('keyModal');
+            throw new Error("未設定個人 API Key");
+        }
+        await waitForRateLimitSlot();
+        return await fetchGeminiDirectly(apiKey, promptText);
+    }
+}
+
+/**
+ * 🔹 個人 Key：前端直接呼叫 Google API (支援自動切換模型與重試)
+ */
+async function fetchGeminiDirectly(apiKey, promptText) {
     const cleanKey = apiKey.trim();
 
-    if (window.cachedWorkingModel) {
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${window.cachedWorkingModel}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-        try {
-            const res = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-            });
+    const modelList = window.cachedWorkingModel 
+        ? [window.cachedWorkingModel, ...GEMINI_MODELS.filter(m => m !== window.cachedWorkingModel)]
+        : GEMINI_MODELS;
 
-            if (res.ok) {
-                const data = await res.json();
-                return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            }
-            if (res.status === 404) {
-                window.cachedWorkingModel = null;
-            }
-        } catch (e) {
-            console.error(`[AI Engine Exception]:`, e);
-            window.cachedWorkingModel = null;
-        }
-    }
+    let lastError = null;
 
-    for (const model of GEMINI_MODELS) {
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+    for (const model of modelList) {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+        
         try {
             const res = await fetch(apiUrl, {
                 method: 'POST',
@@ -92,7 +144,6 @@ async function callGeminiApi(apiKey, promptText) {
             if (res.ok) {
                 const data = await res.json();
                 window.cachedWorkingModel = model;
-                console.log(`[AI Engine] 成功連線模型：${model}`);
                 return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
             }
 
@@ -101,18 +152,53 @@ async function callGeminiApi(apiKey, promptText) {
                 updateApiKeyStatusUI();
                 if (typeof showToast === 'function') showToast(safeT('toastInvalidApiKey', null, 'Gemini API Key 無效，請重新設定'), "error");
                 if (typeof openModal === 'function') openModal('keyModal');
-                return null;
-            } else if (res.status === 429) {
-                if (typeof showToast === 'function') showToast(safeT('toastRateLimit', null, 'API 請求過於頻繁，請稍後再試'), "warning");
-                return null;
+                throw new Error("Gemini API Key 無效");
             }
+
+            lastError = `模型 ${model} 回應異常 (${res.status})`;
         } catch (e) {
             console.error(`[AI Engine] 嘗試模型 ${model} 失敗:`, e);
+            lastError = e.message;
         }
     }
 
-    if (typeof showToast === 'function') showToast(safeT('toastApiConnError', null, '無法連線至 AI 伺服器'), "error");
-    return null;
+    throw new Error(lastError || "無法連線至 AI 伺服器");
+}
+
+/**
+ * 🔹 共用 Key：透過 Cloudflare Worker 後端代理伺服器轉發 (含精準 CORS / 網路報錯)
+ */
+async function fetchViaSharedProxy(promptText) {
+    try {
+        const res = await fetch(SHARED_BACKEND_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: promptText }] }]
+            })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        } else if (res.status === 429) {
+            if (typeof showToast === 'function') {
+                showToast("共用免費配額繁忙中，建議於設定中填入個人 API Key 解鎖完整速度！", "warning");
+            }
+            throw new Error("共用免費 API 限流 (429)");
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            const errorMsg = errData.error || `伺服器回應異常 (${res.status})`;
+            console.error('[Shared API Proxy Error]:', errorMsg);
+            throw new Error(errorMsg);
+        }
+    } catch (e) {
+        console.error('[Shared API Proxy Exception]:', e);
+        const failMessage = e.message === 'Failed to fetch' 
+            ? '網路連線失敗或 Worker CORS 跨域遭阻擋' 
+            : e.message;
+        throw new Error(failMessage);
+    }
 }
 
 function safeParseJSON(rawText) {
@@ -167,17 +253,32 @@ function safeParseJSON(rawText) {
     return null;
 }
 
-function isFieldIncomplete(val) {
+/**
+ * 🛡️ 增強版欄位完整性與語言錯植檢查
+ */
+function isFieldIncomplete(val, fieldType = '') {
     if (!val) return true;
     const str = String(val).trim();
-    if (str === '' || str === '-' || str === 'N/A' || str === 'EMPTY') return true;
+    if (str === '' || str === '-' || str === 'N/A' || str === 'EMPTY' || str === '""' || str === 'undefined' || str === 'null') return true;
 
     const pendingKeywords = [
         '解析中', 'parsing', '尚未填寫', '未入力', '待補齊', 
-        'no definition', 'pending', '自動解析'
+        'no definition', 'pending', '自動解析', 'no sentence', 
+        '無例句', '未設定例句', '無翻譯', '未設定', 'empty'
     ];
 
-    return pendingKeywords.some(keyword => str.toLowerCase().includes(keyword.toLowerCase()));
+    if (pendingKeywords.some(keyword => str.toLowerCase().includes(keyword.toLowerCase()))) {
+        return true;
+    }
+
+    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
+    if (targetLang === 'en' && (fieldType === 'sentence' || fieldType === 'translation')) {
+        if (/[\u3040-\u30ff]/.test(str)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function getLanguageConfig() {
@@ -237,13 +338,6 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
 }
 
 async function autoFillWithAI(word) {
-    const rawKey = getValidApiKey();
-    if (!rawKey) {
-        if (typeof showToast === 'function') showToast(safeT('toastNoApiKey', null, '請設定 Gemini API Key'), "warning");
-        if (typeof openModal === 'function') openModal('keyModal');
-        return null;
-    }
-
     const cleaned = sanitizeWordAndPos(word, '', '');
     const cleanWord = cleaned.word;
     const { targetName, nativeName } = getLanguageConfig();
@@ -254,7 +348,7 @@ Target Language: ${targetName}
 User Native Language: ${nativeName}
 
 LANGUAGE INSTRUCTIONS:
-1. "word": The clean term in Target Language (${targetName}).
+1. "word": Keep EXACTLY as "${cleanWord}". Do NOT append readings, brackets, or translation.
 2. "phonetic": Pronunciation guide (IPA / Kana / Pinyin / Romaji).
 3. "pos": Parts of speech translated in User Native Language (${nativeName}).
 4. "meaning": Precise definition translated in User Native Language (${nativeName}).
@@ -271,35 +365,36 @@ Return ONLY a valid raw JSON object:
   "translation": "Translation in ${nativeName}"
 }`;
 
-    const rawResponse = await callGeminiApi(rawKey, prompt);
-    return safeParseJSON(rawResponse);
+    try {
+        const rawResponse = await callGeminiApi(prompt);
+        return safeParseJSON(rawResponse);
+    } catch (e) {
+        if (typeof showToast === 'function') showToast("AI 解析失敗：" + e.message, "error");
+        return null;
+    }
 }
 
 /**
- * 🤖 批次 AI 欄位補充與錯植語言修復核心邏輯
+ * 🤖 批次 AI 欄位補充核心邏輯 (含失敗重試、真報錯與不漏字保障)
  */
 async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
-    const rawKey = getValidApiKey();
-    if (!rawKey) {
-        if (typeof showToast === 'function') showToast(safeT('toastNoApiKey', null, '請設定 Gemini API Key'), "warning");
-        if (typeof openModal === 'function') openModal('keyModal');
-        return;
-    }
-
     const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
-        isFieldIncomplete(item.meaning) || 
-        isFieldIncomplete(item.pos) || 
-        isFieldIncomplete(item.sentence) || 
-        isFieldIncomplete(item.translation) ||
-        isFieldIncomplete(item.phonetic)
+        isFieldIncomplete(item.meaning, 'meaning') || 
+        isFieldIncomplete(item.pos, 'pos') || 
+        isFieldIncomplete(item.sentence, 'sentence') || 
+        isFieldIncomplete(item.translation, 'translation') ||
+        isFieldIncomplete(item.phonetic, 'phonetic')
     );
 
     const total = targetItems.length;
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 10;
+    const batchSize = 30; // 🌟 設定每批 30 字，平衡穩定度與速度
     let completedCount = 0;
+    let successUpdatedCount = 0;
+
+    const normalizeWord = str => (str || '').toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]/g, '');
 
     for (let i = 0; i < total; i += batchSize) {
         const chunk = targetItems.slice(i, i + batchSize);
@@ -310,9 +405,10 @@ Input Terms: ${JSON.stringify(chunkWords)}
 Target Language: ${targetName}
 User Native Language: ${nativeName}
 
-LANGUAGE INSTRUCTIONS:
-- Example "sentence" MUST be written strictly in Target Language (${targetName}).
-- "pos", "meaning", and "translation" MUST be written strictly in User Native Language (${nativeName}).
+CRITICAL RULES:
+- "word": MUST match the exact string from the input array without adding brackets or furigana.
+- "sentence": MUST be a natural example sentence written strictly in Target Language (${targetName}).
+- "pos", "meaning", and "translation": MUST be written strictly in User Native Language (${nativeName}).
 
 Return ONLY a pure JSON array matching the input order:
 [
@@ -326,23 +422,54 @@ Return ONLY a pure JSON array matching the input order:
   }
 ]`;
 
-        const rawResponse = await callGeminiApi(rawKey, prompt);
+        let rawResponse = null;
+        let attempt = 0;
+        const maxAttempts = 5;
+        let lastErrorMsg = '';
+
+        while (!rawResponse && attempt < maxAttempts) {
+            attempt++;
+            try {
+                rawResponse = await callGeminiApi(prompt);
+            } catch (err) {
+                lastErrorMsg = err.message;
+            }
+
+            if (!rawResponse) {
+                if (attempt < maxAttempts) {
+                    console.warn(`[AI Batch Retry] 批次解析暫時中斷 (${lastErrorMsg})，等待 ${attempt * 2} 秒後進行第 ${attempt} 次重試...`);
+                    await new Promise(r => setTimeout(r, attempt * 2000)); // 遞增冷卻時間 (2s, 4s, 6s...)
+                }
+            }
+        }
+
         if (rawResponse) {
             const results = safeParseJSON(rawResponse);
             if (Array.isArray(results)) {
                 results.forEach(resItem => {
                     if (!resItem || !resItem.word) return;
-                    const target = targetList.find(p => p.word.trim().toLowerCase() === resItem.word.trim().toLowerCase());
+
+                    const target = targetList.find(p => {
+                        if (!p || !p.word) return false;
+                        const cleanP = normalizeWord(p.word);
+                        const cleanRes = normalizeWord(resItem.word);
+                        return cleanP === cleanRes || cleanRes.startsWith(cleanP) || cleanP.startsWith(cleanRes);
+                    });
+
                     if (target) {
-                        if ((forceOverwrite || isFieldIncomplete(target.pos)) && resItem.pos) target.pos = resItem.pos;
-                        if ((forceOverwrite || isFieldIncomplete(target.phonetic)) && resItem.phonetic) target.phonetic = resItem.phonetic;
-                        if ((forceOverwrite || isFieldIncomplete(target.meaning)) && resItem.meaning) target.meaning = resItem.meaning;
-                        if ((forceOverwrite || isFieldIncomplete(target.sentence)) && resItem.sentence) target.sentence = resItem.sentence;
-                        if ((forceOverwrite || isFieldIncomplete(target.translation)) && resItem.translation) target.translation = resItem.translation;
+                        if ((forceOverwrite || isFieldIncomplete(target.pos, 'pos')) && resItem.pos) target.pos = resItem.pos;
+                        if ((forceOverwrite || isFieldIncomplete(target.phonetic, 'phonetic')) && resItem.phonetic) target.phonetic = resItem.phonetic;
+                        if ((forceOverwrite || isFieldIncomplete(target.meaning, 'meaning')) && resItem.meaning) target.meaning = resItem.meaning;
+                        if ((forceOverwrite || isFieldIncomplete(target.sentence, 'sentence')) && resItem.sentence) target.sentence = resItem.sentence;
+                        if ((forceOverwrite || isFieldIncomplete(target.translation, 'translation')) && resItem.translation) target.translation = resItem.translation;
                         target.updatedAt = Date.now();
+                        successUpdatedCount++;
                     }
                 });
             }
+        } else {
+            console.error(`[AI Batch Error] 該批次重試 ${maxAttempts} 次仍無法連線：`, chunkWords);
+            throw new Error(lastErrorMsg || "連線至 AI 伺服器失敗，請檢查網路連線或 Cloudflare Worker CORS 設定");
         }
 
         completedCount += chunk.length;
@@ -351,7 +478,11 @@ Return ONLY a pure JSON array matching the input order:
         }
 
         if (i + batchSize < total) {
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
+    }
+
+    if (successUpdatedCount === 0) {
+        throw new Error("AI 未能成功解析任何單字，請稍後再試");
     }
 }
