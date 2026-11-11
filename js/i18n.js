@@ -466,7 +466,12 @@ const I18N_DICTIONARY = {
         onlineUserHidden: "線上人數：已隱藏 (隱私模式開啟中)",
         onlineListEmpty: "目前沒有其他在線使用者",
         privacyListNotice: "您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）",
-        toastEarnCoin10Cards: "🎉 累積刷滿 10 張字卡，獲得 1 金幣！"
+        toastEarnCoin10Cards: "🎉 累積刷滿 10 張字卡，獲得 1 金幣！",
+        lblApiKeySource: "API 金鑰來源",
+        lblApiPersonalKey: "個人 API Key",
+        lblApiPersonalKeyDesc: "獨享 200 字大批次",
+        lblApiSharedKey: "免費共用 Key",
+        lblApiSharedKeyDesc: "免設定，全站共享"
     },
     'en': {
         appSubtitle: "Exam Prep Flashcards",
@@ -914,7 +919,12 @@ const I18N_DICTIONARY = {
         onlineUserHidden: "Online Users: Hidden (Privacy Mode)",
         onlineListEmpty: "No other online users",
         privacyListNotice: "Privacy mode enabled (Cannot view others' online status)",
-        toastEarnCoin10Cards: "🎉 Reviewed 10 cards and earned 1 coin!"
+        toastEarnCoin10Cards: "🎉 Reviewed 10 cards and earned 1 coin!",
+        lblApiKeySource: "API Key Source",
+        lblApiPersonalKey: "Personal API Key",
+        lblApiPersonalKeyDesc: "Exclusive 200-word large batch",
+        lblApiSharedKey: "Free Shared Key",
+        lblApiSharedKeyDesc: "No setup required, shared site-wide"
     },
     'ja': {
         appSubtitle: "単語暗記ツール",
@@ -1363,7 +1373,12 @@ const I18N_DICTIONARY = {
         onlineUserHidden: "オンライン人数：非表示 (プライバシーモード)",
         onlineListEmpty: "現在オンラインのユーザーはいません",
         privacyListNotice: "プライバシーモード有効（他人のオンラインステータスを表示できません）",
-        toastEarnCoin10Cards: "🎉 10枚のカードを復習して1コインを獲得しました！"
+        toastEarnCoin10Cards: "🎉 10枚のカードを復習して1コインを獲得しました！",
+        lblApiKeySource: "API キーソース",
+        lblApiPersonalKey: "個人 API Key",
+        lblApiPersonalKeyDesc: "最大200単語の一括処理",
+        lblApiSharedKey: "無料共有 Key",
+        lblApiSharedKeyDesc: "設定不要、全ユーザーで共有"
     }
 };
 
