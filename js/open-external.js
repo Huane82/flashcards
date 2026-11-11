@@ -33,12 +33,11 @@
 })();
 
 /**
- * 🎨 渲染高顏值遮罩
+ * 🎨 渲染高顏值遮罩 (掛載至 window 物件)
  */
 function showIosGuideModal() {
     if (document.getElementById("ios-browser-guide-mask")) return;
 
-    // 建立外層遮罩容器
     const mask = document.createElement("div");
     mask.id = "ios-browser-guide-mask";
     mask.style.cssText = `
@@ -53,14 +52,12 @@ function showIosGuideModal() {
         align-items: flex-end;
         padding: 16px 20px;
         box-sizing: border-box;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         color: #ffffff;
         animation: fadeIn 0.25s ease-out;
     `;
 
-    // 遮罩內部 HTML 結構 (包含弧形 SVG 箭頭、卡片式引導說明、關閉按鈕)
     mask.innerHTML = `
-        <!-- 指向右上角的弧形箭頭 SVG -->
         <div style="margin-right: 12px; margin-top: 4px; animation: bounce 1.2s infinite alternate;">
             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M7 17L17 7"></path>
@@ -68,7 +65,6 @@ function showIosGuideModal() {
             </svg>
         </div>
 
-        <!-- 說明卡片 -->
         <div style="
             background: rgba(255, 255, 255, 0.12);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -93,7 +89,6 @@ function showIosGuideModal() {
             </div>
         </div>
 
-        <!-- 允許使用者關閉遮罩的按鈕 -->
         <button id="close-guide-btn" style="
             margin-top: 24px;
             align-self: center;
@@ -108,23 +103,18 @@ function showIosGuideModal() {
             先繼續留在 App 內
         </button>
 
-        <!-- 關鍵動畫 CSS -->
         <style>
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            @keyframes bounce {
-                from { transform: translate(0, 0); }
-                to { transform: translate(6px, -6px); }
-            }
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes bounce { from { transform: translate(0, 0); } to { transform: translate(6px, -6px); } }
         </style>
     `;
 
     document.body.appendChild(mask);
 
-    // 點擊關閉按鈕或背景時關閉遮罩
     document.getElementById("close-guide-btn").addEventListener("click", () => {
         mask.remove();
     });
 }
+
+// 🌟 核心修正：明確將函式綁定至 window 全域
+window.showIosGuideModal = showIosGuideModal;
