@@ -382,7 +382,7 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 40; // 🌟 每批 40 字
+    const batchSize = 20; // 🌟 每批 30 字
     let completedCount = 0;
     let successUpdatedCount = 0;
 
