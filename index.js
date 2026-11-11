@@ -1,5 +1,5 @@
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -7,7 +7,7 @@ export default {
       "Access-Control-Max-Age": "86400",
     };
 
-    // 1. 處理預檢請求 (OPTIONS)
+    // 1. 優先處理 CORS OPTIONS 預檢請求
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -25,7 +25,7 @@ export default {
         );
       }
 
-      // 3. 讀取 Body
+      // 3. 解析 Body
       let body;
       try {
         body = await request.json();
@@ -36,20 +36,46 @@ export default {
         );
       }
 
-      // 4. 呼叫 Google Gemini API
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const response = await fetch(geminiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      // 🌟 指定的模型輪詢清單
+      const GEMINI_MODELS = [
+        "gemini-3.5-flash-lite",
+        "Gemini 3.6 Flash",
+        "Gemini 3.8 Flash"
+      ];
 
-      const data = await response.json();
+      let lastErrorData = null;
 
-      return new Response(JSON.stringify(data), {
-        status: response.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // 4. 依序嘗試呼叫指定模型
+      for (const model of GEMINI_MODELS) {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`;
+        
+        try {
+          const response = await fetch(geminiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: body.contents }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            return new Response(JSON.stringify(data), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          lastErrorData = data;
+        } catch (e) {
+          lastErrorData = { error: e.message };
+        }
+      }
+
+      // 若所有指定模型皆回應失敗，回傳最後一次的錯誤訊息
+      return new Response(
+        JSON.stringify(lastErrorData || { error: "所有 Gemini 模型皆回應失敗" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
 
     } catch (err) {
       return new Response(
