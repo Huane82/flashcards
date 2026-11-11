@@ -234,7 +234,7 @@ function initChatRealtimeListeners() {
 }
 
 /**
- * 👁️ 3. 渲染線上人數、線上名單與管理員透視面板
+ * 👁️ 3. 渲染線上人數、線上名單與管理員透視面板 (支援 i18n)
  */
 function renderOnlineStatusUI() {
     const onlineCountEl = document.getElementById('onlineUserCountText');
@@ -254,10 +254,6 @@ function renderOnlineStatusUI() {
 
             const targetUserIsHidden = !!userStatus.hidePrivacy;
 
-            // 雙向隱私邏輯：
-            // 1. 管理員永遠可以看到所有人
-            // 2. 一般玩家若自己開啟「隱藏線上/已讀」，則看不到任何人，別人也看不到他
-            // 3. 一般玩家若對方開啟「隱藏線上/已讀」，則看不到對方
             if (isAdmin) {
                 visibleOnlineUsers.push({ uid, ...userStatus });
             } else if (!myPrivacyHide && !targetUserIsHidden) {
@@ -269,18 +265,18 @@ function renderOnlineStatusUI() {
     // A. 渲染線上人數標籤
     if (onlineCountEl) {
         if (myPrivacyHide) {
-            onlineCountEl.textContent = `線上人數：已隱藏 (隱私模式開啟中)`;
+            onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-slate-400 rounded-full inline-block"></span> ${typeof t === 'function' ? t('onlineUserHidden') : '線上人數：已隱藏 (隱私模式開啟中)'}`;
         } else {
-            onlineCountEl.textContent = `線上人數：${visibleOnlineUsers.length} 人`;
+            onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse inline-block"></span> ${typeof t === 'function' ? t('onlineUserCount', { count: visibleOnlineUsers.length }) : `線上人數：${visibleOnlineUsers.length} 人`}`;
         }
     }
 
     // B. 渲染普通使用者可見的線上名單
     if (onlineListContainer) {
         if (myPrivacyHide) {
-            onlineListContainer.innerHTML = `<div class="p-2 text-center text-slate-400 text-xs">您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）</div>`;
+            onlineListContainer.innerHTML = `<div class="p-2 text-center text-slate-400 text-xs">${typeof t === 'function' ? t('privacyListNotice') : '您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）'}</div>`;
         } else if (visibleOnlineUsers.length === 0) {
-            onlineListContainer.innerHTML = `<div class="p-2 text-center text-slate-400 text-xs">目前沒有其他在線使用者</div>`;
+            onlineListContainer.innerHTML = `<div class="p-2 text-center text-slate-400 text-xs">${typeof t === 'function' ? t('onlineListEmpty') : '目前沒有其他在線使用者'}</div>`;
         } else {
             onlineListContainer.innerHTML = visibleOnlineUsers.map(u => `
                 <div class="flex items-center space-x-2 p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-xs">

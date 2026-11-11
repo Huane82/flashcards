@@ -389,7 +389,11 @@ const I18N_DICTIONARY = {
         tourStatsTitle: "學習成果統計",
         tourStatsDesc: "視覺化圖表呈現總單字累積量、掌握率及艾賓浩斯 5 級熟練度分佈。",
         tourSettingsTitle: "帳號與系統設定",
-        tourSettingsDesc: "設定固定暱稱、母語/學習目標語言、卡片正面顯示模式及 Gemini API Key。"
+        tourSettingsDesc: "設定固定暱稱、母語/學習目標語言、卡片正面顯示模式及 Gemini API Key。",
+        onlineUserCount: "線上人數：{count} 人",
+        onlineUserHidden: "線上人數：已隱藏 (隱私模式開啟中)",
+        onlineListEmpty: "目前沒有其他在線使用者",
+        privacyListNotice: "您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）"
     },
     'en': {
         appSubtitle: "Exam Prep Flashcards",
@@ -763,7 +767,11 @@ const I18N_DICTIONARY = {
         tourStatsTitle: "Learning Analytics",
         tourStatsDesc: "Visualized charts showing vocabulary growth, mastery rate, and level distributions.",
         tourSettingsTitle: "System Settings",
-        tourSettingsDesc: "Configure your nickname, native/target languages, card display mode, and Gemini API Key."
+        tourSettingsDesc: "Configure your nickname, native/target languages, card display mode, and Gemini API Key.",
+        onlineUserCount: "Online Users: {count}",
+        onlineUserHidden: "Online Users: Hidden (Privacy Mode)",
+        onlineListEmpty: "No other online users",
+        privacyListNotice: "Privacy mode enabled (Cannot view others' online status)"
     },
     'ja': {
         appSubtitle: "単語暗記ツール",
@@ -1137,7 +1145,11 @@ const I18N_DICTIONARY = {
         tourStatsTitle: "学習成果統計",
         tourStatsDesc: "総単語数、習得率、エビングハウスレベルの分布をグラフで視覚化します。",
         tourSettingsTitle: "アカウント＆設定",
-        tourSettingsDesc: "ニックネーム、母国語・目標言語、カード表示モード、Gemini API Keyを設定します。"
+        tourSettingsDesc: "ニックネーム、母国語・目標言語、カード表示モード、Gemini API Keyを設定します。",
+        onlineUserCount: "オンライン人数：{count} 人",
+    onlineUserHidden: "オンライン人数：非表示 (プライバシーモード)",
+    onlineListEmpty: "現在オンラインのユーザーはいません",
+    privacyListNotice: "プライバシーモード有効（他人のオンラインステータスを表示できません）"
     }
 };
 
