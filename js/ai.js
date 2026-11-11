@@ -367,7 +367,7 @@ Return ONLY a valid raw JSON object:
 }
 
 /**
- * 🤖 批次 AI 欄位補充核心邏輯 (每批 20 字，確保效能與完整度平衡)
+ * 🤖 批次 AI 欄位補充核心邏輯 (每批 20 字，即時邊跑邊存檔)
  */
 async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
     const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
@@ -382,7 +382,7 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 20; // 🌟 實測最佳批次量：每批 20 字
+    const batchSize = 20; // 🌟 每批 20 字
     let completedCount = 0;
     let successUpdatedCount = 0;
 
@@ -470,6 +470,14 @@ Return ONLY a pure JSON array matching input order:
                         successUpdatedCount++;
                     }
                 });
+
+                // 💾 🌟 核心修改點：每完成一批（20字），立刻寫入 LocalStorage 存檔並即時更新 UI
+                if (typeof saveStorage === 'function') {
+                    saveStorage();
+                }
+                if (typeof renderWordList === 'function') {
+                    renderWordList();
+                }
             }
         } else {
             console.error(`[AI Batch Error] 該批次重試 ${maxAttempts} 次仍無法連線：`, chunkWords);
@@ -486,7 +494,7 @@ Return ONLY a pure JSON array matching input order:
         }
     }
 
-    // 🔄 二次自動補掃機制 (Auto Sweep Pass)：每批 25 字二次撿漏
+    // 🔄 二次自動補掃機制 (Auto Sweep Pass)
     const leftoverItems = targetItems.filter(item => 
         isFieldIncomplete(item.meaning, 'meaning') || 
         isFieldIncomplete(item.pos, 'pos') || 
@@ -546,6 +554,14 @@ Return ONLY a pure JSON array:
                                 successUpdatedCount++;
                             }
                         });
+
+                        // 💾 🌟 補掃完成後也立刻存檔
+                        if (typeof saveStorage === 'function') {
+                            saveStorage();
+                        }
+                        if (typeof renderWordList === 'function') {
+                            renderWordList();
+                        }
                     }
                 }
             } catch (sweepErr) {
