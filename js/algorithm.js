@@ -1,3 +1,7 @@
+/**
+ * 🧠 艾賓浩斯演算法與抽卡邏輯 (js/algorithm.js)
+ */
+
 const LEVEL_NAMES = {
     1: "Lv.1",
     2: "Lv.2",
@@ -17,6 +21,7 @@ const LEVEL_COLORS = {
 let activeLevel1Pool = [];
 let activeLevel2Pool = [];
 let historyQueue = [];
+let level5HistoryQueue = []; // 🌟 專屬記錄 Lv.5 出現過的單字佇列
 
 function getLevelInfo(level) {
     const lv = level || 1;
@@ -91,17 +96,46 @@ function getNextCardSpacedRepetition() {
     }
 
     const BASE_WEIGHTS = { 1: 250, 2: 70, 3: 35, 4: 15, 5: 4 };
+    const weightedCandidates = [];
 
-    const weightedCandidates = poolToSelectFrom.map(word => {
+    // 1️⃣ 處理非 Lv.5 單字（維持原本權重邏輯）
+    const nonLv5Words = poolToSelectFrom.filter(w => w.level !== 5);
+    nonLv5Words.forEach(word => {
         let weight = BASE_WEIGHTS[word.level] || 50;
-
         const historyIndex = historyQueue.indexOf(word.id);
         if (historyIndex !== -1) {
             weight *= 0.25;
         }
-        return { word, weight: Math.max(weight, 0.1) };
+        weightedCandidates.push({ word, weight: Math.max(weight, 0.1) });
     });
 
+    // 2️⃣ 處理 Lv.5 單字（動態權重歸一化，保持 Lv.5 總權重不變，但內部優先抽沒出現過的字）
+    const lv5Words = poolToSelectFrom.filter(w => w.level === 5);
+    if (lv5Words.length > 0) {
+        const targetTotalLv5Weight = lv5Words.length * BASE_WEIGHTS[5]; // 第 5 級應有的總權重配額
+
+        // 計算新鮮度權重 (新鮮字 = 1.0，剛出現過的字 = 0.01)
+        const lv5Freshness = lv5Words.map(word => {
+            const hIndex = level5HistoryQueue.indexOf(word.id);
+            let freshWeight = 1.0;
+            if (hIndex !== -1) {
+                // 越近代出現過懲罰越重
+                const recencyRatio = (hIndex + 1) / level5HistoryQueue.length;
+                freshWeight = 0.01 + 0.09 * recencyRatio; // 0.01 ~ 0.1
+            }
+            return { word, freshWeight };
+        });
+
+        const totalFreshness = lv5Freshness.reduce((sum, item) => sum + item.freshWeight, 0);
+
+        // 將新鮮度權重按比例等比放回到目標總權重
+        lv5Freshness.forEach(item => {
+            const normalizedWeight = (item.freshWeight / totalFreshness) * targetTotalLv5Weight;
+            weightedCandidates.push({ word: item.word, weight: Math.max(normalizedWeight, 0.01) });
+        });
+    }
+
+    // 🎲 加權隨機抽卡
     const totalWeight = weightedCandidates.reduce((sum, item) => sum + item.weight, 0);
     let randomNum = Math.random() * totalWeight;
 
@@ -114,8 +148,18 @@ function getNextCardSpacedRepetition() {
         randomNum -= item.weight;
     }
 
+    // 📝 更新通用歷史佇列
     historyQueue.push(selectedCard.id);
     if (historyQueue.length > 4) historyQueue.shift();
+
+    // 📝 若抽中 Lv.5 單字，更新專屬的 Lv.5 歷史佇列 (最多記憶近 30 個或候選數-1 個)
+    if (selectedCard.level === 5) {
+        level5HistoryQueue.push(selectedCard.id);
+        const maxLv5History = Math.max(10, lv5Words.length - 1);
+        if (level5HistoryQueue.length > maxLv5History) {
+            level5HistoryQueue.shift();
+        }
+    }
 
     return selectedCard;
 }
