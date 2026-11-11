@@ -78,6 +78,12 @@ function syncSettingsUI() {
     if (nicknameInput && window.userData && window.userData.nickname) {
         nicknameInput.value = window.userData.nickname;
     }
+
+    // 🟢 同步「隱藏線上狀態與已讀」切換開關 (privacyStatusToggle)
+    const privacyToggle = document.getElementById('privacyStatusToggle');
+    if (privacyToggle) {
+        privacyToggle.checked = !!(window.userData && window.userData.privacyHideStatus);
+    }
 }
 
 /**
@@ -293,6 +299,7 @@ function checkAuthAndTosState() {
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
                 closeWelcomeModal();
+                syncSettingsUI(); // 🟢 登入成功時同步設定區 UI 開關狀態
             } else if (isGuest && tosAccepted) {
                 closeWelcomeModal();
             } else {

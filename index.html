@@ -11,10 +11,6 @@
         document.documentElement.classList.remove('dark');
     }
     </script>
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -652,6 +648,18 @@
                         <input type="text" id="settingsNicknameInput" data-i18n-placeholder="phNicknameInput" placeholder="設定您的固定暱稱..." class="flex-1 px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
                         <button type="button" onclick="handleSaveNickname()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-xs whitespace-nowrap" data-i18n="btnSaveNickname">儲存暱稱</button>
                     </div>
+                </div>
+
+                <!-- 🔒 隱私與線上狀態設定 -->
+                <div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100" data-i18n="lblPrivacyStatus">隱藏線上狀態與訊息已讀</div>
+                        <div class="text-[11px] text-slate-400" data-i18n="descPrivacyStatus">開啟後其他玩家將無法看到您的在線狀態</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="privacyStatusToggle" onchange="if(typeof handlePrivacyToggleChange==='function')handlePrivacyToggleChange(this.checked)" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-brand-600"></div>
+                    </label>
                 </div>
 
                 <!-- 登入/登出操作 -->
@@ -1345,7 +1353,7 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs (統一使用 10.7.1 Compat 版本) -->
+    <!-- Firebase SDKs (Compat 10.7.1) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>

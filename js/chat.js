@@ -1,5 +1,5 @@
 /**
- * LZHCard - 聊天、好友申請、群組管理與系統公告模組 (chat.js - Realtime Database 100% 重構加固版)
+ * LZHCard - 聊天、好友、群組、公告、在線狀態、已讀與隱私控制模組 (chat.js)
  */
 
 if (!window.userData) window.userData = {};
@@ -11,15 +11,19 @@ let chatSearchQuery = '';
 
 // RTDB 監聽器引用
 let activeChatListener = null;
+let activeChatReadListener = null;
 let friendRequestsListener = null;
 let groupInvitesListener = null;
 let chatsListListener = null;
 let announcementsListener = null;
+let presenceStatusListener = null;
 
 let pendingRequestsList = [];
 let pendingGroupInvitesList = [];
 let userChatThreads = [];
 let cloudAnnouncements = [];
+let onlineUsersMap = {}; // 記錄全站線上使用者狀態
+let chatReadByMap = {};   // 記錄當前聊天室各成員最後已讀時間
 
 // 取得 RTDB 實例
 function getRtdb() {
@@ -66,6 +70,9 @@ function checkAdminPermissions() {
 
     const adminBadge = document.getElementById('adminBadge');
     if (adminBadge) adminBadge.classList.toggle('hidden', !isAdmin);
+
+    const adminOnlinePanel = document.getElementById('adminOnlineMonitorPanel');
+    if (adminOnlinePanel) adminOnlinePanel.classList.toggle('hidden', !isAdmin);
 }
 
 /**
@@ -119,14 +126,56 @@ function updateUnreadBadgeUI() {
 }
 
 /**
- * 📡 初始化 Realtime Database 全局即時監聽器
+ * 🟢 1. 在線狀態 Presence 綁定與自動離線偵測
+ */
+function initUserPresenceTracker() {
+    if (isGuestUser()) return;
+    const currentUid = firebase.auth()?.currentUser?.uid;
+    const rtdb = getRtdb();
+    if (!rtdb || !currentUid) return;
+
+    const userStatusRef = rtdb.ref(`status/${currentUid}`);
+    const connectedRef = rtdb.ref('.info/connected');
+
+    connectedRef.on('value', snapshot => {
+        if (snapshot.val() === false) return;
+
+        // 當斷線時自動改為 offline
+        userStatusRef.onDisconnect().set({
+            state: 'offline',
+            last_changed: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            // 連線時設定為 online，並寫入隱身與暱稱資訊
+            userStatusRef.set({
+                state: 'online',
+                nickname: window.userData.nickname || firebase.auth().currentUser.displayName || '玩家',
+                email: firebase.auth().currentUser.email || '',
+                hidePrivacy: !!(window.userData.privacyHideStatus), // 雙向隱私設定
+                last_changed: firebase.database.ServerValue.TIMESTAMP
+            });
+        });
+    });
+}
+
+/**
+ * 📡 2. 初始化 Realtime Database 全局即時監聽器
  */
 function initChatRealtimeListeners() {
     const rtdb = getRtdb();
     if (!rtdb || !firebase.auth || !firebase.auth().currentUser) return;
     const currentUid = firebase.auth().currentUser.uid;
 
-    // A. 監聽好友申請
+    // A. 啟動 Presence 追蹤
+    initUserPresenceTracker();
+
+    // B. 監聽全站線上狀態
+    if (presenceStatusListener) rtdb.ref('status').off('value', presenceStatusListener);
+    presenceStatusListener = rtdb.ref('status').on('value', snapshot => {
+        onlineUsersMap = snapshot.val() || {};
+        renderOnlineStatusUI();
+    });
+
+    // C. 監聽好友申請
     if (friendRequestsListener) rtdb.ref('friendRequests').off('value', friendRequestsListener);
     friendRequestsListener = rtdb.ref('friendRequests').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -140,7 +189,7 @@ function initChatRealtimeListeners() {
         }
     });
 
-    // B. 監聽群組邀請
+    // D. 監聽群組邀請
     if (groupInvitesListener) rtdb.ref('groupInvites').off('value', groupInvitesListener);
     groupInvitesListener = rtdb.ref('groupInvites').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -154,7 +203,7 @@ function initChatRealtimeListeners() {
         }
     });
 
-    // C. 監聽包含自己的所有聊天頻道
+    // E. 監聽包含自己的所有聊天頻道
     if (chatsListListener) rtdb.ref('chats').off('value', chatsListListener);
     chatsListListener = rtdb.ref('chats').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -168,7 +217,7 @@ function initChatRealtimeListeners() {
         }
     });
 
-    // D. 監聽系統公告
+    // F. 監聽系統公告
     if (announcementsListener) rtdb.ref('announcements').off('value', announcementsListener);
     announcementsListener = rtdb.ref('announcements').on('value', snapshot => {
         const data = snapshot.val() || {};
@@ -182,6 +231,108 @@ function initChatRealtimeListeners() {
             renderAnnouncements();
         }
     });
+}
+
+/**
+ * 👁️ 3. 渲染線上人數、線上名單與管理員透視面板
+ */
+function renderOnlineStatusUI() {
+    const onlineCountEl = document.getElementById('onlineUserCountText');
+    const onlineListContainer = document.getElementById('onlineUsersListContainer');
+    const adminMonitorContainer = document.getElementById('adminOnlineMonitorList');
+
+    const isAdmin = window.userData && window.userData.role === 'admin';
+    const myPrivacyHide = !isAdmin && !!(window.userData && window.userData.privacyHideStatus);
+
+    let visibleOnlineUsers = [];
+    let allOnlineUsersForAdmin = [];
+
+    Object.keys(onlineUsersMap).forEach(uid => {
+        const userStatus = onlineUsersMap[uid];
+        if (userStatus.state === 'online') {
+            allOnlineUsersForAdmin.push({ uid, ...userStatus });
+
+            const targetUserIsHidden = !!userStatus.hidePrivacy;
+
+            // 雙向隱私邏輯：
+            // 1. 管理員永遠可以看到所有人
+            // 2. 一般玩家若自己開啟「隱藏線上/已讀」，則看不到任何人，別人也看不到他
+            // 3. 一般玩家若對方開啟「隱藏線上/已讀」，則看不到對方
+            if (isAdmin) {
+                visibleOnlineUsers.push({ uid, ...userStatus });
+            } else if (!myPrivacyHide && !targetUserIsHidden) {
+                visibleOnlineUsers.push({ uid, ...userStatus });
+            }
+        }
+    });
+
+    // A. 渲染線上人數標籤
+    if (onlineCountEl) {
+        if (myPrivacyHide) {
+            onlineCountEl.textContent = `線上人數：已隱藏 (隱私模式開啟中)`;
+        } else {
+            onlineCountEl.textContent = `線上人數：${visibleOnlineUsers.length} 人`;
+        }
+    }
+
+    // B. 渲染普通使用者可見的線上名單
+    if (onlineListContainer) {
+        if (myPrivacyHide) {
+            onlineListContainer.innerHTML = `<div class="p-2 text-center text-slate-400 text-xs">您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）</div>`;
+        } else if (visibleOnlineUsers.length === 0) {
+            onlineListContainer.innerHTML = `<div class="p-2 text-center text-slate-400 text-xs">目前沒有其他在線使用者</div>`;
+        } else {
+            onlineListContainer.innerHTML = visibleOnlineUsers.map(u => `
+                <div class="flex items-center space-x-2 p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-xs">
+                    <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <span class="font-bold text-slate-700 dark:text-slate-200">${escapeHTML(u.nickname)}</span>
+                </div>
+            `).join('');
+        }
+    }
+
+    // C. 👑 管理員透視面板 (強制顯示全站線上使用者，標註誰開了隱身)
+    if (adminMonitorContainer && isAdmin) {
+        adminMonitorContainer.innerHTML = allOnlineUsersForAdmin.map(u => `
+            <div class="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 text-xs my-1">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
+                    <div>
+                        <div class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                            <span>${escapeHTML(u.nickname)}</span>
+                            ${u.hidePrivacy ? `<span class="px-1.5 py-0.2 bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 text-[9px] rounded-full font-semibold">開隱身</span>` : ''}
+                        </div>
+                        <p class="text-[10px] text-slate-400 font-mono">UID: ${u.uid}</p>
+                    </div>
+                </div>
+                <span class="text-[10px] text-slate-400">${u.email || '無 Email'}</span>
+            </div>
+        `).join('');
+    }
+}
+
+/**
+ * ⚙️ 4. 隱私控制：開關顯示線上狀態與已讀
+ */
+async function togglePrivacyHideStatus(enableHide) {
+    if (!window.userData) window.userData = {};
+    window.userData.privacyHideStatus = enableHide;
+
+    if (typeof saveUserData === 'function') saveUserData();
+
+    const currentUid = firebase.auth()?.currentUser?.uid;
+    const rtdb = getRtdb();
+    if (rtdb && currentUid) {
+        try {
+            await rtdb.ref(`status/${currentUid}/hidePrivacy`).set(enableHide);
+            renderOnlineStatusUI();
+            if (typeof showToast === 'function') {
+                showToast(enableHide ? '🔒 已開啟隱私模式：已隱藏您的線上狀態與已讀標記' : '🌐 已關閉隱私模式：恢復公開線上狀態與已讀', 'info');
+            }
+        } catch (e) {
+            console.error("更新隱私設定失敗:", e);
+        }
+    }
 }
 
 function openChatDrawer() {
@@ -203,7 +354,9 @@ function closeChatDrawer() {
     const rtdb = getRtdb();
     if (activeChatListener && currentActiveChatId && rtdb) {
         rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+        if (activeChatReadListener) rtdb.ref(`chats/${currentActiveChatId}/readBy`).off('value', activeChatReadListener);
         activeChatListener = null;
+        activeChatReadListener = null;
     }
     const drawer = document.getElementById('chatDrawer');
     if (drawer) drawer.classList.add('hidden');
@@ -213,7 +366,9 @@ function switchChatTab(tab) {
     const rtdb = getRtdb();
     if (activeChatListener && currentActiveChatId && rtdb) {
         rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+        if (activeChatReadListener) rtdb.ref(`chats/${currentActiveChatId}/readBy`).off('value', activeChatReadListener);
         activeChatListener = null;
+        activeChatReadListener = null;
     }
 
     const noticeView = document.getElementById('noticeView');
@@ -414,16 +569,16 @@ async function sendFriendRequestByEmail(emailInput = null, btnElem = null) {
             return;
         }
 
-        const currentUid = auth.currentUser.uid;
-        const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : (auth.currentUser?.displayName || '使用者');
-        const myEmail = auth.currentUser.email;
+        const currentUid = firebase.auth().currentUser.uid;
+        const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : (firebase.auth().currentUser?.displayName || '使用者');
+        const myEmail = firebase.auth().currentUser.email;
 
         const newReqRef = rtdb.ref('friendRequests').push();
         await newReqRef.set({
             fromUid: currentUid,
             fromNickname: myName,
             fromEmail: myEmail,
-            fromAvatar: auth.currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUid)}`,
+            fromAvatar: firebase.auth().currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUid)}`,
             toEmail: targetEmail,
             toUid: '',
             status: 'pending',
@@ -439,7 +594,7 @@ async function sendFriendRequestByEmail(emailInput = null, btnElem = null) {
 async function handleAcceptFriendRequest(reqId, fromUid, encodedNickname, fromEmail, encodedAvatar) {
     const fromNickname = decodeURIComponent(encodedNickname);
     const fromAvatar = decodeURIComponent(encodedAvatar);
-    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const currentUid = firebase.auth()?.currentUser ? firebase.auth().currentUser.uid : '';
     const rtdb = getRtdb();
     if (!rtdb) return;
 
@@ -500,7 +655,7 @@ async function createGroupPrompt() {
     const groupName = (prompt('請輸入新群組名稱：') || '').trim();
     if (!groupName) return;
 
-    const currentUid = auth.currentUser.uid;
+    const currentUid = firebase.auth().currentUser.uid;
     const myName = (window.userData && window.userData.nickname) ? window.userData.nickname : '玩家';
     const rtdb = getRtdb();
     if (!rtdb) return;
@@ -535,7 +690,7 @@ async function startPrivateChat(encodedTargetUsername, targetUid = '') {
     }
 
     const targetUser = decodeURIComponent(encodedTargetUsername);
-    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const currentUid = firebase.auth()?.currentUser ? firebase.auth().currentUser.uid : '';
     const rtdb = getRtdb();
     if (!rtdb) return;
 
@@ -570,7 +725,7 @@ async function renderChatThreads(isAdminInspector = false) {
     const container = document.getElementById('chatThreadsList');
     if (!container) return;
 
-    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const currentUid = firebase.auth()?.currentUser ? firebase.auth().currentUser.uid : '';
     const isAdmin = window.userData && window.userData.role === 'admin';
     const query = chatSearchQuery;
 
@@ -640,8 +795,14 @@ async function renderChatThreads(isAdminInspector = false) {
     container.innerHTML = html;
 }
 
+/**
+ * 💬 5. 開啟聊天視窗並記錄自己的最後已讀時間點
+ */
 async function openChatWindow(chatId, encodedName = '') {
     currentActiveChatId = chatId;
+    const currentUid = firebase.auth()?.currentUser?.uid;
+    const rtdb = getRtdb();
+
     localStorage.setItem(`lzhcard_last_read_chat_${chatId}`, Date.now().toString());
     updateUnreadBadgeUI();
 
@@ -656,18 +817,31 @@ async function openChatWindow(chatId, encodedName = '') {
     const titleEl = document.getElementById('activeChatTitle');
     if (titleEl) titleEl.textContent = displayName;
 
-    const rtdb = getRtdb();
     if (!rtdb || !chatId) return;
 
-    if (activeChatListener) {
-        rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
-        activeChatListener = null;
+    // 寫入自己的最後已讀時間戳記
+    if (currentUid) {
+        rtdb.ref(`chats/${chatId}/readBy/${currentUid}`).set(Date.now());
     }
 
+    if (activeChatListener) rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+    if (activeChatReadListener) rtdb.ref(`chats/${currentActiveChatId}/readBy`).off('value', activeChatReadListener);
+
+    // 監聽訊息列表
     activeChatListener = rtdb.ref(`chats/${chatId}/messages`).on('value', snapshot => {
         const data = snapshot.val() || {};
         const messages = Object.keys(data).map(key => ({ id: key, ...data[key] }));
         renderMessagesList(messages);
+    });
+
+    // 監聽成員已讀時間
+    activeChatReadListener = rtdb.ref(`chats/${chatId}/readBy`).on('value', snapshot => {
+        chatReadByMap = snapshot.val() || {};
+        rtdb.ref(`chats/${chatId}/messages`).once('value', snapshot => {
+            const data = snapshot.val() || {};
+            const messages = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            renderMessagesList(messages);
+        });
     });
 }
 
@@ -675,7 +849,9 @@ function backToChatThreads() {
     const rtdb = getRtdb();
     if (activeChatListener && currentActiveChatId && rtdb) {
         rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+        if (activeChatReadListener) rtdb.ref(`chats/${currentActiveChatId}/readBy`).off('value', activeChatReadListener);
         activeChatListener = null;
+        activeChatReadListener = null;
     }
     document.getElementById('activeChatWindow')?.classList.add('hidden');
     document.getElementById('chatsView')?.classList.remove('hidden');
@@ -686,12 +862,16 @@ function backToChatThreads() {
     renderChatThreads(isInspectorMode);
 }
 
+/**
+ * 📖 6. 渲染訊息與計算已讀狀態 (雙向隱私開關保護)
+ */
 function renderMessagesList(messages = []) {
     const container = document.getElementById('chatMessagesBox');
     if (!container) return;
 
-    const currentUid = (auth && auth.currentUser) ? auth.currentUser.uid : '';
+    const currentUid = firebase.auth()?.currentUser ? firebase.auth().currentUser.uid : '';
     const isAdmin = window.userData && window.userData.role === 'admin';
+    const myPrivacyHide = !isAdmin && !!(window.userData && window.userData.privacyHideStatus);
 
     if (messages.length === 0) {
         container.innerHTML = `<div class="text-center text-slate-400 py-6 text-xs">尚無聊天訊息，輸入第一條訊息開始交流吧！</div>`;
@@ -710,6 +890,30 @@ function renderMessagesList(messages = []) {
 
         const isMe = msg.senderUid ? (msg.senderUid === currentUid) : (msg.sender === (window.userData?.username || ''));
 
+        // 計算對手是否已讀
+        let isReadByOther = false;
+        if (isMe) {
+            Object.keys(chatReadByMap).forEach(memberUid => {
+                if (memberUid !== currentUid) {
+                    const readTime = chatReadByMap[memberUid] || 0;
+                    const msgTime = msg.createdAt || 0;
+                    const targetStatus = onlineUsersMap[memberUid] || {};
+                    const targetPrivacyHide = !!targetStatus.hidePrivacy;
+
+                    if (readTime >= msgTime) {
+                        // 雙向隱私規則：
+                        // 1. 管理員永遠看得見「已讀」
+                        // 2. 若自己或對手任何一方開了隱身（隱私模式），則非管理員不顯示已讀標記
+                        if (isAdmin) {
+                            isReadByOther = true;
+                        } else if (!myPrivacyHide && !targetPrivacyHide) {
+                            isReadByOther = true;
+                        }
+                    }
+                }
+            });
+        }
+
         return `
             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 my-1.5">
                 <div class="flex items-center space-x-1">
@@ -723,7 +927,10 @@ function renderMessagesList(messages = []) {
                 <div class="max-w-[80%] px-3 py-2 rounded-2xl text-xs ${isMe ? 'bg-brand-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none'} shadow-2xs">
                     ${escapeHTML(msg.text)}
                 </div>
-                <span class="text-[9px] text-slate-400 px-1">${escapeHTML(msg.time || '')}</span>
+                <div class="flex items-center space-x-1 px-1">
+                    ${isMe && isReadByOther ? `<span class="text-[9px] text-brand-500 dark:text-brand-400 font-bold">已讀</span>` : ''}
+                    <span class="text-[9px] text-slate-400">${escapeHTML(msg.time || '')}</span>
+                </div>
             </div>
         `;
     }).join('');
@@ -751,9 +958,9 @@ async function handleSendMessage(e) {
 
     const currentUser = (window.userData && window.userData.nickname) 
         ? window.userData.nickname 
-        : (auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || '使用者');
+        : (firebase.auth().currentUser?.displayName || firebase.auth().currentUser?.email?.split('@')[0] || '使用者');
     
-    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const currentUid = firebase.auth().currentUser.uid;
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
@@ -775,6 +982,9 @@ async function handleSendMessage(e) {
             lastSenderUid: currentUid,
             updatedAt: Date.now()
         });
+
+        // 發訊息時自動更新自己的已讀時間戳記
+        await rtdb.ref(`chats/${currentActiveChatId}/readBy/${currentUid}`).set(Date.now());
 
     } catch (err) {
         console.error("RTDB 發送訊息失敗:", err);
@@ -831,11 +1041,7 @@ async function deleteAnnouncement(annId) {
     }
 }
 
-/**
- * 📢 發布公告核心邏輯（加強除錯與權限驗證）
- */
 async function submitAnnouncement() {
-    // 1. 驗證前端角色權限
     if (!window.userData || window.userData.role !== 'admin') {
         const currentRole = window.userData?.role || '訪客';
         if (typeof showToast === 'function') {
@@ -855,7 +1061,6 @@ async function submitAnnouncement() {
         return;
     }
 
-    // 2. 檢查 RTDB 實例
     const rtdb = getRtdb();
     if (!rtdb) {
         if (typeof showToast === 'function') showToast('Realtime Database SDK 未成功初始化！', 'error');

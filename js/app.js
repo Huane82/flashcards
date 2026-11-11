@@ -211,6 +211,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         await loadStorage();
     }
     updateUserCoinsUI();
+
+    // 🟢 登入身分驗證完成後，自動啟動 Realtime Database 在線狀態與聊天監聽
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user && typeof initChatRealtimeListeners === 'function') {
+                initChatRealtimeListeners();
+            }
+        });
+    }
 });
 
 function updateUI() {
