@@ -1,12 +1,36 @@
 /**
- * LZHCard - 隨堂測驗模組 (已修復多選字庫連動與高亮樣式)
+ * LZHCard - 隨堂測驗模組 (支援多國語言切換與多選字庫連動)
  */
 
 let currentQuizWord = null;
 let currentQuizMode = 1;
+let currentQuizLang = 'en'; // 預設英文測驗
 let quizScoreCorrect = 0;
 let quizScoreTotal = 0;
 
+/**
+ * 🌐 切換測驗語言 (英文 / 中文 / 日文)
+ */
+function setQuizLanguage(lang) {
+    currentQuizLang = lang;
+
+    ['en', 'zh', 'ja'].forEach(l => {
+        const btn = document.getElementById(`qlang-${l}`);
+        if (btn) {
+            if (l === lang) {
+                btn.className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition bg-white dark:bg-slate-700 text-brand-600 dark:text-brand-400 shadow-2xs";
+            } else {
+                btn.className = "flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-500 dark:text-slate-400 hover:text-slate-800";
+            }
+        }
+    });
+
+    nextQuizQuestion();
+}
+
+/**
+ * 🎯 切換測驗模式 (模式 1、2、3)
+ */
 function setQuizMode(mode) {
     currentQuizMode = mode;
     
@@ -24,9 +48,17 @@ function setQuizMode(mode) {
     nextQuizQuestion();
 }
 
+/**
+ * 🎲 產生下一題隨堂測驗題目
+ */
 function nextQuizQuestion() {
     const inputElem = document.getElementById('quizInput');
     const feedbackElem = document.getElementById('quizFeedback');
+    const submitBtn = document.getElementById('quizSubmitBtn');
+    const promptBox = document.getElementById('quizPromptBox');
+    const badgeElem = document.getElementById('quizBadge');
+    const promptTitleElem = document.getElementById('quizPromptTitle');
+
     if (inputElem) {
         inputElem.value = '';
         inputElem.focus();
@@ -36,11 +68,36 @@ function nextQuizQuestion() {
         feedbackElem.innerHTML = '';
     }
 
-    const promptBox = document.getElementById('quizPromptBox');
-    const badgeElem = document.getElementById('quizBadge');
-    const promptTitleElem = document.getElementById('quizPromptTitle');
+    // 🚧 若選擇 中文 或 日文 測驗，顯示開發中提示並停用輸入
+    if (currentQuizLang !== 'en') {
+        if (inputElem) inputElem.disabled = true;
+        if (submitBtn) submitBtn.disabled = true;
+        if (badgeElem) badgeElem.innerText = (typeof t === 'function') ? t('quizDevTitle') : '🚧 功能開發中';
 
-    // 🌟 修正：連動 window.selectedCategories 多選字庫陣列
+        if (promptBox) {
+            const langName = currentQuizLang === 'zh' ? '中文' : '日文';
+            promptBox.innerHTML = `
+                <div class="text-center py-8 space-y-3">
+                    <div class="w-12 h-12 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-xl font-bold">
+                        <i class="fa-solid fa-code"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-800 dark:text-slate-100" data-i18n="quizDevTitle">
+                        ${(typeof t === 'function') ? t('quizDevTitle') : '🚧 功能開發中'}
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed" data-i18n="quizDevDesc">
+                        ${(typeof t === 'function') ? t('quizDevDesc') : `${langName}隨堂測驗模式正在全力開發中，敬請期待！`}
+                    </p>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    // 英文測驗解除停用狀態
+    if (inputElem) inputElem.disabled = false;
+    if (submitBtn) submitBtn.disabled = false;
+
+    // 🌟 連動 window.selectedCategories 多選字庫陣列
     const activeCats = window.selectedCategories || ['ALL'];
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
 
@@ -138,9 +195,12 @@ function nextQuizQuestion() {
     }
 }
 
+/**
+ * 📝 提交答案與對錯判定
+ */
 function handleQuizSubmit(e) {
     if (e) e.preventDefault();
-    if (!currentQuizWord) return;
+    if (!currentQuizWord || currentQuizLang !== 'en') return;
 
     const inputElem = document.getElementById('quizInput');
     const feedbackElem = document.getElementById('quizFeedback');

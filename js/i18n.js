@@ -393,7 +393,13 @@ const I18N_DICTIONARY = {
         onlineUserCount: "線上人數：{count} 人",
         onlineUserHidden: "線上人數：已隱藏 (隱私模式開啟中)",
         onlineListEmpty: "目前沒有其他在線使用者",
-        privacyListNotice: "您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）"
+        privacyListNotice: "您已開啟隱私模式（無法查看他人狀態，他人亦無法查看您）",
+        toastEarnCoin10Cards: "🎉 累積刷滿 10 張字卡，獲得 1 金幣！",
+        quizLangEn: "🇬🇧 英文",
+        quizLangZh: "🇹🇼 中文 (開發中)",
+        quizLangJa: "🇯🇵 日文 (開發中)",
+        quizDevTitle: "🚧 功能開發中",
+        quizDevDesc: "中文與日文隨堂測驗模式正在全力開發中，敬請期待！"
     },
     'en': {
         appSubtitle: "Exam Prep Flashcards",
@@ -771,7 +777,13 @@ const I18N_DICTIONARY = {
         onlineUserCount: "Online Users: {count}",
         onlineUserHidden: "Online Users: Hidden (Privacy Mode)",
         onlineListEmpty: "No other online users",
-        privacyListNotice: "Privacy mode enabled (Cannot view others' online status)"
+        privacyListNotice: "Privacy mode enabled (Cannot view others' online status)",
+        toastEarnCoin10Cards: "🎉 Reviewed 10 cards and earned 1 coin!",
+        quizLangEn: "🇬🇧 English",
+        quizLangZh: "🇹🇼 Chinese (Dev)",
+        quizLangJa: "🇯🇵 Japanese (Dev)",
+        quizDevTitle: "🚧 Under Development",
+        quizDevDesc: "Chinese and Japanese quiz modes are currently under active development. Stay tuned!"
     },
     'ja': {
         appSubtitle: "単語暗記ツール",
@@ -1147,9 +1159,15 @@ const I18N_DICTIONARY = {
         tourSettingsTitle: "アカウント＆設定",
         tourSettingsDesc: "ニックネーム、母国語・目標言語、カード表示モード、Gemini API Keyを設定します。",
         onlineUserCount: "オンライン人数：{count} 人",
-    onlineUserHidden: "オンライン人数：非表示 (プライバシーモード)",
-    onlineListEmpty: "現在オンラインのユーザーはいません",
-    privacyListNotice: "プライバシーモード有効（他人のオンラインステータスを表示できません）"
+        onlineUserHidden: "オンライン人数：非表示 (プライバシーモード)",
+        onlineListEmpty: "現在オンラインのユーザーはいません",
+        privacyListNotice: "プライバシーモード有効（他人のオンラインステータスを表示できません）",
+        toastEarnCoin10Cards: "🎉 10枚のカードを復習して1コインを獲得しました！",
+        quizLangEn: "🇬🇧 英語",
+        quizLangZh: "🇹🇼 中國語 (開発中)",
+        quizLangJa: "🇯🇵 日本語 (開発中)",
+        quizDevTitle: "🚧 開発中機能",
+        quizDevDesc: "中國語と日本語のクイズモードは現在積極開発中です。お楽しみに！"
     }
 };
 

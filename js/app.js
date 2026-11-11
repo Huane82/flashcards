@@ -17,6 +17,7 @@ window.selectedCategories = getSavedCategories();
 let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
+let cardReviewCounter = parseInt(localStorage.getItem('lzhcard_review_counter') || '0', 10);
 
 const MAX_AI_BATCH_LIMIT = 200;
 
@@ -350,6 +351,7 @@ function nextCard() {
     if (document.getElementById('cardTranslation')) document.getElementById('cardTranslation').innerText = currentCard.translation || '';
 }
 
+// 覆蓋 handleDontKnow
 function handleDontKnow() {
     if (!currentCard) return;
     const card = wordList.find(w => w.id === currentCard.id);
@@ -358,10 +360,12 @@ function handleDontKnow() {
         card.knowStreak = 0;
         saveStorage();
     }
+    trackCardReviewReward(); // 👈 累計刷卡次數
     updateUI();
     nextCard();
 }
 
+// 覆蓋 handleKnow
 function handleKnow() {
     if (!currentCard) return;
     const card = wordList.find(w => w.id === currentCard.id);
@@ -379,8 +383,30 @@ function handleKnow() {
         }
         saveStorage();
     }
+    trackCardReviewReward(); // 👈 累計刷卡次數
     updateUI();
     nextCard();
+}
+
+/**
+ * 🪙 刷卡計數與獎勵發放函式 (每 10 張卡獲得 1 金幣)
+ */
+function trackCardReviewReward() {
+    cardReviewCounter += 1;
+    if (cardReviewCounter >= 10) {
+        cardReviewCounter = 0;
+        if (!window.userData) window.userData = {};
+        window.userData.coins = (window.userData.coins || 0) + 1;
+        
+        if (typeof saveUserData === 'function') saveUserData();
+        if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
+        
+        const toastMsg = (typeof t === 'function') 
+            ? t('toastEarnCoin10Cards') 
+            : '🎉 累積刷滿 10 張字卡，獲得 1 金幣！';
+        showToast(toastMsg, 'success');
+    }
+    localStorage.setItem('lzhcard_review_counter', cardReviewCounter.toString());
 }
 
 function flipCard() {

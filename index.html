@@ -415,6 +415,19 @@
                 <div class="text-xs text-slate-400 font-medium"><span data-i18n="accuracyRate">精熟率:</span> <span id="quizScore" class="font-bold text-slate-700 dark:text-slate-200">0/0</span></div>
             </div>
 
+                    <!-- 📍【新增在這裡】測驗語言選擇頁籤 -->
+            <div class="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+                <button type="button" id="qlang-en" onclick="setQuizLanguage('en')" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition bg-white dark:bg-slate-700 text-brand-600 dark:text-brand-400 shadow-2xs" data-i18n="quizLangEn">
+                    🇬🇧 英文
+                </button>
+                <button type="button" id="qlang-zh" onclick="setQuizLanguage('zh')" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-500 dark:text-slate-400 hover:text-slate-800" data-i18n="quizLangZh">
+                    🇹🇼 中文 (開發中)
+                </button>
+                <button type="button" id="qlang-ja" onclick="setQuizLanguage('ja')" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-500 dark:text-slate-400 hover:text-slate-800" data-i18n="quizLangJa">
+                    🇯🇵 日文 (開發中)
+                </button>
+            </div>
+            
             <div class="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-1.5 text-xs">
                 <button type="button" id="qmode-1" onclick="setQuizMode(1)" class="py-2 px-1 rounded-lg font-bold transition bg-brand-600 text-white" data-i18n="quizMode1">模式 1</button>
                 <button type="button" id="qmode-2" onclick="setQuizMode(2)" class="py-2 px-1 rounded-lg font-bold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" data-i18n="quizMode2">模式 2</button>
