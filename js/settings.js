@@ -389,12 +389,15 @@ document.addEventListener('DOMContentLoaded', () => {
 function checkAndOpenOnboardingModal() {
     const onboardingCompleted = localStorage.getItem('lzhcard_onboarding_completed') === 'true';
     
-    // 若尚未完成新手設定，則打開 onboardingSetupModal
     if (!onboardingCompleted) {
-        const setupModal = document.getElementById('onboardingSetupModal');
-        if (setupModal) {
-            setupModal.classList.remove('hidden');
-            setupModal.classList.add('flex');
+        if (typeof startOnboardingFlow === 'function') {
+            startOnboardingFlow();
+        } else {
+            const setupModal = document.getElementById('onboardingSetupModal');
+            if (setupModal) {
+                setupModal.classList.remove('hidden');
+                setupModal.classList.add('flex');
+            }
         }
     }
 }

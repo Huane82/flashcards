@@ -471,7 +471,9 @@ const I18N_DICTIONARY = {
         lblApiPersonalKey: "個人 API Key",
         lblApiPersonalKeyDesc: "獨享 200 字大批次",
         lblApiSharedKey: "免費共用 Key",
-        lblApiSharedKeyDesc: "免設定，全站共享"
+        lblApiSharedKeyDesc: "免設定，全站共享",
+        obStep1Title: "步驟 1 / 2：選擇語言",
+        obStep2Title: "步驟 2 / 2：顯示模式與 API 偏好"
     },
     'en': {
         appSubtitle: "Exam Prep Flashcards",
@@ -924,7 +926,9 @@ const I18N_DICTIONARY = {
         lblApiPersonalKey: "Personal API Key",
         lblApiPersonalKeyDesc: "Exclusive 200-word large batch",
         lblApiSharedKey: "Free Shared Key",
-        lblApiSharedKeyDesc: "No setup required, shared site-wide"
+        lblApiSharedKeyDesc: "No setup required, shared site-wide",
+        obStep1Title: "Step 1 / 2: Select Language",
+        obStep2Title: "Step 2 / 2: Display & API Preferences"
     },
     'ja': {
         appSubtitle: "単語暗記ツール",
@@ -1378,7 +1382,9 @@ const I18N_DICTIONARY = {
         lblApiPersonalKey: "個人 API Key",
         lblApiPersonalKeyDesc: "最大200単語の一括処理",
         lblApiSharedKey: "無料共有 Key",
-        lblApiSharedKeyDesc: "設定不要、全ユーザーで共有"
+        lblApiSharedKeyDesc: "設定不要、全ユーザーで共有",
+        obStep1Title: "ステップ 1 / 2：言語を選択",
+        obStep2Title: "ステップ 2 / 2：表示モードとAPI設定",
     }
 };
 

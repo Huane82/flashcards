@@ -105,10 +105,11 @@
         </div>
     </div>
 
-    <!-- ⚙️ 步驟 1：新手快速客製化設定 Modal (z-[62]) -->
+    <!-- ⚙️ 新手快速客製化設定 Modal (z-[62]) -->
     <div id="onboardingSetupModal" class="hidden fixed inset-0 z-[62] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-5">
             
+            <!-- 頂部標號與標頭 -->
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-sliders text-brand-600 text-lg"></i>
@@ -124,10 +125,15 @@
                 先花 10 秒設定好您的學習習慣，稍後可隨時在「設定」中變更：
             </p>
 
-            <div class="space-y-4 text-xs">
+            <!-- 📍 步驟 1：語言偏好設定 (優先確認語言) -->
+            <div id="obStep1" class="space-y-4 text-xs">
+                <div class="flex items-center justify-between font-bold text-brand-600 dark:text-brand-400 pb-1 border-b border-slate-100 dark:border-slate-700">
+                    <span>步驟 1 / 2：選擇語言 (Step 1/2)</span>
+                </div>
+
                 <!-- 1. 母語 -->
                 <div>
-                    <label class="block font-bold mb-1" data-i18n="lblNativeLang">使用者母語</label>
+                    <label class="block font-bold mb-1" data-i18n="lblNativeLang">使用者母語 (Native Language)</label>
                     <select id="obNativeLang" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold">
                         <option value="zh-TW">🇹🇼 繁體中文</option>
                         <option value="en">🇺🇸 English</option>
@@ -137,12 +143,30 @@
 
                 <!-- 2. 目標語言 -->
                 <div>
-                    <label class="block font-bold mb-1" data-i18n="lblTargetLang">學習目標語言</label>
+                    <label class="block font-bold mb-1" data-i18n="lblTargetLang">學習目標語言 (Target Language)</label>
                     <select id="obTargetLang" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold">
                         <option value="en">🇺🇸 English</option>
                         <option value="ja">🇯🇵 日本語</option>
                         <option value="zh-TW">🇹🇼 中文</option>
                     </select>
+                </div>
+
+                <!-- 🚀 步驟 1 底部按鈕 -->
+                <div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end space-x-2">
+                    <button type="button" onclick="skipOnboardingSetup()" class="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition">
+                        <span data-i18n="btnSkip">略過</span>
+                    </button>
+                    <button type="button" onclick="confirmOnboardingLanguageStep()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs transition shadow-xs flex items-center space-x-1">
+                        <span data-i18n="btnNextStep">下一步</span>
+                        <i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 📍 步驟 2：顯示模式與 API Key 模式設定 (預設隱藏) -->
+            <div id="obStep2" class="hidden space-y-4 text-xs">
+                <div class="flex items-center justify-between font-bold text-brand-600 dark:text-brand-400 pb-1 border-b border-slate-100 dark:border-slate-700">
+                    <span>步驟 2 / 2：顯示模式與 API 偏好 (Step 2/2)</span>
                 </div>
 
                 <!-- 3. 卡片顯示模式 -->
@@ -160,29 +184,36 @@
                     <label class="block font-bold mb-1" data-i18n="lblApiModeTitle">Gemini AI Key 模式</label>
                     <div class="grid grid-cols-2 gap-2 mb-2">
                         <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                            <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" onchange="toggleObApiKeyBox()" class="text-brand-600 focus:ring-brand-500">
                             <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModePersonal">個人 Key</span>
                         </label>
                         <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                            <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" checked onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" checked onchange="toggleObApiKeyBox()" class="text-brand-600 focus:ring-brand-500">
                             <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModeShared">免費共用 Key</span>
                         </label>
                     </div>
-                    <div id="obApiKeyBox">
+                    <!-- 🟢 個人 Key 輸入框 (預設帶有 hidden 類別) -->
+                    <div id="obApiKeyBox" class="hidden">
                         <input type="password" id="obApiKey" placeholder="AIzaSy..." data-i18n-placeholder="phApiKeyInput" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-mono">
                     </div>
                 </div>
-            </div>
 
-            <!-- 🚀 底部按鈕 -->
-            <div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end space-x-2">
-                <button type="button" onclick="skipOnboardingSetup()" class="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition">
-                    <span data-i18n="btnSkip">略過</span>
-                </button>
-                <button type="button" onclick="saveOnboardingSetupAndContinue()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs transition shadow-xs flex items-center space-x-1">
-                    <i class="fa-solid fa-compass"></i>
-                    <span data-i18n="btnSaveAndTour">儲存並開啟導覽</span>
-                </button>
+                <!-- 🚀 步驟 2 底部按鈕 -->
+                <div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                    <button type="button" onclick="backToOnboardingStep1()" class="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition flex items-center space-x-1">
+                        <i class="fa-solid fa-chevron-left mr-1"></i>
+                        <span data-i18n="btnPrevStep">上一步</span>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="skipOnboardingSetup()" class="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition">
+                            <span data-i18n="btnSkip">略過</span>
+                        </button>
+                        <button type="button" onclick="saveOnboardingSetupAndContinue()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs transition shadow-xs flex items-center space-x-1">
+                            <i class="fa-solid fa-compass"></i>
+                            <span data-i18n="btnSaveAndTour">儲存並開啟導覽</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
         </div>
