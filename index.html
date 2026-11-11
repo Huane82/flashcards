@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+    <script src="js/open-external.js"></script>
     <script>
     // 初始化夜間模式 (優先讀取記憶，若無則跟隨系統)
     const savedTheme = localStorage.getItem('theme_preference') || 'system';
@@ -1403,7 +1404,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     
     <!-- 正確腳本載入順序 -->
-    <script src="js/open-external.js"></script>
     <script src="js/firebase.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/algorithm.js"></script>
