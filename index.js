@@ -36,18 +36,18 @@ export default {
         );
       }
 
-      // 🌟 指定的模型輪詢清單
+      // 🌟 修正後的標準 Gemini API 模型代號 (全小寫、無空格)
       const GEMINI_MODELS = [
         "gemini-3.5-flash-lite",
-        "Gemini 3.6 Flash",
-        "Gemini 3.8 Flash"
+        "gemini-3.6-flash",
+        "gemini-3.8-flash"
       ];
 
       let lastErrorData = null;
 
       // 4. 依序嘗試呼叫指定模型
       for (const model of GEMINI_MODELS) {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         
         try {
           const response = await fetch(geminiUrl, {
@@ -71,7 +71,7 @@ export default {
         }
       }
 
-      // 若所有指定模型皆回應失敗，回傳最後一次的錯誤訊息
+      // 若所有模型嘗試後皆失敗，回傳最後的報錯資料
       return new Response(
         JSON.stringify(lastErrorData || { error: "所有 Gemini 模型皆回應失敗" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
