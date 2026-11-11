@@ -188,6 +188,24 @@ function handlePhoneticPosChange(mode) {
 }
 
 /**
+ * 🎛️ 切換 Gemini API 金鑰模式 (personal / shared)
+ */
+function switchApiMode(mode) {
+    localStorage.setItem('lzhcard_api_mode', mode);
+    const box = document.getElementById('personalKeyInputBox');
+    if (box) {
+        if (mode === 'shared') {
+            box.classList.add('hidden');
+        } else {
+            box.classList.remove('hidden');
+        }
+    }
+    if (typeof updateApiKeyStatusUI === 'function') {
+        updateApiKeyStatusUI();
+    }
+}
+
+/**
  * 🔑 儲存 Gemini API Key (支援個人 Key / 免費共用 Key 雙軌存檔)
  */
 function handleSaveApiKey() {
@@ -322,6 +340,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const themeSelect = document.getElementById('themeSelect');
     if (themeSelect) themeSelect.value = preference;
     applyTheme(preference);
+
+    checkAuthAndTosState();
+
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().onAuthStateChanged(() => {
+            if (typeof applyLanguageUI === 'function') applyLanguageUI();
+        });
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    initLanguageSettings();
+
+    const preference = localStorage.getItem('theme_preference') || 'system';
+    const themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) themeSelect.value = preference;
+    applyTheme(preference);
+
+    // 🎛️ 初始化 API 金鑰模式 (預設為 shared 免費共用模式)
+    const savedApiMode = localStorage.getItem('lzhcard_api_mode') || 'shared';
+    const radShared = document.getElementById('apiModeShared');
+    const radPersonal = document.getElementById('apiModePersonal');
+    if (savedApiMode === 'shared' && radShared) radShared.checked = true;
+    if (savedApiMode === 'personal' && radPersonal) radPersonal.checked = true;
+    switchApiMode(savedApiMode);
 
     checkAuthAndTosState();
 

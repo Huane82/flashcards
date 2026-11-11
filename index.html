@@ -160,11 +160,11 @@
                     <label class="block font-bold mb-1" data-i18n="lblApiModeTitle">Gemini AI Key 模式</label>
                     <div class="grid grid-cols-2 gap-2 mb-2">
                         <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                            <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" checked onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <input type="radio" name="obApiMode" value="personal" id="obApiModePersonal" onchange="document.getElementById('obApiKeyBox').classList.remove('hidden')" class="text-brand-600 focus:ring-brand-500">
                             <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModePersonal">個人 Key</span>
                         </label>
                         <label class="flex items-center space-x-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                            <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
+                            <input type="radio" name="obApiMode" value="shared" id="obApiModeShared" checked onchange="document.getElementById('obApiKeyBox').classList.add('hidden')" class="text-brand-600 focus:ring-brand-500">
                             <span class="font-bold text-slate-800 dark:text-slate-100" data-i18n="lblApiModeShared">免費共用 Key</span>
                         </label>
                     </div>
@@ -1037,33 +1037,7 @@
         </div>
     </div>
 
-    <script>
-    // 🎛️ 控制 API 切換選單的顯隱與存檔
-    function switchApiMode(mode) {
-        localStorage.setItem('lzhcard_api_mode', mode);
-        const box = document.getElementById('personalKeyInputBox');
-        if (box) {
-            if (mode === 'shared') {
-                box.classList.add('hidden');
-            } else {
-                box.classList.remove('hidden');
-            }
-        }
-        if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
-    }
-
-    // 頁面載入時讀取預設模式
-    document.addEventListener('DOMContentLoaded', () => {
-        const savedMode = localStorage.getItem('lzhcard_api_mode') || 'personal';
-        const radShared = document.getElementById('apiModeShared');
-        const radPersonal = document.getElementById('apiModePersonal');
-        if (savedMode === 'shared' && radShared) radShared.checked = true;
-        if (savedMode === 'personal' && radPersonal) radPersonal.checked = true;
-        switchApiMode(savedMode);
-    });
-    </script>
-
-    <!-- 彈窗 4: 字庫 JSON 備份與還原 Modal -->
+        <!-- 彈窗 4: 字庫 JSON 備份與還原 Modal -->
     <div id="backupModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-100 dark:border-slate-700">
             <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
