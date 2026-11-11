@@ -354,13 +354,19 @@ function nextCard() {
 // 覆蓋 handleDontKnow
 function handleDontKnow() {
     if (!currentCard) return;
-    const card = wordList.find(w => w.id === currentCard.id);
-    if (card) {
-        card.level = Math.max(1, (card.level || 1) - 1);
-        card.knowStreak = 0;
-        saveStorage();
-    }
-    trackCardReviewReward(); // 👈 累計刷卡次數
+    const targetWord = (currentCard.word || '').trim().toLowerCase();
+    
+    // 🌟 找到全站所有同名單字同步降級
+    wordList.forEach(w => {
+        if ((w.word || '').trim().toLowerCase() === targetWord) {
+            w.level = Math.max(1, (w.level || 1) - 1);
+            w.knowStreak = 0;
+            w.updatedAt = Date.now();
+        }
+    });
+
+    saveStorage();
+    trackCardReviewReward();
     updateUI();
     nextCard();
 }
@@ -368,22 +374,28 @@ function handleDontKnow() {
 // 覆蓋 handleKnow
 function handleKnow() {
     if (!currentCard) return;
-    const card = wordList.find(w => w.id === currentCard.id);
-    if (card) {
-        if (!card.level) card.level = 1;
-        card.knowStreak = (card.knowStreak || 0) + 1;
+    const targetWord = (currentCard.word || '').trim().toLowerCase();
 
-        if (card.knowStreak >= 2) {
-            if (card.level < 5) {
-                card.level += 1;
-                card.knowStreak = 0;
-            } else {
-                card.knowStreak = 2;
+    // 🌟 找到全站所有同名單字同步升級
+    wordList.forEach(w => {
+        if ((w.word || '').trim().toLowerCase() === targetWord) {
+            if (!w.level) w.level = 1;
+            w.knowStreak = (w.knowStreak || 0) + 1;
+
+            if (w.knowStreak >= 2) {
+                if (w.level < 5) {
+                    w.level += 1;
+                    w.knowStreak = 0;
+                } else {
+                    w.knowStreak = 2;
+                }
             }
+            w.updatedAt = Date.now();
         }
-        saveStorage();
-    }
-    trackCardReviewReward(); // 👈 累計刷卡次數
+    });
+
+    saveStorage();
+    trackCardReviewReward();
     updateUI();
     nextCard();
 }

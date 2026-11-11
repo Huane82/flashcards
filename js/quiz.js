@@ -208,21 +208,24 @@ function handleQuizSubmit(e) {
     if (userAns === targetAns) {
         quizScoreCorrect += 1;
 
-        const card = wordList.find(w => w.id === currentQuizWord.id);
-        if (card) {
-            if (!card.level) card.level = 1;
-            if (typeof card.knowStreak === 'undefined') card.knowStreak = 0;
-            card.knowStreak += 1;
-            if (card.knowStreak >= 3) {
-                if (card.level < 5) {
-                    card.level += 1;
-                    card.knowStreak = 0;
-                } else {
-                    card.knowStreak = 3;
+        // 🌟 全站同名單字同步加分
+        wordList.forEach(w => {
+            if ((w.word || '').trim().toLowerCase() === targetAns) {
+                if (!w.level) w.level = 1;
+                if (typeof w.knowStreak === 'undefined') w.knowStreak = 0;
+                w.knowStreak += 1;
+                if (w.knowStreak >= 3) {
+                    if (w.level < 5) {
+                        w.level += 1;
+                        w.knowStreak = 0;
+                    } else {
+                        w.knowStreak = 3;
+                    }
                 }
+                w.updatedAt = Date.now();
             }
-            if (typeof saveStorage === 'function') saveStorage();
-        }
+        });
+        if (typeof saveStorage === 'function') saveStorage();
 
         feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 block";
         feedbackElem.innerHTML = `
@@ -232,12 +235,15 @@ function handleQuizSubmit(e) {
             </div>
         `;
     } else {
-        const card = wordList.find(w => w.id === currentQuizWord.id);
-        if (card) {
-            card.level = Math.max(1, (card.level || 1) - 1);
-            card.knowStreak = 0;
-            if (typeof saveStorage === 'function') saveStorage();
-        }
+        // 🌟 全站同名單字同步扣分
+        wordList.forEach(w => {
+            if ((w.word || '').trim().toLowerCase() === targetAns) {
+                w.level = Math.max(1, (w.level || 1) - 1);
+                w.knowStreak = 0;
+                w.updatedAt = Date.now();
+            }
+        });
+        if (typeof saveStorage === 'function') saveStorage();
 
         feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 block";
         feedbackElem.innerHTML = `

@@ -37,12 +37,24 @@ function getNextCardSpacedRepetition() {
     const activeCats = window.selectedCategories || ['ALL'];
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
 
-    const filteredList = wordList.filter(w => {
+    // 1️⃣ 篩選當前勾選字庫的單字
+    const rawFiltered = wordList.filter(w => {
         if (activeCats.includes("ALL")) return true;
         return activeCats.includes(w.category || defaultCatName);
     });
 
-    if (filteredList.length === 0) return null;
+    if (rawFiltered.length === 0) return null;
+
+    // 2️⃣ 依單字名稱去重（轉小寫比對），確保多字庫勾選時重複單字不會被加倍計算機率
+    const uniqueMap = new Map();
+    rawFiltered.forEach(w => {
+        if (!w || !w.word) return;
+        const key = w.word.trim().toLowerCase();
+        if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, w);
+        }
+    });
+    const filteredList = Array.from(uniqueMap.values());
 
     filteredList.forEach(w => {
         if (!w.level) w.level = 1;
