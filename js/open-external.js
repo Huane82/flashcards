@@ -81,7 +81,7 @@ function showIosGuideModal() {
             
             <ol style="margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.6; color: #E5E7EB;">
                 <li style="margin-bottom: 8px;">點擊右上角點點選單 <b style="color: #fff; background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px;">···</b></li>
-                <li>選擇 <b style="color: #60A5FA;">「在 Safari 中開啟」</b></li>
+                <li>選擇 <b style="color: #60A5FA;">「使用外部瀏覽器開啟」</b></li>
             </ol>
 
             <div style="margin-top: 16px; font-size: 13px; color: #9CA3AF; text-align: center;">
