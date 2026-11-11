@@ -290,6 +290,14 @@ function handleWelcomeGuestLogin() {
     }
 
     closeWelcomeModal();
+    
+    // 🚀 關鍵修復：關閉歡迎彈窗後，立刻檢查並開啟新手設定/導覽
+    if (typeof checkOnboardingStatus === 'function') {
+        checkOnboardingStatus();
+    } else if (typeof startInteractiveTour === 'function') {
+        startInteractiveTour();
+    }
+
     if (typeof showToast === 'function') showToast('已以訪客身份進入系統！', 'success');
 }
 
