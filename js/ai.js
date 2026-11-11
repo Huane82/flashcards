@@ -367,7 +367,7 @@ Return ONLY a valid raw JSON object:
 }
 
 /**
- * 🤖 批次 AI 欄位補充核心邏輯 (每批 25 字，確保效能與完整度平衡)
+ * 🤖 批次 AI 欄位補充核心邏輯 (每批 20 字，確保效能與完整度平衡)
  */
 async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
     const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
@@ -382,7 +382,7 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
     if (total === 0) return;
 
     const { targetName, nativeName } = getLanguageConfig();
-    const batchSize = 25; // 🌟 實測最佳批次量：每批 25 字
+    const batchSize = 20; // 🌟 實測最佳批次量：每批 20 字
     let completedCount = 0;
     let successUpdatedCount = 0;
 

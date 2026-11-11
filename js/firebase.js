@@ -1,7 +1,8 @@
-// 你的 Firebase 設定資訊
+// 你的 Firebase 設定資訊 (已補上東南亞區域 RTDB 網址)
 const firebaseConfig = {
   apiKey: "AIzaSyCbAux_DnwsgYJn3tGwLPImcaIAzGkdiHE",
   authDomain: "flashcards-5f514.firebaseapp.com",
+  databaseURL: "https://flashcards-5f514-default-rtdb.asia-southeast1.firebasedatabase.app", // 👈 補上這行連線設定
   projectId: "flashcards-5f514",
   storageBucket: "flashcards-5f514.firebasestorage.app",
   messagingSenderId: "471941628425",
@@ -258,7 +259,6 @@ auth.onAuthStateChanged(async (user) => {
   if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
   if (typeof checkAdminPermissions === 'function') checkAdminPermissions();
 
-  // 🚀 頁面初始化或 Google 登入完成時觸發導覽
   const isTosAccepted = localStorage.getItem('lzhcard_tos_accepted') === 'true';
   const isCompleted = localStorage.getItem('lzhcard_onboarding_completed') === 'true';
 
@@ -273,9 +273,6 @@ auth.onAuthStateChanged(async (user) => {
 // 🔒 條款同意與新手引導流程控制 (welcomeModal)
 // ==========================================
 
-/**
- * 1. 勾選/取消條款時，動態啟用或停用按鈕與切換樣式
- */
 function toggleAuthButtons() {
   const checkbox = document.getElementById('tosCheckbox');
   const googleBtn = document.getElementById('welcomeGoogleBtn');
@@ -302,11 +299,7 @@ function toggleAuthButtons() {
   }
 }
 
-/**
- * 2. 點擊「使用 Google 帳號登入」
- */
 async function handleWelcomeGoogleLogin() {
-  // 👈 先記錄已同意條款，確保 onAuthStateChanged 監聽能即時偵測
   localStorage.setItem('lzhcard_tos_accepted', 'true');
 
   const user = await loginWithGoogle();
@@ -319,18 +312,13 @@ async function handleWelcomeGoogleLogin() {
   }
 }
 
-/**
- * 3. 點擊「以訪客身份繼續使用」
- */
 function handleWelcomeGuestLogin() {
   localStorage.setItem('lzhcard_tos_accepted', 'true');
   
-  // 先關閉條款彈窗
   if (typeof closeModal === 'function') {
     closeModal('welcomeModal');
   }
 
-  // 強制啟動新手客製化教學導覽
   setTimeout(() => {
     if (typeof startOnboardingFlow === 'function') {
       startOnboardingFlow();
@@ -338,9 +326,6 @@ function handleWelcomeGuestLogin() {
   }, 150);
 }
 
-/**
- * 4. 頁面載入時檢查是否需要顯示開頭同意條款彈窗
- */
 function checkWelcomeModalState() {
   const isAccepted = localStorage.getItem('lzhcard_tos_accepted') === 'true';
   const welcomeModal = document.getElementById('welcomeModal');
@@ -350,5 +335,4 @@ function checkWelcomeModalState() {
   }
 }
 
-// 監聽 DOM 載入後自動檢查條款狀態
 document.addEventListener('DOMContentLoaded', checkWelcomeModalState);
