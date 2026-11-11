@@ -47,8 +47,8 @@ const I18N_DICTIONARY = {
         btnNext: "下一題",
 
         // 字庫管理 View
-        btnAddWord: "新增單字",
-        btnBatchImport: "批量匯入",
+        btnAddWord: "個別填入",
+        btnBatchImport: "批量單字",
         btnBackup: "JSON 備份",
         btnSplit: "拆分",
         btnClear: "清空",
@@ -433,8 +433,8 @@ const I18N_DICTIONARY = {
         btnSubmit: "Submit",
         btnNext: "Next",
 
-        btnAddWord: "Add Word",
-        btnBatchImport: "Batch Import",
+        btnAddWord: "add one",
+        btnBatchImport: "Add words",
         btnBackup: "JSON Backup",
         btnSplit: "Split",
         btnClear: "Clear All",
@@ -809,8 +809,8 @@ const I18N_DICTIONARY = {
         btnSubmit: "回答する",
         btnNext: "次の問題",
 
-        btnAddWord: "単語を追加",
-        btnBatchImport: "一括インポート",
+        btnAddWord: "単数",
+        btnBatchImport: "複数",
         btnBackup: "バックアップ",
         btnSplit: "分割",
         btnClear: "全消去",
