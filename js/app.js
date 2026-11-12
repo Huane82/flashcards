@@ -272,18 +272,40 @@ function updateEmptyNoticeState() {
     }
 }
 
-function nextCard() {
+function nextCard(force = false) {
     const flashcardElem = document.getElementById('flashcard');
+    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+    const activeCats = window.selectedCategories || ['ALL'];
 
-    if (flashcardElem) {
-        flashcardElem.classList.add('no-transition');
-        flashcardElem.classList.remove('rotate-y-180');
-        void flashcardElem.offsetHeight;
-        flashcardElem.classList.remove('no-transition');
+    let shouldDrawNew = force || !currentCard;
+
+    // 🌟 若非主動換卡（例如刷新後幾秒雲端同步完成觸發），檢查當前卡片是否仍有效
+    if (!shouldDrawNew && currentCard && Array.isArray(wordList)) {
+        const targetWord = (currentCard.word || '').trim().toLowerCase();
+        const syncedCard = wordList.find(w => {
+            const matchIdOrWord = (w.id === currentCard.id) || ((w.word || '').trim().toLowerCase() === targetWord);
+            const matchCat = activeCats.includes("ALL") || activeCats.includes(w.category || defaultCatName);
+            return matchIdOrWord && matchCat;
+        });
+
+        if (syncedCard) {
+            // 卡片仍在目前字庫中：僅同步最新的雲端等級/連勝狀態，不跳過卡片
+            currentCard = syncedCard;
+        } else {
+            // 若雲端資料顯示該字已被刪除或不在目前勾選字庫，才重抽新卡
+            shouldDrawNew = true;
+        }
     }
 
-    currentCard = getNextCardSpacedRepetition();
-    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設';
+    if (shouldDrawNew) {
+        if (flashcardElem) {
+            flashcardElem.classList.add('no-transition');
+            flashcardElem.classList.remove('rotate-y-180');
+            void flashcardElem.offsetHeight;
+            flashcardElem.classList.remove('no-transition');
+        }
+        currentCard = getNextCardSpacedRepetition();
+    }
 
     if (!currentCard) {
         if (document.getElementById('cardWord')) document.getElementById('cardWord').innerText = t('noWordAvailable');
