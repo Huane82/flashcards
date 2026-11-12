@@ -379,7 +379,7 @@ function nextCard(force = false) {
 function handleDontKnow(e) {
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
-    setTimeout(() => { isCardActionLocked = false; }, 300);
+    setTimeout(() => { isCardActionLocked = false; }, 50);
 
     if (e && e.currentTarget) e.currentTarget.blur();
     else if (document.activeElement) document.activeElement.blur();
@@ -405,7 +405,7 @@ function handleDontKnow(e) {
 function handleKnow(e) {
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
-    setTimeout(() => { isCardActionLocked = false; }, 300);
+    setTimeout(() => { isCardActionLocked = false; }, 50);
 
     if (e && e.currentTarget) e.currentTarget.blur();
     else if (document.activeElement) document.activeElement.blur();
