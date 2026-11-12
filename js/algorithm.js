@@ -18,6 +18,10 @@ const LEVEL_COLORS = {
     5: "bg-emerald-50 text-emerald-700 border-emerald-200"
 };
 
+const LEVEL1_POOL_SIZE = 6;   // Lv.1 焦點循環池上限
+const LEVEL2_POOL_SIZE = 4;   // 🌟 Lv.2 焦點循環池上限（限定一次 4 個循環）
+const LV2_RELATIVE_BOOST = 1.8; // 🌟 Lv.2 相較於 Lv.3/4/5 的權重倍率（不影響 Lv.1 總機率）
+
 let activeLevel1Pool = [];
 let activeLevel2Pool = [];
 let historyQueue = [];
@@ -68,20 +72,20 @@ function getNextCardSpacedRepetition() {
     });
     const allLevel1Words = filteredList.filter(w => w.level === 1);
     for (const w of allLevel1Words) {
-        if (activeLevel1Pool.length >= 6) break;
+        if (activeLevel1Pool.length >= LEVEL1_POOL_SIZE) break;
         if (!activeLevel1Pool.includes(w.id)) {
             activeLevel1Pool.push(w.id);
         }
     }
 
-    // 🌟 Level 2 焦點池
+    // 🌟 Level 2 焦點池（限定一次 4 個單字循環）
     activeLevel2Pool = activeLevel2Pool.filter(id => {
         const w = filteredList.find(item => item.id === id);
         return w && w.level === 2;
     });
     const allLevel2Words = filteredList.filter(w => w.level === 2);
     for (const w of allLevel2Words) {
-        if (activeLevel2Pool.length >= 4) break;
+        if (activeLevel2Pool.length >= LEVEL2_POOL_SIZE) break;
         if (!activeLevel2Pool.includes(w.id)) {
             activeLevel2Pool.push(w.id);
         }
@@ -110,40 +114,71 @@ function getNextCardSpacedRepetition() {
     const BASE_WEIGHTS = { 1: 250, 2: 70, 3: 35, 4: 15, 5: 4 };
     const weightedCandidates = [];
 
-    // 1️⃣ 處理非 Lv.5 單字（維持原本權重邏輯）
-    const nonLv5Words = poolToSelectFrom.filter(w => w.level !== 5);
-    nonLv5Words.forEach(word => {
-        let weight = BASE_WEIGHTS[word.level] || 50;
-        const historyIndex = historyQueue.indexOf(word.id);
-        if (historyIndex !== -1) {
+    // 1️⃣ 處理 Lv.1 單字（維持原始權重，確保相對於 2~5 級的總機率完全不變）
+    const lv1Words = poolToSelectFrom.filter(w => w.level === 1);
+    lv1Words.forEach(word => {
+        let weight = BASE_WEIGHTS[1];
+        if (historyQueue.indexOf(word.id) !== -1) {
             weight *= 0.25;
         }
         weightedCandidates.push({ word, weight: Math.max(weight, 0.1) });
     });
 
-    // 2️⃣ 處理 Lv.5 單字（動態權重歸一化，保持 Lv.5 總權重不變，但內部優先抽沒出現過的字）
+    // 2️⃣ 收集 Lv.2 ~ Lv.5 單字的原始權重
+    const lv2to5Items = [];
+
+    // 2a. Lv.2 ~ Lv.4 基礎權重
+    const lv234Words = poolToSelectFrom.filter(w => w.level >= 2 && w.level <= 4);
+    lv234Words.forEach(word => {
+        let baseWeight = BASE_WEIGHTS[word.level] || 50;
+        if (historyQueue.indexOf(word.id) !== -1) {
+            baseWeight *= 0.25;
+        }
+        lv2to5Items.push({ word, baseWeight: Math.max(baseWeight, 0.1) });
+    });
+
+    // 2b. Lv.5 單字（保持 Lv.5 總權重不變，內部優先抽沒出現過的字）
     const lv5Words = poolToSelectFrom.filter(w => w.level === 5);
     if (lv5Words.length > 0) {
-        const targetTotalLv5Weight = lv5Words.length * BASE_WEIGHTS[5]; // 第 5 級應有的總權重配額
+        const targetTotalLv5Weight = lv5Words.length * BASE_WEIGHTS[5];
 
-        // 計算新鮮度權重 (新鮮字 = 1.0，剛出現過的字 = 0.01)
         const lv5Freshness = lv5Words.map(word => {
             const hIndex = level5HistoryQueue.indexOf(word.id);
             let freshWeight = 1.0;
             if (hIndex !== -1) {
-                // 越近代出現過懲罰越重
                 const recencyRatio = (hIndex + 1) / level5HistoryQueue.length;
-                freshWeight = 0.01 + 0.09 * recencyRatio; // 0.01 ~ 0.1
+                freshWeight = 0.01 + 0.09 * recencyRatio;
             }
             return { word, freshWeight };
         });
 
         const totalFreshness = lv5Freshness.reduce((sum, item) => sum + item.freshWeight, 0);
 
-        // 將新鮮度權重按比例等比放回到目標總權重
         lv5Freshness.forEach(item => {
             const normalizedWeight = (item.freshWeight / totalFreshness) * targetTotalLv5Weight;
-            weightedCandidates.push({ word: item.word, weight: Math.max(normalizedWeight, 0.01) });
+            lv2to5Items.push({ word: item.word, baseWeight: Math.max(normalizedWeight, 0.01) });
+        });
+    }
+
+    // 3️⃣ 群組權重歸一化：提高 Lv.2 相對於 Lv.3/4/5 的比重，同時維持 Lv.2~5 總權重不變
+    if (lv2to5Items.length > 0) {
+        const originalLv2to5Sum = lv2to5Items.reduce((sum, item) => sum + item.baseWeight, 0);
+
+        const boostedItems = lv2to5Items.map(item => ({
+            word: item.word,
+            boostedWeight: item.word.level === 2
+                ? item.baseWeight * LV2_RELATIVE_BOOST
+                : item.baseWeight
+        }));
+
+        const boostedLv2to5Sum = boostedItems.reduce((sum, item) => sum + item.boostedWeight, 0);
+        const scaleFactor = boostedLv2to5Sum > 0 ? (originalLv2to5Sum / boostedLv2to5Sum) : 1;
+
+        boostedItems.forEach(item => {
+            weightedCandidates.push({
+                word: item.word,
+                weight: Math.max(item.boostedWeight * scaleFactor, 0.01)
+            });
         });
     }
 
@@ -164,7 +199,7 @@ function getNextCardSpacedRepetition() {
     historyQueue.push(selectedCard.id);
     if (historyQueue.length > 4) historyQueue.shift();
 
-    // 📝 若抽中 Lv.5 單字，更新專屬的 Lv.5 歷史佇列 (最多記憶近 30 個或候選數-1 個)
+    // 📝 若抽中 Lv.5 單字，更新專屬的 Lv.5 歷史佇列
     if (selectedCard.level === 5) {
         level5HistoryQueue.push(selectedCard.id);
         const maxLv5History = Math.max(10, lv5Words.length - 1);
