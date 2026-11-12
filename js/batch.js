@@ -3,6 +3,7 @@
  */
 
 window.parsedBatchList = window.parsedBatchList || [];
+let isAutoDeduplicating = false;
 
 function safeT(key, params, fallbackStr) {
     if (typeof t === 'function') {
@@ -18,6 +19,168 @@ function safeT(key, params, fallbackStr) {
     }
     return fallbackStr;
 }
+
+/**
+ * 🧹 單字字串標準化（去除前後空白、壓縮連續空白並轉小寫，用於精準重複比對）
+ */
+function normalizeWordKey(rawWord) {
+    if (!rawWord || typeof rawWord !== 'string') return '';
+    return rawWord.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * 🧹 判斷欄位是否為有效內容（排除空白與預設佔位文字）
+ */
+function isValidFieldValue(val) {
+    if (!val || typeof val !== 'string') return false;
+    const trimmed = val.trim();
+    if (!trimmed) return false;
+    const placeholders = [
+        '無釋義',
+        '未設定釋義',
+        'AI 自動解析中...',
+        'AI 解析中...',
+        'N/A',
+        '/---/',
+        'EMPTY',
+        '-'
+    ];
+    return !placeholders.includes(trimmed);
+}
+
+/**
+ * 🔀 合併兩筆重複單字資料（保留較高的學習進度與較完整的欄位內容）
+ */
+function mergeDuplicateWordRecord(baseItem, otherItem, preferOtherFields = false) {
+    const baseScore = (Number(baseItem.level) || 1) * 10 + (Number(baseItem.knowStreak) || 0);
+    const otherScore = (Number(otherItem.level) || 1) * 10 + (Number(otherItem.knowStreak) || 0);
+    const progressSource = otherScore > baseScore ? otherItem : baseItem;
+
+    const pickField = (field) => {
+        const valA = baseItem[field];
+        const valB = otherItem[field];
+        const validA = isValidFieldValue(valA);
+        const validB = isValidFieldValue(valB);
+
+        if (preferOtherFields) {
+            if (validB) return String(valB).trim();
+            if (validA) return String(valA).trim();
+        } else {
+            if (validA) return String(valA).trim();
+            if (validB) return String(valB).trim();
+        }
+        return String(valA || valB || '').trim();
+    };
+
+    return {
+        ...baseItem,
+        word: String(baseItem.word || otherItem.word || '').trim().replace(/\s+/g, ' '),
+        pos: pickField('pos'),
+        phonetic: pickField('phonetic'),
+        meaning: pickField('meaning'),
+        sentence: pickField('sentence'),
+        translation: pickField('translation'),
+        level: Number(progressSource.level) || 1,
+        knowStreak: Number(progressSource.knowStreak) || 0,
+        updatedAt: Math.max(Number(baseItem.updatedAt) || 0, Number(otherItem.updatedAt) || 0, Date.now())
+    };
+}
+
+/**
+ * 🤖 自動掃描並刪除字庫中的重複單字（保留學習進度與最完整釋義）
+ */
+function autoDeduplicateWordList(options = {}) {
+    const { silent = false } = options;
+    if (isAutoDeduplicating || typeof wordList === 'undefined' || !Array.isArray(wordList) || wordList.length <= 1) {
+        return 0;
+    }
+
+    isAutoDeduplicating = true;
+    let removedCount = 0;
+
+    try {
+        const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
+        const seenMap = new Map(); // key: `${category}::${normalizedWord}` -> index in dedupedList
+        const dedupedList = [];
+
+        for (const item of wordList) {
+            if (!item || !item.word) continue;
+
+            const cleanWord = String(item.word).trim().replace(/\s+/g, ' ');
+            if (!cleanWord) continue;
+
+            const catName = String(item.category || defaultCatName).trim() || defaultCatName;
+            const compositeKey = `${catName.toLowerCase()}::${cleanWord.toLowerCase()}`;
+
+            if (seenMap.has(compositeKey)) {
+                const existingIdx = seenMap.get(compositeKey);
+                dedupedList[existingIdx] = mergeDuplicateWordRecord(dedupedList[existingIdx], {
+                    ...item,
+                    category: catName,
+                    word: cleanWord
+                }, false);
+                removedCount++;
+            } else {
+                seenMap.set(compositeKey, dedupedList.length);
+                dedupedList.push({
+                    ...item,
+                    category: catName,
+                    word: cleanWord
+                });
+            }
+        }
+
+        if (removedCount > 0) {
+            wordList.length = 0;
+            wordList.push(...dedupedList);
+
+            if (typeof selectedWordIds !== 'undefined' && selectedWordIds instanceof Set) {
+                const validIds = new Set(wordList.map(w => w.id));
+                for (const id of Array.from(selectedWordIds)) {
+                    if (!validIds.has(id)) selectedWordIds.delete(id);
+                }
+            }
+
+            if (typeof saveStorage === 'function') saveStorage();
+            if (typeof updateCategorySelects === 'function') updateCategorySelects();
+            if (typeof updateUI === 'function') updateUI();
+
+            if (!silent && typeof showToast === 'function') {
+                showToast(
+                    safeT('toastAutoDeduplicated', { count: removedCount }, `🧹 已自動清理並合併 ${removedCount} 筆重複單字`),
+                    'info'
+                );
+            }
+        }
+    } finally {
+        isAutoDeduplicating = false;
+    }
+
+    return removedCount;
+}
+
+// 🔗 掛載自動去重鉤子：每次介面刷新（包含初始載入與雲端同步完成）時自動檢查並清理重複字
+(function attachAutoDeduplicateHook() {
+    const bindHook = () => {
+        if (typeof window.updateUI === 'function' && !window.updateUI._hasDedupeHook) {
+            const origUpdateUI = window.updateUI;
+            const wrappedUpdateUI = function (...args) {
+                if (!isAutoDeduplicating) {
+                    autoDeduplicateWordList({ silent: false });
+                }
+                return origUpdateUI.apply(this, args);
+            };
+            wrappedUpdateUI._hasDedupeHook = true;
+            window.updateUI = wrappedUpdateUI;
+        }
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindHook);
+    } else {
+        bindHook();
+    }
+})();
 
 /**
  * 🌐 依據目前設定的目標語言與選擇字庫動態切換範例提示與預設字庫名稱
@@ -151,7 +314,10 @@ async function handleLoadPreset(levelNum) {
     const targetCategoryInput = document.getElementById('batchTargetCategory');
     if (targetCategoryInput) targetCategoryInput.value = catName;
 
-    window.parsedBatchList = targetWords.map(item => {
+    const seenSet = new Set();
+    window.parsedBatchList = [];
+
+    targetWords.forEach(item => {
         const rawW = item.word || item.term || item.english || item.w || '';
         const rawP = item.pos || item.partOfSpeech || item.type || item.p || '';
         
@@ -164,14 +330,18 @@ async function handleLoadPreset(levelNum) {
             ? sanitizeWordAndPos(rawW, rawP, rawM)
             : { word: rawW, pos: rawP, meaning: rawM };
 
-        return {
-            word: cleanObj.word,
+        const normKey = normalizeWordKey(cleanObj.word);
+        if (!normKey || seenSet.has(normKey)) return;
+        seenSet.add(normKey);
+
+        window.parsedBatchList.push({
+            word: cleanObj.word.trim().replace(/\s+/g, ' '),
             pos: cleanObj.pos,
             phonetic: item.phonetic || item.pronunciation || '',
             meaning: cleanObj.meaning,
             sentence: item.sentence || item.example || '',
             translation: item.translation || item.exampleZh || ''
-        };
+        });
     });
 
     if (btn) {
@@ -184,13 +354,14 @@ async function handleLoadPreset(levelNum) {
 }
 
 /**
- * 🌐 批量貼上文字解析器 (支援 日語假名/中文注音 與 多種分隔符)
+ * 🌐 批量貼上文字解析器 (支援 日語假名/中文注音 與 多種分隔符，並自動過濾貼上內容中的重複字)
  */
 function parseBatchText(text) {
     if (!text || typeof text !== 'string') return [];
 
     const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
     const results = [];
+    const seenWords = new Set();
 
     const posUnit = '(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|art|phr|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)';
     const strictPosRegex = new RegExp(
@@ -252,11 +423,13 @@ function parseBatchText(text) {
             }
         }
 
-        word = word.trim();
+        word = word.trim().replace(/\s+/g, ' ');
         meaning = meaning.trim();
         phonetic = phonetic.trim();
 
-        if (word) {
+        const normKey = normalizeWordKey(word);
+        if (normKey && !seenWords.has(normKey)) {
+            seenWords.add(normKey);
             results.push({
                 word: word,
                 pos: pos,
@@ -401,19 +574,11 @@ function handleConfirmBatchImport() {
 
     window.parsedBatchList.forEach(item => {
         if (item && item.word) {
-            const itemWord = String(item.word).trim();
+            const itemWord = String(item.word).trim().replace(/\s+/g, ' ');
+            const normWord = normalizeWordKey(itemWord);
+            if (!normWord) return;
 
-            const existingIndex = wordList.findIndex(w => 
-                (w.category || defaultCatName).toLowerCase() === targetCategory.toLowerCase() &&
-                w.word.trim().toLowerCase() === itemWord.toLowerCase()
-            );
-
-            if (existingIndex !== -1) {
-                wordList.splice(existingIndex, 1);
-                replacedCount++;
-            }
-
-            wordList.unshift({
+            const newCardData = {
                 id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                 category: targetCategory,
                 word: itemWord,
@@ -425,10 +590,27 @@ function handleConfirmBatchImport() {
                 level: 1, 
                 knowStreak: 0, 
                 updatedAt: Date.now()
-            });
+            };
+
+            const existingIndex = wordList.findIndex(w => 
+                (w.category || defaultCatName).trim().toLowerCase() === targetCategory.toLowerCase() &&
+                normalizeWordKey(w.word) === normWord
+            );
+
+            if (existingIndex !== -1) {
+                const existingItem = wordList[existingIndex];
+                wordList.splice(existingIndex, 1);
+                // 🌟 合併並保留原有學習進度 (level / knowStreak)
+                wordList.unshift(mergeDuplicateWordRecord(existingItem, newCardData, true));
+                replacedCount++;
+            } else {
+                wordList.unshift(newCardData);
+            }
             addedCount++;
         }
     });
+
+    autoDeduplicateWordList({ silent: true });
 
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof updateUI === 'function') updateUI();
@@ -438,7 +620,7 @@ function handleConfirmBatchImport() {
 
     const netUniqueAdded = addedCount - replacedCount;
     const msg = replacedCount > 0 
-        ? safeT('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded }, `成功匯入 ${addedCount} 個單字（覆蓋 ${replacedCount} 筆重複資料）`)
+        ? safeT('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded }, `成功匯入 ${addedCount} 個單字（自動合併 ${replacedCount} 筆重複單字）`)
         : safeT('toastImportSuccess', { count: addedCount }, `成功匯入 ${addedCount} 個單字`);
 
     if (typeof showToast === 'function') showToast(msg, 'success');
@@ -482,31 +664,50 @@ async function handleQuickAddWords() {
     // 🌟 記憶本次選擇的字庫至 localStorage
     localStorage.setItem('lzhcard_last_quick_add_cat', targetCategory);
 
-    let addedList = [];
+    // 先自動清理字庫中既有的重複單字
+    autoDeduplicateWordList({ silent: true });
 
-    for (const rawWord of wordsToProcess) {
-        const exists = wordList.some(w => 
-            (w.category || defaultCategoryName).toLowerCase() === targetCategory.toLowerCase() && 
-            w.word.toLowerCase() === rawWord.toLowerCase()
+    let addedList = [];
+    let skippedDuplicateCount = 0;
+
+    for (const rawInputWord of wordsToProcess) {
+        const cleanObj = (typeof sanitizeWordAndPos === 'function')
+            ? sanitizeWordAndPos(rawInputWord, '', '')
+            : { word: rawInputWord, pos: '', meaning: '' };
+
+        const cleanWord = String(cleanObj.word || rawInputWord).trim().replace(/\s+/g, ' ');
+        const normWord = normalizeWordKey(cleanWord);
+        if (!normWord) continue;
+
+        // 1️⃣ 檢查目標字庫內是否已存在（含本次剛加入的單字）
+        const existsInTargetCat = wordList.some(w => 
+            (w.category || defaultCategoryName).trim().toLowerCase() === targetCategory.toLowerCase() && 
+            normalizeWordKey(w.word) === normWord
         );
 
-        if (!exists) {
-            const newCard = {
-                id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-                category: targetCategory,
-                word: rawWord,
-                pos: '',
-                phonetic: '',
-                meaning: defaultMeaningText,
-                sentence: '',
-                translation: '',
-                level: 1,
-                knowStreak: 0,
-                updatedAt: Date.now()
-            };
-            wordList.unshift(newCard);
-            addedList.push(newCard);
+        if (existsInTargetCat) {
+            skippedDuplicateCount++;
+            continue;
         }
+
+        // 2️⃣ 若其他字庫已有同名單字，繼承其學習進度與已解析資料（避免重複浪費 AI）
+        const existingInOtherCat = wordList.find(w => normalizeWordKey(w.word) === normWord);
+
+        const newCard = {
+            id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            category: targetCategory,
+            word: cleanWord,
+            pos: existingInOtherCat && isValidFieldValue(existingInOtherCat.pos) ? existingInOtherCat.pos : (cleanObj.pos || ''),
+            phonetic: existingInOtherCat && isValidFieldValue(existingInOtherCat.phonetic) ? existingInOtherCat.phonetic : '',
+            meaning: existingInOtherCat && isValidFieldValue(existingInOtherCat.meaning) ? existingInOtherCat.meaning : defaultMeaningText,
+            sentence: existingInOtherCat && isValidFieldValue(existingInOtherCat.sentence) ? existingInOtherCat.sentence : '',
+            translation: existingInOtherCat && isValidFieldValue(existingInOtherCat.translation) ? existingInOtherCat.translation : '',
+            level: existingInOtherCat ? (existingInOtherCat.level || 1) : 1,
+            knowStreak: existingInOtherCat ? (existingInOtherCat.knowStreak || 0) : 0,
+            updatedAt: Date.now()
+        };
+        wordList.unshift(newCard);
+        addedList.push(newCard);
     }
 
     if (typeof closeModal === 'function') closeModal('quickAddModal');
@@ -517,7 +718,12 @@ async function handleQuickAddWords() {
     }
 
     if (addedList.length === 0) {
-        if (typeof showToast === 'function') showToast(safeT('toastQuickWordsExist', null, '輸入的單字皆已存在於字庫中'), 'info');
+        if (typeof showToast === 'function') {
+            showToast(
+                safeT('toastQuickWordsExist', null, `輸入的 ${skippedDuplicateCount} 個單字皆已存在，已自動略過重複項`),
+                'info'
+            );
+        }
         return;
     }
 
@@ -525,11 +731,20 @@ async function handleQuickAddWords() {
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof updateUI === 'function') updateUI();
 
-    if (typeof showToast === 'function') showToast(safeT('toastQuickAddSuccess', { count: addedList.length }, `已新增 ${addedList.length} 個單字，AI 正在背景解析中`), 'success');
+    const dedupNote = skippedDuplicateCount > 0 ? `（已自動略過 ${skippedDuplicateCount} 個重複字）` : '';
+    if (typeof showToast === 'function') {
+        showToast(
+            safeT('toastQuickAddSuccess', { count: addedList.length }, `已新增 ${addedList.length} 個單字${dedupNote}，AI 正在背景解析中`),
+            'success'
+        );
+    }
 
-    if (typeof runBatchAiAutoFill === 'function') {
+    // 僅針對尚未有完整資料的新單字執行 AI 補齊
+    const cardsNeedingAi = addedList.filter(c => !isValidFieldValue(c.meaning) || !isValidFieldValue(c.sentence));
+
+    if (cardsNeedingAi.length > 0 && typeof runBatchAiAutoFill === 'function') {
         try {
-            await runBatchAiAutoFill(addedList, (current, total) => {
+            await runBatchAiAutoFill(cardsNeedingAi, (current, total) => {
                 if (typeof saveStorage === 'function') saveStorage();
                 if (typeof updateUI === 'function') updateUI();
             });
@@ -627,6 +842,9 @@ function handleRenameCategory() {
         saveSelectedCategoriesToCloud(window.selectedCategories);
     }
 
+    // 🌟 若重命名後與既有同名資料夾合併，自動清理重複單字
+    autoDeduplicateWordList({ silent: true });
+
     if (typeof saveStorage === 'function') saveStorage();
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof updateUI === 'function') updateUI();
@@ -634,7 +852,7 @@ function handleRenameCategory() {
 }
 
 /**
- * 📦 批量變更 / 移動字庫
+ * 📦 批量變更 / 移動字庫（移動後若與目標字庫有重複字會自動合併刪除）
  */
 function handleBatchChangeCategory() {
     if (typeof selectedWordIds === 'undefined' || selectedWordIds.size === 0) {
@@ -664,10 +882,14 @@ function handleBatchChangeCategory() {
 
     if (typeof selectedWordIds !== 'undefined') selectedWordIds.clear();
 
+    const dedupedCount = autoDeduplicateWordList({ silent: true });
+
     if (typeof saveStorage === 'function') saveStorage();
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
     if (typeof updateUI === 'function') updateUI();
-    if (typeof showToast === 'function') showToast(safeT('toastMoveSuccess', { count, name: catName }, `已成功將 ${count} 個單字移至「${catName}」`), 'success');
+
+    const dedupHint = dedupedCount > 0 ? `（並自動合併 ${dedupedCount} 筆重複單字）` : '';
+    if (typeof showToast === 'function') showToast(safeT('toastMoveSuccess', { count, name: catName }, `已成功將 ${count} 個單字移至「${catName}」${dedupHint}`), 'success');
 }
 
 function handleBatchDeleteWords() {
@@ -819,6 +1041,8 @@ function exportJSON() {
         return;
     }
 
+    autoDeduplicateWordList({ silent: true });
+
     const dataStr = JSON.stringify(wordList, null, 2);
     const fileName = `LZHCard_Backup_${new Date().toISOString().slice(0, 10)}.json`;
 
@@ -872,20 +1096,12 @@ function handleImportJSON() {
 
             importedData.forEach(item => {
                 if (item && item.word) {
-                    const itemCat = String(item.category || defaultCatName).trim();
-                    const itemWord = String(item.word).trim();
+                    const itemCat = String(item.category || defaultCatName).trim() || defaultCatName;
+                    const itemWord = String(item.word).trim().replace(/\s+/g, ' ');
+                    const normWord = normalizeWordKey(itemWord);
+                    if (!normWord) return;
 
-                    const existingIndex = wordList.findIndex(w => 
-                        (w.category || defaultCatName).toLowerCase() === itemCat.toLowerCase() &&
-                        w.word.trim().toLowerCase() === itemWord.toLowerCase()
-                    );
-
-                    if (existingIndex !== -1) {
-                        wordList.splice(existingIndex, 1);
-                        replacedCount++;
-                    }
-
-                    wordList.unshift({
+                    const importedCard = {
                         id: item.id || ('w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)),
                         category: itemCat,
                         word: itemWord,
@@ -897,10 +1113,26 @@ function handleImportJSON() {
                         level: item.level || 1,
                         knowStreak: item.knowStreak || 0,
                         updatedAt: Date.now()
-                    });
+                    };
+
+                    const existingIndex = wordList.findIndex(w => 
+                        (w.category || defaultCatName).trim().toLowerCase() === itemCat.toLowerCase() &&
+                        normalizeWordKey(w.word) === normWord
+                    );
+
+                    if (existingIndex !== -1) {
+                        const existingItem = wordList[existingIndex];
+                        wordList.splice(existingIndex, 1);
+                        wordList.unshift(mergeDuplicateWordRecord(existingItem, importedCard, true));
+                        replacedCount++;
+                    } else {
+                        wordList.unshift(importedCard);
+                    }
                     addedCount++;
                 }
             });
+
+            autoDeduplicateWordList({ silent: true });
 
             if (typeof saveStorage === 'function') await saveStorage();
             if (typeof updateCategorySelects === 'function') updateCategorySelects();
@@ -912,7 +1144,7 @@ function handleImportJSON() {
 
             const netUniqueAdded = addedCount - replacedCount;
             const msg = replacedCount > 0 
-                ? safeT('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded }, `成功匯入 ${addedCount} 個單字（覆蓋 ${replacedCount} 筆重複資料）`)
+                ? safeT('toastImportSuccessDeDup', { count: addedCount, dedup: replacedCount, actual: netUniqueAdded }, `成功匯入 ${addedCount} 個單字（自動合併 ${replacedCount} 筆重複單字）`)
                 : safeT('toastImportSuccess', { count: addedCount }, `成功匯入 ${addedCount} 個單字`);
 
             if (typeof showToast === 'function') showToast(msg, "success");
@@ -932,3 +1164,4 @@ const handleBatchDelete = handleBatchDeleteWords;
 const handleBatchAiFill = handleBatchAiFillLibraryWords;
 const handleExportJSON = exportJSON;
 const handleSplitCategory = handleConfirmSplitDeck;
+const handleRemoveDuplicateWords = () => autoDeduplicateWordList({ silent: false });
