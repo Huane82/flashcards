@@ -18,6 +18,7 @@ let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
 let cardReviewCounter = parseInt(localStorage.getItem('lzhcard_review_counter') || '0', 10);
+let isCardActionLocked = false
 
 const MAX_AI_BATCH_LIMIT = 200;
 
@@ -352,8 +353,15 @@ function nextCard() {
 }
 
 // 覆蓋 handleDontKnow
-function handleDontKnow() {
-    if (!currentCard) return;
+function handleDontKnow(e) {
+    if (isCardActionLocked || !currentCard) return;
+    isCardActionLocked = true;
+    setTimeout(() => { isCardActionLocked = false; }, 100);
+
+    // 移除按鈕焦點，避免後續按空白鍵/Enter 誤觸重複點擊
+    if (e && e.currentTarget) e.currentTarget.blur();
+    else if (document.activeElement) document.activeElement.blur();
+
     const targetWord = (currentCard.word || '').trim().toLowerCase();
     
     // 🌟 找到全站所有同名單字同步降級
@@ -372,8 +380,15 @@ function handleDontKnow() {
 }
 
 // 覆蓋 handleKnow
-function handleKnow() {
-    if (!currentCard) return;
+function handleKnow(e) {
+    if (isCardActionLocked || !currentCard) return;
+    isCardActionLocked = true;
+    setTimeout(() => { isCardActionLocked = false; }, 100);
+
+    // 移除按鈕焦點，避免後續按空白鍵/Enter 誤觸重複點擊
+    if (e && e.currentTarget) e.currentTarget.blur();
+    else if (document.activeElement) document.activeElement.blur();
+
     const targetWord = (currentCard.word || '').trim().toLowerCase();
 
     // 🌟 找到全站所有同名單字同步升級
