@@ -1,5 +1,5 @@
 /**
- * LZHCard - 主程式交互控制器 (純化精簡版)
+ * LZHCard - 主程式交互控制器 (完整修正版)
  */
 
 function getSavedCategories() {
@@ -18,7 +18,7 @@ let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
 let cardReviewCounter = parseInt(localStorage.getItem('lzhcard_review_counter') || '0', 10);
-let isCardActionLocked = false
+let isCardActionLocked = false; // 🌟 防止短時間重複觸發的鎖定旗標
 
 const MAX_AI_BATCH_LIMIT = 200;
 
@@ -205,7 +205,7 @@ function handleCategoryCheckboxChange(checkbox) {
 
     selectedWordIds.clear();
     updateUI();
-    nextCard();
+    nextCard(true);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -272,6 +272,9 @@ function updateEmptyNoticeState() {
     }
 }
 
+/**
+ * 🃏 抽取或更新字卡 (force = true 代表使用者主動換卡；false 則避免背景同步誤跳過當前卡片)
+ */
 function nextCard(force = false) {
     const flashcardElem = document.getElementById('flashcard');
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
@@ -289,10 +292,8 @@ function nextCard(force = false) {
         });
 
         if (syncedCard) {
-            // 卡片仍在目前字庫中：僅同步最新的雲端等級/連勝狀態，不跳過卡片
             currentCard = syncedCard;
         } else {
-            // 若雲端資料顯示該字已被刪除或不在目前勾選字庫，才重抽新卡
             shouldDrawNew = true;
         }
     }
@@ -378,9 +379,8 @@ function nextCard(force = false) {
 function handleDontKnow(e) {
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
-    setTimeout(() => { isCardActionLocked = false; }, 100);
+    setTimeout(() => { isCardActionLocked = false; }, 300);
 
-    // 移除按鈕焦點，避免後續按空白鍵/Enter 誤觸重複點擊
     if (e && e.currentTarget) e.currentTarget.blur();
     else if (document.activeElement) document.activeElement.blur();
 
@@ -398,16 +398,15 @@ function handleDontKnow(e) {
     saveStorage();
     trackCardReviewReward();
     updateUI();
-    nextCard();
+    nextCard(true);
 }
 
 // 覆蓋 handleKnow
 function handleKnow(e) {
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
-    setTimeout(() => { isCardActionLocked = false; }, 100);
+    setTimeout(() => { isCardActionLocked = false; }, 300);
 
-    // 移除按鈕焦點，避免後續按空白鍵/Enter 誤觸重複點擊
     if (e && e.currentTarget) e.currentTarget.blur();
     else if (document.activeElement) document.activeElement.blur();
 
@@ -434,7 +433,7 @@ function handleKnow(e) {
     saveStorage();
     trackCardReviewReward();
     updateUI();
-    nextCard();
+    nextCard(true);
 }
 
 /**
@@ -548,7 +547,7 @@ function startFocusMode(mode) {
     if (mode === 'flashcard') {
         const secFlashcard = document.getElementById('sec-flashcard');
         if (secFlashcard) secFlashcard.classList.remove('hidden');
-        nextCard();
+        nextCard(true);
     } else if (mode === 'quiz') {
         const secQuiz = document.getElementById('sec-quiz');
         if (secQuiz) secQuiz.classList.remove('hidden');
@@ -764,7 +763,7 @@ function deleteCard(id) {
         saveStorage();
         updateCategorySelects();
         updateUI();
-        if (currentCard && currentCard.id === id) nextCard();
+        if (currentCard && currentCard.id === id) nextCard(true);
         showToast(typeof t === 'function' ? t('toastWordDeleted') : '已刪除單字', 'info');
     }
 }
@@ -776,7 +775,7 @@ function handleClearAllWords() {
         saveStorage();
         updateCategorySelects();
         updateUI();
-        nextCard();
+        nextCard(true);
         showToast(typeof t === 'function' ? t('toastDeckCleared') : '單字庫已清空', 'warning');
     }
 }
@@ -847,7 +846,7 @@ function handleSaveCardForm(e) {
     updateCategorySelects();
     updateUI();
     closeModal('cardModal');
-    if (!currentCard) nextCard();
+    if (!currentCard) nextCard(true);
 }
 
 async function handleAiSingleFill() {
