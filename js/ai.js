@@ -1,5 +1,5 @@
 /**
- * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine - 20字高效版)
+ * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine - 20字高效 + 自動拼寫修正版)
  */
 
 window.cachedWorkingModel = null;
@@ -246,7 +246,7 @@ function safeParseJSON(rawText) {
 }
 
 /**
- * 🛡️ 增強版欄位完整性與語言錯植檢查
+ * 🛡️ 增強版欄位完整性與語言錯植檢查（含「無母語釋意 / 無釋義」等佔位字過濾）
  */
 function isFieldIncomplete(val, fieldType = '') {
     if (!val) return true;
@@ -256,7 +256,8 @@ function isFieldIncomplete(val, fieldType = '') {
     const pendingKeywords = [
         '解析中', 'parsing', '尚未填寫', '未入力', '待補齊', 
         'no definition', 'pending', '自動解析', 'no sentence', 
-        '無例句', '未設定例句', '無翻譯', '未設定', 'empty'
+        '無例句', '未設定例句', '無翻譯', '未設定', 'empty',
+        '無母語釋意', '無母語釋義', '無釋意', '無釋義', '無中文釋義', '無中文釋意', '尚無釋義', '暫無釋義'
     ];
 
     if (pendingKeywords.some(keyword => str.toLowerCase().includes(keyword.toLowerCase()))) {
@@ -302,6 +303,9 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
     let pos = (rawPos || '').trim();
     let meaning = (rawMeaning || '').trim();
 
+    // 清除誤混入單字中的佔位標籤（如 "(無母語釋意)"、"（無釋義）"）
+    word = word.replace(/[\(\[（【]?\s*(?:無母語釋意|無母語釋義|無釋意|無釋義|無中文釋義|無中文釋意|解析中|自動解析中\.\.\.)\s*[\)\]）】]?/gi, '').trim();
+
     const posUnit = '(?:n|v|vt|vi|adj|adv|prep|conj|pron|num|art|phr|名詞|代名詞|動詞|他動詞|自動詞|形容詞|形容動詞|副詞|助詞|感動詞|連體詞|接続詞)';
     const multiPosRegex = new RegExp(
         `(?:[\\(\\[\\{]\\s*${posUnit}(?:[\\s\\.\\,\\/\\\\&|]+${posUnit})*[\\.\\s]*[\\)\\]\\}])` +
@@ -340,16 +344,16 @@ Target Language: ${targetName}
 User Native Language: ${nativeName}
 
 MANDATORY INSTRUCTIONS:
-1. "word": Keep EXACTLY as "${cleanWord}".
-2. "phonetic": IPA or pronunciation guide (MUST NOT BE EMPTY).
+1. "word": Automatically fix any common spelling typos in "${cleanWord}" (e.g. "enviroment" -> "environment", "recieve" -> "receive"). If the spelling is already valid (including valid phrases, idioms, or proper nouns), keep it unchanged.
+2. "phonetic": IPA or pronunciation guide for the corrected word (MUST NOT BE EMPTY).
 3. "pos": Parts of speech translated in ${nativeName} (MUST NOT BE EMPTY).
 4. "meaning": Precise definition in ${nativeName} (MUST NOT BE EMPTY).
-5. "sentence": A natural example sentence written strictly in ${targetName} (MUST NOT BE EMPTY).
+5. "sentence": A natural example sentence written strictly in ${targetName} using the corrected word (MUST NOT BE EMPTY).
 6. "translation": Example sentence translation strictly written in ${nativeName} (MUST NOT BE EMPTY).
 
 Return ONLY a valid raw JSON object:
 {
-  "word": "${cleanWord}",
+  "word": "corrected spelling of ${cleanWord}",
   "phonetic": "Pronunciation",
   "pos": "POS in ${nativeName}",
   "meaning": "Definition in ${nativeName}",
@@ -359,7 +363,14 @@ Return ONLY a valid raw JSON object:
 
     try {
         const rawResponse = await callGeminiApi(prompt);
-        return safeParseJSON(rawResponse);
+        const parsed = safeParseJSON(rawResponse);
+        if (parsed && parsed.word) {
+            const wordInputElem = document.getElementById('formWord');
+            if (wordInputElem && parsed.word.trim() && parsed.word.trim() !== cleanWord) {
+                wordInputElem.value = parsed.word.trim();
+            }
+        }
+        return parsed;
     } catch (e) {
         if (typeof showToast === 'function') showToast("AI 解析失敗：" + e.message, "error");
         return null;
@@ -367,7 +378,7 @@ Return ONLY a valid raw JSON object:
 }
 
 /**
- * 🤖 批次 AI 欄位補充核心邏輯 (每批 20 字，即時邊跑邊存檔)
+ * 🤖 批次 AI 欄位補充核心邏輯 (每批 20 字，強制覆蓋僅傳純單字 + 自動修正拼寫錯誤)
  */
 async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
     const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
@@ -390,25 +401,33 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
 
     for (let i = 0; i < total; i += batchSize) {
         const chunk = targetItems.slice(i, i + batchSize);
-        const chunkWords = chunk.map(item => item.word);
+
+        // 🌟 無論是否強制覆蓋，一律只萃取「序號 + 清理後的純單字」傳給 AI，完全不帶舊釋義以避免卡死
+        const cleanChunkInputs = chunk.map((item, idx) => {
+            const sanitized = sanitizeWordAndPos(item.word || '', '', '');
+            const cleanTerm = sanitized.word || String(item.word || '').trim();
+            return { index: idx, word: cleanTerm };
+        });
 
         const prompt = `You are an expert lexicographer.
-Input Terms: ${JSON.stringify(chunkWords)}
+Input Terms (JSON array with index and term): ${JSON.stringify(cleanChunkInputs)}
 Target Language: ${targetName}
 User Native Language: ${nativeName}
 
 CRITICAL RULES (STRICT COMPLIANCE REQUIRED):
-1. "word": MUST match the exact string from input.
-2. "phonetic": MUST provide IPA pronunciation guide (DO NOT LEAVE EMPTY).
-3. "pos": MUST provide part of speech in ${nativeName} (e.g. n., v., adj.).
-4. "meaning": MUST provide clear definition in ${nativeName}.
-5. "sentence": MUST provide a complete example sentence strictly in ${targetName} (DO NOT LEAVE EMPTY).
-6. "translation": MUST provide translation of sentence in ${nativeName} (DO NOT LEAVE EMPTY).
+1. "index": MUST keep the exact integer "index" from the input item so each result maps back 1-to-1.
+2. "word": Automatically correct any common spelling typos in the input term (e.g., "enviroment" -> "environment", "recieve" -> "receive", "seperate" -> "separate"). If the term is already spelled correctly (including valid phrases, idioms, or proper nouns), keep it as-is.
+3. "phonetic": MUST provide IPA pronunciation guide for the corrected word (DO NOT LEAVE EMPTY).
+4. "pos": MUST provide part of speech in ${nativeName} (e.g. n., v., adj.).
+5. "meaning": MUST provide clear definition in ${nativeName}.
+6. "sentence": MUST provide a complete example sentence strictly in ${targetName} (DO NOT LEAVE EMPTY).
+7. "translation": MUST provide translation of sentence in ${nativeName} (DO NOT LEAVE EMPTY).
 
 Return ONLY a pure JSON array matching input order:
 [
   {
-    "word": "original term",
+    "index": 0,
+    "word": "corrected spelling of term",
     "pos": "POS in ${nativeName}",
     "phonetic": "phonetic IPA",
     "meaning": "definition in ${nativeName}",
@@ -432,38 +451,46 @@ Return ONLY a pure JSON array matching input order:
 
             if (!rawResponse && attempt < maxAttempts) {
                 console.warn(`[AI Batch Retry] 批次解析暫時中斷 (${lastErrorMsg})，等待 1.5 秒後進行重試...`);
-                await new Promise(r => setTimeout(r, 1500)); // 🌟 已改為固定 1500 ms
+                await new Promise(r => setTimeout(r, 1500)); // 🌟 固定 1500 ms
             }
         }
 
         if (rawResponse) {
             const results = safeParseJSON(rawResponse);
             if (Array.isArray(results)) {
-                results.forEach(resItem => {
+                results.forEach((resItem, resIdx) => {
                     if (!resItem || !resItem.word) return;
 
-                    const cleanRes = normalizeWord(resItem.word);
-                    if (!cleanRes) return;
-
-                    let target = chunk.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
-
-                    if (!target) {
-                        target = targetList.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+                    // 1️⃣ 優先透過 index 精準對應原卡片（即使拼寫被 AI 修正也能 100% 命中）
+                    let target = null;
+                    if (typeof resItem.index === 'number' && chunk[resItem.index]) {
+                        target = chunk[resItem.index];
                     }
 
-                    if (!target) {
-                        target = chunk.find(p => {
-                            if (!p || !p.word) return false;
-                            const cleanP = normalizeWord(p.word);
-                            if (Math.abs(cleanP.length - cleanRes.length) > 4) return false;
-                            return cleanP.includes(cleanRes) || cleanRes.includes(cleanP);
-                        });
+                    // 2️⃣ 備援：依字串正規化比對
+                    const cleanRes = normalizeWord(resItem.word);
+                    if (!target && cleanRes) {
+                        target = chunk.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+                    }
+                    if (!target && cleanRes) {
+                        target = targetList.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+                    }
+                    if (!target && results.length === chunk.length && chunk[resIdx]) {
+                        target = chunk[resIdx];
                     }
 
                     if (target) {
-                        if ((forceOverwrite || isFieldIncomplete(target.pos, 'pos')) && resItem.pos) target.pos = resItem.pos;
+                        const sanitizedRes = sanitizeWordAndPos(resItem.word, resItem.pos || '', resItem.meaning || '');
+                        const correctedWord = (sanitizedRes.word || String(resItem.word)).trim();
+
+                        // 🌟 自動更新修正後的正確拼寫
+                        if (correctedWord && !isFieldIncomplete(correctedWord)) {
+                            target.word = correctedWord;
+                        }
+
+                        if ((forceOverwrite || isFieldIncomplete(target.pos, 'pos')) && sanitizedRes.pos) target.pos = sanitizedRes.pos;
                         if ((forceOverwrite || isFieldIncomplete(target.phonetic, 'phonetic')) && resItem.phonetic) target.phonetic = resItem.phonetic;
-                        if ((forceOverwrite || isFieldIncomplete(target.meaning, 'meaning')) && resItem.meaning) target.meaning = resItem.meaning;
+                        if ((forceOverwrite || isFieldIncomplete(target.meaning, 'meaning')) && sanitizedRes.meaning) target.meaning = sanitizedRes.meaning;
                         if ((forceOverwrite || isFieldIncomplete(target.sentence, 'sentence')) && resItem.sentence) target.sentence = resItem.sentence;
                         if ((forceOverwrite || isFieldIncomplete(target.translation, 'translation')) && resItem.translation) target.translation = resItem.translation;
                         target.updatedAt = Date.now();
@@ -471,7 +498,7 @@ Return ONLY a pure JSON array matching input order:
                     }
                 });
 
-                // 💾 🌟 核心：每完成一批（40字），立刻寫入 LocalStorage 存檔並即時更新 UI
+                // 💾 每完成一批（20字），立刻寫入 LocalStorage 存檔並即時更新 UI
                 if (typeof saveStorage === 'function') {
                     saveStorage();
                 }
@@ -480,7 +507,7 @@ Return ONLY a pure JSON array matching input order:
                 }
             }
         } else {
-            console.error(`[AI Batch Error] 該批次重試 ${maxAttempts} 次仍無法連線：`, chunkWords);
+            console.error(`[AI Batch Error] 該批次重試 ${maxAttempts} 次仍無法連線：`, cleanChunkInputs);
             throw new Error(lastErrorMsg || "連線至 AI 伺服器失敗，請檢查網路連線或 Cloudflare Worker CORS 設定");
         }
 
@@ -494,7 +521,7 @@ Return ONLY a pure JSON array matching input order:
         }
     }
 
-    // 🔄 二次自動補掃機制 (Auto Sweep Pass)
+    // 🔄 二次自動補掃機制 (Auto Sweep Pass - 僅在非強制覆蓋或仍有缺漏欄位時執行)
     const leftoverItems = targetItems.filter(item => 
         isFieldIncomplete(item.meaning, 'meaning') || 
         isFieldIncomplete(item.pos, 'pos') || 
@@ -508,25 +535,30 @@ Return ONLY a pure JSON array matching input order:
         
         for (let j = 0; j < leftoverItems.length; j += batchSize) {
             const sweepChunk = leftoverItems.slice(j, j + batchSize);
-            const leftoverWords = sweepChunk.map(item => item.word);
+            const sweepInputs = sweepChunk.map((item, idx) => {
+                const sanitized = sanitizeWordAndPos(item.word || '', '', '');
+                return { index: idx, word: sanitized.word || String(item.word || '').trim() };
+            });
             
             const sweepPrompt = `You are an expert lexicographer.
-Input Terms: ${JSON.stringify(leftoverWords)}
+Input Terms: ${JSON.stringify(sweepInputs)}
 Target Language: ${targetName}
 User Native Language: ${nativeName}
 
 CRITICAL RULES:
-1. "word": MUST match exact string.
-2. "phonetic": MUST provide IPA pronunciation guide.
-3. "pos": MUST provide POS in ${nativeName}.
-4. "meaning": MUST provide definition in ${nativeName}.
-5. "sentence": MUST provide example sentence in ${targetName}.
-6. "translation": MUST provide translation in ${nativeName}.
+1. "index": MUST keep exact integer index.
+2. "word": Automatically fix common spelling typos if any; otherwise keep unchanged.
+3. "phonetic": MUST provide IPA pronunciation guide.
+4. "pos": MUST provide POS in ${nativeName}.
+5. "meaning": MUST provide definition in ${nativeName}.
+6. "sentence": MUST provide example sentence in ${targetName}.
+7. "translation": MUST provide translation in ${nativeName}.
 
 Return ONLY a pure JSON array:
 [
   {
-    "word": "original term",
+    "index": 0,
+    "word": "corrected spelling of term",
     "pos": "POS in ${nativeName}",
     "phonetic": "phonetic IPA",
     "meaning": "definition in ${nativeName}",
@@ -540,14 +572,21 @@ Return ONLY a pure JSON array:
                 if (rawSweep) {
                     const sweepResults = safeParseJSON(rawSweep);
                     if (Array.isArray(sweepResults)) {
-                        sweepResults.forEach(resItem => {
+                        sweepResults.forEach((resItem, resIdx) => {
                             if (!resItem || !resItem.word) return;
-                            const cleanRes = normalizeWord(resItem.word);
-                            const target = sweepChunk.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+                            let target = (typeof resItem.index === 'number' && sweepChunk[resItem.index])
+                                ? sweepChunk[resItem.index]
+                                : sweepChunk.find(p => p && p.word && normalizeWord(p.word) === normalizeWord(resItem.word));
+                            if (!target && sweepResults.length === sweepChunk.length) target = sweepChunk[resIdx];
+
                             if (target) {
-                                if (isFieldIncomplete(target.pos, 'pos') && resItem.pos) target.pos = resItem.pos;
+                                const sanitizedRes = sanitizeWordAndPos(resItem.word, resItem.pos || '', resItem.meaning || '');
+                                if (sanitizedRes.word && !isFieldIncomplete(sanitizedRes.word)) {
+                                    target.word = sanitizedRes.word;
+                                }
+                                if (isFieldIncomplete(target.pos, 'pos') && sanitizedRes.pos) target.pos = sanitizedRes.pos;
                                 if (isFieldIncomplete(target.phonetic, 'phonetic') && resItem.phonetic) target.phonetic = resItem.phonetic;
-                                if (isFieldIncomplete(target.meaning, 'meaning') && resItem.meaning) target.meaning = resItem.meaning;
+                                if (isFieldIncomplete(target.meaning, 'meaning') && sanitizedRes.meaning) target.meaning = sanitizedRes.meaning;
                                 if (isFieldIncomplete(target.sentence, 'sentence') && resItem.sentence) target.sentence = resItem.sentence;
                                 if (isFieldIncomplete(target.translation, 'translation') && resItem.translation) target.translation = resItem.translation;
                                 target.updatedAt = Date.now();
@@ -555,7 +594,7 @@ Return ONLY a pure JSON array:
                             }
                         });
 
-                        // 💾 🌟 補掃完成後也立刻存檔
+                        // 💾 補掃完成後立刻存檔
                         if (typeof saveStorage === 'function') {
                             saveStorage();
                         }
