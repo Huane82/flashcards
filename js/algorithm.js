@@ -18,14 +18,15 @@ const LEVEL_COLORS = {
     5: "bg-emerald-50 text-emerald-700 border-emerald-200"
 };
 
-const LEVEL1_POOL_SIZE = 6;   // Lv.1 焦點循環池上限
-const LEVEL2_POOL_SIZE = 4;   // 🌟 Lv.2 焦點循環池上限（限定一次 4 個循環）
-const LV2_RELATIVE_BOOST = 1.8; // 🌟 Lv.2 相較於 Lv.3/4/5 的權重倍率（不影響 Lv.1 總機率）
+const LEVEL1_POOL_SIZE = 6;     // Lv.1 焦點循環池上限
+const LEVEL2_POOL_SIZE = 4;     // Lv.2 焦點循環池上限（限定一次 4 個循環）
+const LV2_RELATIVE_BOOST = 1.8; // Lv.2 相較於 Lv.3/4/5 的權重倍率（不影響 Lv.1 總機率）
+const LV4_RELATIVE_BOOST = 2.0; // 🌟 Lv.4 相較於 Lv.5 的權重倍率（不影響 Lv.1/2/3 總機率）
 
 let activeLevel1Pool = [];
 let activeLevel2Pool = [];
 let historyQueue = [];
-let level5HistoryQueue = []; // 🌟 專屬記錄 Lv.5 出現過的單字佇列
+let level5HistoryQueue = []; // 專屬記錄 Lv.5 出現過的單字佇列
 
 function getLevelInfo(level) {
     const lv = level || 1;
@@ -137,7 +138,7 @@ function getNextCardSpacedRepetition() {
         lv2to5Items.push({ word, baseWeight: Math.max(baseWeight, 0.1) });
     });
 
-    // 2b. Lv.5 單字（保持 Lv.5 總權重不變，內部優先抽沒出現過的字）
+    // 2b. Lv.5 單字（保持 Lv.5 總權重配額，內部優先抽沒出現過的字）
     const lv5Words = poolToSelectFrom.filter(w => w.level === 5);
     if (lv5Words.length > 0) {
         const targetTotalLv5Weight = lv5Words.length * BASE_WEIGHTS[5];
@@ -160,24 +161,56 @@ function getNextCardSpacedRepetition() {
         });
     }
 
-    // 3️⃣ 群組權重歸一化：提高 Lv.2 相對於 Lv.3/4/5 的比重，同時維持 Lv.2~5 總權重不變
+    // 3️⃣ 第一層群組歸一化：提高 Lv.2 相對於 Lv.3/4/5 的比重，同時維持 Lv.2~5 總權重不變
+    const lv4to5Items = [];
     if (lv2to5Items.length > 0) {
         const originalLv2to5Sum = lv2to5Items.reduce((sum, item) => sum + item.baseWeight, 0);
 
-        const boostedItems = lv2to5Items.map(item => ({
+        const lv2BoostedItems = lv2to5Items.map(item => ({
             word: item.word,
             boostedWeight: item.word.level === 2
                 ? item.baseWeight * LV2_RELATIVE_BOOST
                 : item.baseWeight
         }));
 
-        const boostedLv2to5Sum = boostedItems.reduce((sum, item) => sum + item.boostedWeight, 0);
-        const scaleFactor = boostedLv2to5Sum > 0 ? (originalLv2to5Sum / boostedLv2to5Sum) : 1;
+        const boostedLv2to5Sum = lv2BoostedItems.reduce((sum, item) => sum + item.boostedWeight, 0);
+        const scale2to5 = boostedLv2to5Sum > 0 ? (originalLv2to5Sum / boostedLv2to5Sum) : 1;
 
-        boostedItems.forEach(item => {
+        lv2BoostedItems.forEach(item => {
+            const weightAfterLv2 = item.boostedWeight * scale2to5;
+            if (item.word.level === 2 || item.word.level === 3) {
+                weightedCandidates.push({
+                    word: item.word,
+                    weight: Math.max(weightAfterLv2, 0.01)
+                });
+            } else {
+                // Lv.4 與 Lv.5 進入下一層子群組歸一化
+                lv4to5Items.push({
+                    word: item.word,
+                    weightAfterLv2
+                });
+            }
+        });
+    }
+
+    // 4️⃣ 第二層群組歸一化：提高 Lv.4 相對於 Lv.5 的比重，同時維持 (Lv.4 + Lv.5) 總權重不變（不影響 1/2/3 級機率）
+    if (lv4to5Items.length > 0) {
+        const originalLv4to5Sum = lv4to5Items.reduce((sum, item) => sum + item.weightAfterLv2, 0);
+
+        const lv4BoostedItems = lv4to5Items.map(item => ({
+            word: item.word,
+            boostedWeight: item.word.level === 4
+                ? item.weightAfterLv2 * LV4_RELATIVE_BOOST
+                : item.weightAfterLv2
+        }));
+
+        const boostedLv4to5Sum = lv4BoostedItems.reduce((sum, item) => sum + item.boostedWeight, 0);
+        const scale4to5 = boostedLv4to5Sum > 0 ? (originalLv4to5Sum / boostedLv4to5Sum) : 1;
+
+        lv4BoostedItems.forEach(item => {
             weightedCandidates.push({
                 word: item.word,
-                weight: Math.max(item.boostedWeight * scaleFactor, 0.01)
+                weight: Math.max(item.boostedWeight * scale4to5, 0.01)
             });
         });
     }
