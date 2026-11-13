@@ -18,18 +18,13 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
 
-      // 允許新帳號建檔時初始化預設的 role: 'user' 與 coins: 0（但禁止自設 admin 或偷改高金額）
+      // 允許新帳號建檔與初始化預設金幣，僅禁止自行將 role 設為 admin
       allow create: if isSignedIn() && request.auth.uid == userId 
-        && (!('role' in request.resource.data) || request.resource.data.role == 'user')
-        && (!('coins' in request.resource.data) || request.resource.data.coins == 0);
+        && (!('role' in request.resource.data) || request.resource.data.role == 'user');
 
-      // 允許修改個人資料；禁止修改 role，且若原本已有 coins 則禁止任意竄改
+      // 允許使用者更新自己的資料與金幣，僅禁止自行竄改 role 權限
       allow update: if isSignedIn() && request.auth.uid == userId 
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
-        && (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coins']) ||
-          (!('coins' in resource.data) && request.resource.data.coins == 0)
-        );
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || isAdmin());
 
       // 管理員擁有最高寫入權限
       allow write: if isAdmin();
@@ -53,9 +48,13 @@ service cloud.firestore {
       allow delete: if isSignedIn() && 
         (resource == null || resource.data.authorId == request.auth.uid || isAdmin());
 
+      // 僅允許該字庫原作者或管理員寫入單字分片，所有人皆可讀取下載
       match /{subcollection=**} {
         allow read: if true;
-        allow write: if isSignedIn();
+        allow write: if isSignedIn() && (
+          get(/databases/$(database)/documents/storeDecks/$(deckId)).data.authorId == request.auth.uid || 
+          isAdmin()
+        );
       }
     }
 
