@@ -47,6 +47,94 @@ function deepSanitizeForFirestore(value) {
 }
 
 /**
+ * 🗄️ IndexedDB 本機大型資料庫封裝（突破 localStorage 5MB 上限，支援數萬筆完整單字）
+ */
+const LocalIDB = {
+  DB_NAME: 'LZHCard_LocalDB',
+  DB_VERSION: 1,
+  STORE_NAME: 'kv_store',
+  _dbPromise: null,
+
+  isSupported() {
+    return typeof indexedDB !== 'undefined';
+  },
+
+  open() {
+    if (!this.isSupported()) {
+      return Promise.reject(new Error('IndexedDB not supported'));
+    }
+    if (this._dbPromise) return this._dbPromise;
+
+    this._dbPromise = new Promise((resolve, reject) => {
+      try {
+        const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+            db.createObjectStore(this.STORE_NAME);
+          }
+        };
+
+        request.onsuccess = (event) => {
+          const db = event.target.result;
+          db.onclose = () => { this._dbPromise = null; };
+          db.onversionchange = () => {
+            db.close();
+            this._dbPromise = null;
+          };
+          resolve(db);
+        };
+
+        request.onerror = (event) => {
+          this._dbPromise = null;
+          reject(event.target.error || new Error('IndexedDB open error'));
+        };
+      } catch (err) {
+        this._dbPromise = null;
+        reject(err);
+      }
+    });
+
+    return this._dbPromise;
+  },
+
+  async get(key) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.STORE_NAME, 'readonly');
+      const store = tx.objectStore(this.STORE_NAME);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async set(key, value) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.STORE_NAME, 'readwrite');
+      const store = tx.objectStore(this.STORE_NAME);
+      store.put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB write aborted'));
+    });
+  },
+
+  async remove(key) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.STORE_NAME, 'readwrite');
+      const store = tx.objectStore(this.STORE_NAME);
+      store.delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+};
+
+/**
  * 🏆 比較兩張單字卡的學習進度（回傳 > 0 代表 a 進度高於 b）
  */
 function compareCardProgress(a, b) {
@@ -156,6 +244,8 @@ const StorageEngine = {
   _isFlushing: false,
   _hasPendingFlush: false,
   _lastSyncErrorToastAt: 0,
+  _lastKnownDecks: null,
+  _deletedKeysCache: null,
 
   getCurrentUid() {
     if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
@@ -175,25 +265,138 @@ const StorageEngine = {
     return `${cat}::${norm}`;
   },
 
-  getDeletedKeysSet() {
-    try {
-      const raw = localStorage.getItem(this.LOCAL_DELETED_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return new Set(parsed);
-      }
-    } catch (e) {}
-    return new Set();
+  updateLastKnownDecksSnapshot(decks) {
+    if (!Array.isArray(decks)) {
+      this._lastKnownDecks = [];
+      return;
+    }
+    this._lastKnownDecks = decks.map(c => ({
+      id: c.id,
+      word: c.word,
+      category: c.category
+    }));
   },
 
-  saveDeletedKeysSet(deletedSet) {
-    if (!deletedSet || deletedSet.size === 0) {
+  /**
+   * 📥 從 IndexedDB 讀取本機單字庫（若舊版 localStorage 尚有資料則自動無痛遷移並釋放 5MB 空間）
+   */
+  async getLocalDecks() {
+    try {
+      const idbDecks = await LocalIDB.get(this.LOCAL_DECKS_KEY);
+      if (Array.isArray(idbDecks)) {
+        if (localStorage.getItem(this.LOCAL_DECKS_KEY) !== null) {
+          localStorage.removeItem(this.LOCAL_DECKS_KEY);
+        }
+        return idbDecks;
+      }
+
+      // 首次升級：從舊版 localStorage 遷移進 IndexedDB
+      const rawLegacy = localStorage.getItem(this.LOCAL_DECKS_KEY);
+      if (rawLegacy) {
+        const parsed = JSON.parse(rawLegacy);
+        if (Array.isArray(parsed)) {
+          await LocalIDB.set(this.LOCAL_DECKS_KEY, parsed);
+          localStorage.removeItem(this.LOCAL_DECKS_KEY);
+          return parsed;
+        }
+      }
+      return [];
+    } catch (e) {
+      console.warn("IndexedDB 讀取單字失敗，降級使用 LocalStorage:", e);
+      try {
+        const rawLocal = localStorage.getItem(this.LOCAL_DECKS_KEY);
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (err) {}
+      return [];
+    }
+  },
+
+  /**
+   * 💾 寫入本機單字庫至 IndexedDB（直接儲存 JS 物件陣列，無 5MB 限制）
+   */
+  async setLocalDecks(decks) {
+    const safeArray = Array.isArray(decks) ? decks : [];
+    try {
+      await LocalIDB.set(this.LOCAL_DECKS_KEY, safeArray);
+      if (localStorage.getItem(this.LOCAL_DECKS_KEY) !== null) {
+        localStorage.removeItem(this.LOCAL_DECKS_KEY);
+      }
+    } catch (e) {
+      console.warn("IndexedDB 寫入單字失敗，降級使用 LocalStorage:", e);
+      try {
+        localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(safeArray));
+      } catch (quotaErr) {
+        console.error("本機儲存空間已滿:", quotaErr);
+      }
+    }
+  },
+
+  async getDeletedKeysSet() {
+    if (this._deletedKeysCache instanceof Set) {
+      return this._deletedKeysCache;
+    }
+
+    try {
+      const idbDeleted = await LocalIDB.get(this.LOCAL_DELETED_KEY);
+      if (Array.isArray(idbDeleted)) {
+        if (localStorage.getItem(this.LOCAL_DELETED_KEY) !== null) {
+          localStorage.removeItem(this.LOCAL_DELETED_KEY);
+        }
+        this._deletedKeysCache = new Set(idbDeleted);
+        return this._deletedKeysCache;
+      }
+
+      const rawLegacy = localStorage.getItem(this.LOCAL_DELETED_KEY);
+      if (rawLegacy) {
+        const parsed = JSON.parse(rawLegacy);
+        if (Array.isArray(parsed)) {
+          await LocalIDB.set(this.LOCAL_DELETED_KEY, parsed);
+          localStorage.removeItem(this.LOCAL_DELETED_KEY);
+          this._deletedKeysCache = new Set(parsed);
+          return this._deletedKeysCache;
+        }
+      }
+    } catch (e) {
+      try {
+        const raw = localStorage.getItem(this.LOCAL_DELETED_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            this._deletedKeysCache = new Set(parsed);
+            return this._deletedKeysCache;
+          }
+        }
+      } catch (err) {}
+    }
+
+    this._deletedKeysCache = new Set();
+    return this._deletedKeysCache;
+  },
+
+  async saveDeletedKeysSet(deletedSet) {
+    const normalizedSet = deletedSet instanceof Set ? deletedSet : new Set();
+    this._deletedKeysCache = normalizedSet;
+
+    if (normalizedSet.size === 0) {
+      try { await LocalIDB.remove(this.LOCAL_DELETED_KEY); } catch (e) {}
       localStorage.removeItem(this.LOCAL_DELETED_KEY);
       return;
     }
+
+    const arr = Array.from(normalizedSet);
     try {
-      localStorage.setItem(this.LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedSet)));
-    } catch (e) {}
+      await LocalIDB.set(this.LOCAL_DELETED_KEY, arr);
+      if (localStorage.getItem(this.LOCAL_DELETED_KEY) !== null) {
+        localStorage.removeItem(this.LOCAL_DELETED_KEY);
+      }
+    } catch (e) {
+      try {
+        localStorage.setItem(this.LOCAL_DELETED_KEY, JSON.stringify(arr));
+      } catch (err) {}
+    }
   },
 
   /**
@@ -404,9 +607,9 @@ const StorageEngine = {
   /**
    * 🔀 合併雲端與本機單字進度（同步套用尚未上傳的刪除紀錄，避免已刪除的單字從雲端復活）
    */
-  mergeRemoteAndLocalDecks(remoteDecks, localDecks, isLocalDirty) {
+  async mergeRemoteAndLocalDecks(remoteDecks, localDecks, isLocalDirty) {
     const defaultCatName = getStorageDefaultCatName();
-    const deletedSet = this.getDeletedKeysSet();
+    const deletedSet = await this.getDeletedKeysSet();
     const hasPendingDeletions = deletedSet.size > 0;
 
     if (isLocalDirty && Array.isArray(localDecks) && localDecks.length === 0) {
@@ -564,13 +767,7 @@ const StorageEngine = {
     }
 
     const runLoad = async () => {
-      let localDecks = [];
-      try {
-        const rawLocal = localStorage.getItem(this.LOCAL_DECKS_KEY);
-        if (rawLocal) localDecks = JSON.parse(rawLocal);
-      } catch (e) {
-        localDecks = [];
-      }
+      const localDecks = await this.getLocalDecks();
       const isLocalDirty = localStorage.getItem(this.LOCAL_DIRTY_KEY) === 'true';
 
       if (uid && typeof db !== 'undefined') {
@@ -611,7 +808,7 @@ const StorageEngine = {
               }
             }
 
-            const { decks: mergedDecks, needsCloudSync } = this.mergeRemoteAndLocalDecks(
+            const { decks: mergedDecks, needsCloudSync } = await this.mergeRemoteAndLocalDecks(
               remoteDecks,
               localDecks,
               isLocalDirty
@@ -620,9 +817,8 @@ const StorageEngine = {
             wordList = this.sanitizeDecksForStorage(mergedDecks);
             const migrated = this.migrateAllCardsFSRS(wordList);
             const deduped = this.deduplicateSameDeckWords(wordList);
-            try {
-              localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-            } catch (e) {}
+            await this.setLocalDecks(wordList);
+            this.updateLastKnownDecksSnapshot(wordList);
 
             const localQuiz = this.getLocalQuizScore();
             const remoteQuiz = data.quizScore || { correct: 0, total: 0, updatedAt: 0 };
@@ -634,7 +830,7 @@ const StorageEngine = {
               await this.flushCloudSave();
             } else {
               localStorage.removeItem(this.LOCAL_DIRTY_KEY);
-              localStorage.removeItem(this.LOCAL_DELETED_KEY);
+              await this.saveDeletedKeysSet(new Set());
             }
 
             if (data.apiKey) {
@@ -656,9 +852,8 @@ const StorageEngine = {
             this.migrateAllCardsFSRS(initialDecks);
             this.deduplicateSameDeckWords(initialDecks);
             wordList = this.sanitizeDecksForStorage(initialDecks);
-            try {
-              localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-            } catch (e) {}
+            await this.setLocalDecks(wordList);
+            this.updateLastKnownDecksSnapshot(wordList);
             this.applyQuizScoreState(this.getLocalQuizScore());
             await this.flushCloudSave();
 
@@ -669,7 +864,7 @@ const StorageEngine = {
             return wordList;
           }
         } catch (e) {
-          console.warn("Firestore 讀取失敗，降級使用 LocalStorage:", e);
+          console.warn("Firestore 讀取失敗，降級使用 IndexedDB 本機資料:", e);
           if (typeof checkAndOpenOnboardingModal === 'function') {
             checkAndOpenOnboardingModal();
           }
@@ -680,10 +875,9 @@ const StorageEngine = {
       const migratedLocal = this.migrateAllCardsFSRS(wordList);
       const dedupedLocal = this.deduplicateSameDeckWords(wordList);
       if (migratedLocal || dedupedLocal) {
-        try {
-          localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-        } catch (e) {}
+        await this.setLocalDecks(wordList);
       }
+      this.updateLastKnownDecksSnapshot(wordList);
       this.applyQuizScoreState(this.getLocalQuizScore());
       return wordList;
     };
@@ -739,7 +933,6 @@ const StorageEngine = {
           basePayload.wordList = firebase.firestore.FieldValue.delete();
         }
 
-        // 精簡後總大小（位元組）
         const compactBytes = new Blob([JSON.stringify({
           decks: compactDecks,
           apiKey: currentApiKey,
@@ -747,7 +940,7 @@ const StorageEngine = {
           quizScore: currentQuizScore
         })]).size;
 
-        // 策略 1：精簡後若在 750 KB 以內，直接存入主文件並清理舊分片（最快、相容所有 Firestore 規則）
+        // 策略 1：精簡後若在 750 KB 以內，直接存入主文件並清理舊分片
         if (compactBytes <= 750000) {
           try {
             const oldChunksSnap = await chunksColRef.get();
@@ -756,9 +949,7 @@ const StorageEngine = {
               oldChunksSnap.docs.forEach(d => delBatch.delete(d.ref));
               await delBatch.commit();
             }
-          } catch (cleanErr) {
-            // 若無子集合權限或尚無分片則忽略
-          }
+          } catch (cleanErr) {}
 
           await userDocRef.set({
             ...basePayload,
@@ -782,7 +973,6 @@ const StorageEngine = {
               });
             });
 
-            // 刪除多餘的舊分片（例如刪字後分片數從 4 減為 2）
             existingSnap.docs.forEach(docSnap => {
               const idx = parseInt(String(docSnap.id).replace('chunk_', ''), 10);
               if (Number.isNaN(idx) || idx >= chunks.length) {
@@ -798,7 +988,6 @@ const StorageEngine = {
 
             await batch.commit();
           } catch (chunkWriteErr) {
-            // 若 Firestore 安全規則尚未開放 deckChunks 子集合且精簡後小於 980 KB，降級寫入主文件
             if (compactBytes <= 980000) {
               await userDocRef.set({
                 ...basePayload,
@@ -813,7 +1002,7 @@ const StorageEngine = {
 
         if (!this._hasPendingFlush) {
           localStorage.removeItem(this.LOCAL_DIRTY_KEY);
-          localStorage.removeItem(this.LOCAL_DELETED_KEY);
+          await this.saveDeletedKeysSet(new Set());
         }
       } while (this._hasPendingFlush);
     } catch (e) {
@@ -840,13 +1029,9 @@ const StorageEngine = {
 
   async saveData(decks, immediate = false) {
     const defaultCatName = getStorageDefaultCatName();
-    let prevLocalDecks = [];
-    try {
-      const rawPrev = localStorage.getItem(this.LOCAL_DECKS_KEY);
-      if (rawPrev) prevLocalDecks = JSON.parse(rawPrev);
-    } catch (e) {
-      prevLocalDecks = [];
-    }
+    const prevLocalDecks = Array.isArray(this._lastKnownDecks)
+      ? this._lastKnownDecks
+      : await this.getLocalDecks();
 
     if (Array.isArray(decks)) {
       this.deduplicateSameDeckWords(decks);
@@ -858,6 +1043,9 @@ const StorageEngine = {
       wordList.push(...sanitizedDecks);
     }
 
+    // 立即更新記憶體快照，避免連續快速操作時比對誤差
+    this.updateLastKnownDecksSnapshot(sanitizedDecks);
+
     const nextIds = new Set();
     const nextKeys = new Set();
     sanitizedDecks.forEach(c => {
@@ -867,7 +1055,7 @@ const StorageEngine = {
       if (compKey) nextKeys.add(compKey);
     });
 
-    const deletedSet = this.getDeletedKeysSet();
+    const deletedSet = await this.getDeletedKeysSet();
     nextIds.forEach(id => deletedSet.delete(id));
     nextKeys.forEach(key => deletedSet.delete(key));
 
@@ -887,10 +1075,8 @@ const StorageEngine = {
       });
     }
 
-    this.saveDeletedKeysSet(deletedSet);
-    try {
-      localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(sanitizedDecks));
-    } catch (e) {}
+    await this.saveDeletedKeysSet(deletedSet);
+    await this.setLocalDecks(sanitizedDecks);
     localStorage.setItem(this.LOCAL_DIRTY_KEY, 'true');
 
     if (this._cloudSaveTimer) {
