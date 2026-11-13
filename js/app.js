@@ -1,5 +1,5 @@
 /**
- * LZHCard - 主程式交互控制器 (FSRS 混合排程整合版)
+ * LZHCard - 主程式交互控制器 (FSRS 與自由練習雙軌整合版)
  */
 
 function getSavedCategories() {
@@ -492,12 +492,36 @@ function updateEmptyNoticeState(precomputedCount) {
 }
 
 /**
+ * ⚡ 判斷目前是否處於「自由練習 / 考前臨時熟悉模式」
+ * 條件：手動開啟自由加練，或當前字庫的今日到期與新字皆已清空
+ */
+function isFreePracticeActive() {
+    if (window.isManualFreePractice) return true;
+    if (!Array.isArray(wordList) || wordList.length === 0) return false;
+
+    const activePool = (typeof getDeduplicatedActiveWords === 'function')
+        ? getDeduplicatedActiveWords()
+        : wordList.filter(w => {
+            const activeCats = window.selectedCategories || ['ALL'];
+            const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+            return activeCats.includes('ALL') || activeCats.includes(w.category || defaultCatName);
+        });
+
+    if (activePool.length === 0) return false;
+    const now = Date.now();
+    const dueCount = activePool.filter(w => w.state && w.state !== 'new' && (w.nextReview || 0) <= now).length;
+    const newCount = activePool.filter(w => !w.state || w.state === 'new').length;
+    return dueCount === 0 && newCount === 0;
+}
+
+/**
  * 🃏 抽取或更新字卡 (force = true 代表使用者主動換卡)
  */
 function nextCard(force = false) {
     const flashcardElem = document.getElementById('flashcard');
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
     const activeCats = window.selectedCategories || ['ALL'];
+    const isFreeMode = isFreePracticeActive();
 
     let shouldDrawNew = force || !currentCard;
 
@@ -529,7 +553,9 @@ function nextCard(force = false) {
             void flashcardElem.offsetHeight;
             flashcardElem.classList.remove('no-transition');
         }
-        currentCard = getNextCardSpacedRepetition();
+        currentCard = (isFreeMode && typeof getNextCardFreePractice === 'function')
+            ? getNextCardFreePractice()
+            : getNextCardSpacedRepetition();
     }
 
     updateStudyQueueUI();
@@ -550,15 +576,19 @@ function nextCard(force = false) {
         migrateCardFSRS(currentCard);
     }
 
-    const lvInfo = getLevelInfo(currentCard.level || 1);
-    const streak = currentCard.knowStreak || 0;
-    const intervals = (typeof previewNextIntervals === 'function')
-        ? previewNextIntervals(currentCard)
-        : { 1: '10 分鐘後', 2: '10 分鐘後', 3: '1 天後', 4: '4 天後' };
+    const lvInfo = (isFreeMode && typeof getFreeLevelInfo === 'function')
+        ? getFreeLevelInfo(currentCard.freeLevel || 1)
+        : getLevelInfo(currentCard.level || 1);
+    const streak = isFreeMode ? (currentCard.freeStreak || 0) : (currentCard.knowStreak || 0);
+    const intervals = (isFreeMode && typeof previewFreePracticeTransitions === 'function')
+        ? previewFreePracticeTransitions(currentCard)
+        : ((typeof previewNextIntervals === 'function')
+            ? previewNextIntervals(currentCard)
+            : { 1: '10 分鐘後', 2: '10 分鐘後', 3: '1 天後', 4: '4 天後' });
 
     const streakTextElem = document.getElementById('knowStreakText');
     if (streakTextElem) {
-        if (currentCard.state === 'review') {
+        if (!isFreeMode && currentCard.state === 'review') {
             streakTextElem.innerText = intervals[3];
         } else {
             streakTextElem.innerText = `${streak}/2`;
@@ -618,14 +648,14 @@ function nextCard(force = false) {
     
     const levelFront = document.getElementById('cardLevelFront');
     if (levelFront) {
-        levelFront.innerText = `${currentCard.category || defaultCatName} | ${lvInfo.name}`;
+        levelFront.innerText = isFreeMode ? lvInfo.name : `${currentCard.category || defaultCatName} | ${lvInfo.name}`;
         levelFront.className = `px-2.5 py-1 rounded-full text-xs font-bold border ${lvInfo.color}`;
     }
 
     if (document.getElementById('cardPosBack')) document.getElementById('cardPosBack').innerText = currentCard.pos || 'N/A';
     const levelBack = document.getElementById('cardLevelBack');
     if (levelBack) {
-        levelBack.innerText = `${currentCard.category || defaultCatName} | ${lvInfo.name}`;
+        levelBack.innerText = isFreeMode ? lvInfo.name : `${currentCard.category || defaultCatName} | ${lvInfo.name}`;
         levelBack.className = `px-2.5 py-1 rounded-full text-xs font-bold border ${lvInfo.color}`;
     }
 
@@ -639,6 +669,7 @@ function nextCard(force = false) {
 
 /**
  * 🧠 統一處理卡片記憶評分回饋（1: 不熟悉 | 2: 模糊 | 3: 已掌握 | 4: 秒答）
+ * 自由練習模式下僅更新臨時熟悉等級 (freeLevel)，完全不影響 FSRS 排程
  */
 function handleCardRating(rating, e) {
     if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
@@ -649,7 +680,18 @@ function handleCardRating(rating, e) {
     if (e && e.currentTarget) e.currentTarget.blur();
     else if (document.activeElement) document.activeElement.blur();
 
-    if (typeof recordCardReview === 'function') {
+    if (isFreePracticeActive() && typeof recordFreePracticeReview === 'function') {
+        recordFreePracticeReview(currentCard, rating);
+        const targetWord = (currentCard.word || '').trim().toLowerCase();
+        if (Array.isArray(wordList)) {
+            wordList.forEach(w => {
+                if ((w.word || '').trim().toLowerCase() === targetWord) {
+                    w.freeLevel = currentCard.freeLevel;
+                    w.freeStreak = currentCard.freeStreak;
+                }
+            });
+        }
+    } else if (typeof recordCardReview === 'function') {
         recordCardReview(currentCard, rating);
     } else {
         const targetWord = (currentCard.word || '').trim().toLowerCase();
@@ -790,6 +832,21 @@ function startFocusMode(mode) {
     }
 
     updateEmptyNoticeState();
+}
+
+if (typeof window.startFreePracticeMode !== 'function') {
+    window.startFreePracticeMode = function () {
+        window.isManualFreePractice = true;
+        startFocusMode('flashcard');
+    };
+}
+
+if (typeof window.toggleFreePracticeMode !== 'function') {
+    window.toggleFreePracticeMode = function () {
+        window.isManualFreePractice = !window.isManualFreePractice;
+        updateStudyQueueUI();
+        nextCard(true);
+    };
 }
 
 function exitFocusMode() {
