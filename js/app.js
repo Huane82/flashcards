@@ -17,7 +17,6 @@ window.selectedCategories = getSavedCategories();
 let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
-let cardReviewCounter = parseInt(localStorage.getItem('lzhcard_review_counter') || '0', 10);
 let isCardActionLocked = false; // 🌟 防止短時間重複觸發的鎖定旗標
 
 const MAX_AI_BATCH_LIMIT = 200;
