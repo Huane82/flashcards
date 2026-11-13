@@ -64,7 +64,7 @@ function handleObNativeChange(langCode) {
 }
 
 /**
- * 🛠️ 控制新手設定 Modal 中個人 API Key 輸入框的顯隱狀態
+ * 🛠️ 控制新手設定 Modal 中個人 API Key 輸入框的顯隱狀態，並即時記憶選擇
  */
 function toggleObApiKeyBox() {
     const isPersonal = document.getElementById('obApiModePersonal')?.checked;
@@ -76,6 +76,9 @@ function toggleObApiKeyBox() {
             box.classList.add('hidden');
         }
     }
+    if (document.getElementById('obApiModePersonal') || document.getElementById('obApiModeShared')) {
+        localStorage.setItem('lzhcard_api_mode', isPersonal ? 'personal' : 'shared');
+    }
 }
 
 /**
@@ -85,11 +88,9 @@ function confirmOnboardingLanguageStep() {
     const nativeLang = document.getElementById('obNativeLang')?.value || 'zh-TW';
     const targetLang = document.getElementById('obTargetLang')?.value || 'en';
 
-    // 1. 寫入語言設定
     localStorage.setItem('lzhcard_native_lang', nativeLang);
     localStorage.setItem('lzhcard_target_lang', targetLang);
 
-    // 2. 觸發多語系與 UI 同步，立刻讓介面變為所選語言
     if (typeof applyLanguageUI === 'function') {
         applyLanguageUI();
     }
@@ -97,13 +98,11 @@ function confirmOnboardingLanguageStep() {
         syncSettingsUI();
     }
 
-    // 3. 切換視圖：隱藏 Step 1，顯示 Step 2
     const step1 = document.getElementById('obStep1');
     const step2 = document.getElementById('obStep2');
     if (step1) step1.classList.add('hidden');
     if (step2) step2.classList.remove('hidden');
 
-    // 4. 確保 API 輸入框狀態與目前 radio 一致
     toggleObApiKeyBox();
 }
 
@@ -128,7 +127,12 @@ function startOnboardingFlow() {
         return;
     }
 
-    // 1. 優先判斷並讀取裝置/瀏覽器預設語言
+    // 🛡️ 防止 Firebase 同步完成後重複觸發，導致使用者操作一半被重置回 Step 1 或共用 Key
+    const setupModal = document.getElementById('onboardingSetupModal');
+    if (setupModal && !setupModal.classList.contains('hidden')) {
+        return;
+    }
+
     let savedNative = localStorage.getItem('lzhcard_native_lang');
     if (!savedNative) {
         const navLang = (navigator.language || '').toLowerCase();
@@ -138,18 +142,15 @@ function startOnboardingFlow() {
         localStorage.setItem('lzhcard_native_lang', savedNative);
     }
 
-    // 2. 開啟 Modal 前先執行一次語系替換，確保初始開啟時為對應語言
     if (typeof applyLanguageUI === 'function') {
         applyLanguageUI();
     }
 
-    // 重設 Modal 為步驟 1 畫面
     const step1 = document.getElementById('obStep1');
     const step2 = document.getElementById('obStep2');
     if (step1) step1.classList.remove('hidden');
     if (step2) step2.classList.add('hidden');
 
-    // 帶入當前設定值
     const nativeSelect = document.getElementById('obNativeLang');
     const targetSelect = document.getElementById('obTargetLang');
     const cardSelect = document.getElementById('obCardDisplayMode');
@@ -159,12 +160,11 @@ function startOnboardingFlow() {
     if (targetSelect) targetSelect.value = localStorage.getItem('lzhcard_target_lang') || 'en';
     if (cardSelect) cardSelect.value = localStorage.getItem('lzhcard_display_mode') || 'target_front';
     
-    // 預設為 shared（免費共用 Key）模式
     const savedMode = localStorage.getItem('lzhcard_api_mode') || 'shared';
     const radShared = document.getElementById('obApiModeShared');
     const radPersonal = document.getElementById('obApiModePersonal');
-    if (savedMode === 'shared' && radShared) radShared.checked = true;
-    if (savedMode === 'personal' && radPersonal) radPersonal.checked = true;
+    if (radShared) radShared.checked = (savedMode === 'shared');
+    if (radPersonal) radPersonal.checked = (savedMode === 'personal');
 
     if (keyInput) keyInput.value = (typeof getValidApiKey === 'function') ? (getValidApiKey() || '') : '';
 
@@ -178,12 +178,13 @@ function startOnboardingFlow() {
  */
 function skipOnboardingSetup() {
     localStorage.setItem('lzhcard_onboarding_completed', 'true');
+    if (typeof saveStorage === 'function') saveStorage();
     if (typeof closeModal === 'function') closeModal('onboardingSetupModal');
-    startInteractiveTour(); // 開啟介面高亮導覽
+    startInteractiveTour();
 }
 
 /**
- * 3. 儲存步驟 2 設定並開始導覽
+ * 3. 儲存步驟 2 設定並上傳至 Firebase
  */
 function saveOnboardingSetupAndContinue() {
     const nativeLang = document.getElementById('obNativeLang')?.value || 'zh-TW';
@@ -203,6 +204,9 @@ function saveOnboardingSetupAndContinue() {
     }
 
     localStorage.setItem('lzhcard_onboarding_completed', 'true');
+
+    // 💾 立刻同步寫入 Firebase，確保雲端與本機一致
+    if (typeof saveStorage === 'function') saveStorage();
 
     if (typeof applyLanguageUI === 'function') applyLanguageUI();
     if (typeof syncSettingsUI === 'function') syncSettingsUI();
@@ -323,5 +327,6 @@ function finishTour() {
     if (tourOverlay) tourOverlay.classList.add('hidden');
 
     localStorage.setItem('lzhcard_onboarding_completed', 'true');
+    if (typeof saveStorage === 'function') saveStorage();
     if (typeof switchTab === 'function') switchTab('home');
 }

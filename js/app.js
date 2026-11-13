@@ -84,6 +84,125 @@ function getAllCategories() {
     return Array.from(categories);
 }
 
+/**
+ * 📂 三個彈窗的字庫選單對應表與控制邏輯（最後一項固定為「創建新字庫」）
+ */
+const CATEGORY_SELECTOR_MAP = {
+    quickAdd: { selectId: 'quickAddCategorySelect', inputId: 'quickAddCategoryInput' },
+    form: { selectId: 'formCategorySelect', inputId: 'formCategory' },
+    batch: { selectId: 'batchTargetCategorySelect', inputId: 'batchTargetCategory' }
+};
+
+function refreshCategoryDropdownWithNew(selectId, inputId) {
+    const select = document.getElementById(selectId);
+    const input = document.getElementById(inputId);
+    if (!select) return;
+
+    const prevValue = select.value;
+    const cats = getAllCategories();
+    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+    const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
+    const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
+
+    let createNewLabel = nativeLang === 'en'
+        ? '➕ Create new deck...'
+        : (nativeLang === 'ja' ? '➕ 新しい単語帳を作成...' : '➕ 創建新字庫...');
+    if (typeof t === 'function') {
+        const translated = t('optCreateNewDeck');
+        if (translated && translated !== 'optCreateNewDeck') {
+            createNewLabel = translated;
+        }
+    }
+
+    const escapeHtml = (str) => String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    let optionsHtml = cats.map(c => {
+        const count = (typeof wordList !== 'undefined' && Array.isArray(wordList))
+            ? wordList.filter(w => (w.category || defaultCatName) === c).length
+            : 0;
+        return `<option value="${escapeHtml(c)}">${escapeHtml(c)} (${count} ${unitText})</option>`;
+    }).join('');
+
+    optionsHtml += `<option value="__NEW_CATEGORY__">${createNewLabel}</option>`;
+    select.innerHTML = optionsHtml;
+
+    if (prevValue === '__NEW_CATEGORY__') {
+        select.value = '__NEW_CATEGORY__';
+        if (input) input.classList.remove('hidden');
+    } else if (prevValue && cats.includes(prevValue)) {
+        select.value = prevValue;
+        if (input) {
+            input.value = prevValue;
+            input.classList.add('hidden');
+        }
+    } else if (cats.length > 0) {
+        select.value = cats[0];
+        if (input) {
+            input.value = cats[0];
+            input.classList.add('hidden');
+        }
+    }
+}
+
+function handleCategorySelectWithNew(type, autoFocus = true) {
+    const cfg = CATEGORY_SELECTOR_MAP[type];
+    if (!cfg) return;
+    const select = document.getElementById(cfg.selectId);
+    const input = document.getElementById(cfg.inputId);
+    if (!select || !input) return;
+
+    if (select.value === '__NEW_CATEGORY__') {
+        input.classList.remove('hidden');
+        input.value = '';
+        if (autoFocus) input.focus();
+    } else {
+        input.classList.add('hidden');
+        input.value = select.value;
+    }
+}
+
+function setCategorySelectorValue(type, categoryName) {
+    const cfg = CATEGORY_SELECTOR_MAP[type];
+    if (!cfg) return;
+    refreshCategoryDropdownWithNew(cfg.selectId, cfg.inputId);
+
+    const select = document.getElementById(cfg.selectId);
+    const input = document.getElementById(cfg.inputId);
+    if (!select || !input) return;
+
+    const target = (categoryName || '').trim();
+    const hasOption = Array.from(select.options).some(
+        opt => opt.value !== '__NEW_CATEGORY__' && opt.value === target
+    );
+
+    if (hasOption) {
+        select.value = target;
+        input.value = target;
+        input.classList.add('hidden');
+    } else {
+        select.value = '__NEW_CATEGORY__';
+        input.value = target;
+        input.classList.remove('hidden');
+    }
+}
+
+function getCategorySelectorValue(type) {
+    const cfg = CATEGORY_SELECTOR_MAP[type];
+    if (!cfg) return { isNew: false, value: '' };
+    const select = document.getElementById(cfg.selectId);
+    const input = document.getElementById(cfg.inputId);
+    if (!select || !input) return { isNew: false, value: '' };
+
+    if (select.value === '__NEW_CATEGORY__') {
+        return { isNew: true, value: input.value.trim() };
+    }
+    return { isNew: false, value: select.value.trim() };
+}
+
 document.addEventListener('click', (e) => {
     const selector = document.getElementById('headerCategorySelector');
     const menu = document.getElementById('categoryDropdownMenu');
@@ -165,6 +284,10 @@ function updateCategorySelects() {
             return `<option value="${c}">${c} (${count} ${unitText})</option>`;
         }).join('');
     }
+
+    Object.values(CATEGORY_SELECTOR_MAP).forEach(cfg => {
+        refreshCategoryDropdownWithNew(cfg.selectId, cfg.inputId);
+    });
 }
 
 /**
@@ -374,7 +497,6 @@ function nextCard(force = false) {
     if (document.getElementById('cardTranslation')) document.getElementById('cardTranslation').innerText = currentCard.translation || '';
 }
 
-// 覆蓋 handleDontKnow
 function handleDontKnow(e) {
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
@@ -395,12 +517,10 @@ function handleDontKnow(e) {
     });
 
     saveStorage();
-    trackCardReviewReward();
     updateUI();
     nextCard(true);
 }
 
-// 覆蓋 handleKnow
 function handleKnow(e) {
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
@@ -430,30 +550,8 @@ function handleKnow(e) {
     });
 
     saveStorage();
-    trackCardReviewReward();
     updateUI();
     nextCard(true);
-}
-
-/**
- * 🪙 刷卡計數與獎勵發放函式 (每 10 張卡獲得 1 金幣)
- */
-function trackCardReviewReward() {
-    cardReviewCounter += 1;
-    if (cardReviewCounter >= 10) {
-        cardReviewCounter = 0;
-        if (!window.userData) window.userData = {};
-        window.userData.coins = (window.userData.coins || 0) + 1;
-        
-        if (typeof saveUserData === 'function') saveUserData();
-        if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
-        
-        const toastMsg = (typeof t === 'function') 
-            ? t('toastEarnCoin10Cards') 
-            : '🎉 累積刷滿 10 張字卡，獲得 1 金幣！';
-        showToast(toastMsg, 'success');
-    }
-    localStorage.setItem('lzhcard_review_counter', cardReviewCounter.toString());
 }
 
 function flipCard() {
@@ -739,8 +837,15 @@ function editCard(id) {
     const item = wordList.find(w => w.id === id);
     if (!item) return;
 
+    const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
+    const targetCat = item.category || defaultCatName;
+
     document.getElementById('editCardId').value = item.id;
-    document.getElementById('formCategory').value = item.category || (typeof t === 'function' ? t('defaultCategoryName') : '預設字庫');
+    if (typeof setCategorySelectorValue === 'function') {
+        setCategorySelectorValue('form', targetCat);
+    } else {
+        document.getElementById('formCategory').value = targetCat;
+    }
     document.getElementById('formWord').value = item.word || '';
     document.getElementById('formPos').value = item.pos || '';
     document.getElementById('formPhonetic').value = item.phonetic || '';
@@ -786,7 +891,25 @@ function handleSaveCardForm(e) {
     const defaultMeaningText = typeof t === 'function' ? t('noMeaning') : '未設定釋義';
 
     const id = document.getElementById('editCardId').value;
-    const category = document.getElementById('formCategory').value.trim() || defaultCategoryName;
+
+    const catRes = (typeof getCategorySelectorValue === 'function')
+        ? getCategorySelectorValue('form')
+        : { isNew: false, value: document.getElementById('formCategory')?.value.trim() || '' };
+
+    if (catRes.isNew && !catRes.value) {
+        let enterNewMsg = '請輸入新字庫名稱！';
+        if (typeof t === 'function') {
+            const translated = t('toastEnterNewDeckName');
+            if (translated && translated !== 'toastEnterNewDeckName') {
+                enterNewMsg = translated;
+            }
+        }
+        showToast(enterNewMsg, 'warning');
+        document.getElementById('formCategory')?.focus();
+        return;
+    }
+    const category = catRes.value || defaultCategoryName;
+
     const rawWord = document.getElementById('formWord').value.trim();
     const rawPos = document.getElementById('formPos').value.trim();
     const phonetic = document.getElementById('formPhonetic').value.trim();
@@ -882,6 +1005,16 @@ function openModal(id) {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 
+    if (id === 'cardModal') {
+        const isEditing = !!document.getElementById('editCardId')?.value;
+        if (!isEditing) {
+            const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
+            const activeCats = window.selectedCategories || ['ALL'];
+            const initialCat = (activeCats.length === 1 && activeCats[0] !== 'ALL') ? activeCats[0] : defaultCatName;
+            setCategorySelectorValue('form', initialCat);
+        }
+    }
+
     if (id === 'batchModal' || id === 'quickAddModal') {
         if (typeof updateBatchPlaceholders === 'function') {
             updateBatchPlaceholders();
@@ -915,6 +1048,8 @@ function closeModal(id) {
         if (cardForm) cardForm.reset();
         const editIdInput = document.getElementById('editCardId');
         if (editIdInput) editIdInput.value = '';
+        const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
+        setCategorySelectorValue('form', defaultCatName);
         const titleElem = document.getElementById('cardModalTitle');
         if (titleElem) titleElem.innerText = typeof t === 'function' ? t('modalTitleAdd') : '新增單字';
     }

@@ -45,6 +45,7 @@ function syncSettingsUI() {
     const savedDisplayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
     const savedPhoneticPos = localStorage.getItem('lzhcard_phonetic_pos') || 'front';
     const savedTheme = localStorage.getItem('theme_preference') || 'system';
+    const savedApiMode = localStorage.getItem('lzhcard_api_mode') || 'shared';
 
     const nativeSelect = document.getElementById('nativeLangSelect');
     if (nativeSelect) nativeSelect.value = savedNative;
@@ -60,6 +61,13 @@ function syncSettingsUI() {
 
     const themeSelect = document.getElementById('themeSelect');
     if (themeSelect) themeSelect.value = savedTheme;
+
+    // 同步 API Key 模式單選框與輸入框顯示狀態
+    const radShared = document.getElementById('apiModeShared');
+    const radPersonal = document.getElementById('apiModePersonal');
+    if (radShared) radShared.checked = (savedApiMode === 'shared');
+    if (radPersonal) radPersonal.checked = (savedApiMode === 'personal');
+    switchApiMode(savedApiMode);
 
     const customNativeInput = document.getElementById('customNativeInput');
     if (customNativeInput) {
@@ -188,10 +196,9 @@ function handlePhoneticPosChange(mode) {
 }
 
 /**
- * 🎛️ 切換 Gemini API 金鑰模式 (personal / shared)
+ * 🎛️ 切換 Gemini API 金鑰模式 UI 顯示 (personal / shared)
  */
 function switchApiMode(mode) {
-    localStorage.setItem('lzhcard_api_mode', mode);
     const box = document.getElementById('personalKeyInputBox');
     if (box) {
         if (mode === 'shared') {
@@ -200,17 +207,13 @@ function switchApiMode(mode) {
             box.classList.remove('hidden');
         }
     }
-    if (typeof updateApiKeyStatusUI === 'function') {
-        updateApiKeyStatusUI();
-    }
 }
 
 /**
  * 🔑 儲存 Gemini API Key (支援個人 Key / 免費共用 Key 雙軌存檔)
  */
 function handleSaveApiKey() {
-    const selectedMode = document.querySelector('input[name="apiMode"]:checked')?.value || 'personal';
-    localStorage.setItem('lzhcard_api_mode', selectedMode);
+    const selectedMode = document.querySelector('input[name="apiMode"]:checked')?.value || 'shared';
 
     if (selectedMode === 'personal') {
         const keyInput = document.getElementById('geminiApiKeyInput');
@@ -221,6 +224,8 @@ function handleSaveApiKey() {
         }
         localStorage.setItem(API_KEY_STORAGE_NAME, key);
     }
+
+    localStorage.setItem('lzhcard_api_mode', selectedMode);
 
     if (typeof updateApiKeyStatusUI === 'function') {
         updateApiKeyStatusUI();
@@ -292,7 +297,7 @@ function handleWelcomeGuestLogin() {
     // 1. 關閉歡迎與條款彈窗
     closeWelcomeModal();
     
-    // 2. 立刻檢查並開啟新手設定彈窗
+    // 2. 訪客無需等待 Firestore 同步，直接檢查並開啟新手設定彈窗
     checkAndOpenOnboardingModal();
 
     if (typeof showToast === 'function') showToast('已以訪客身份進入系統！', 'success');
@@ -320,12 +325,12 @@ function checkAuthAndTosState() {
 
     if (typeof firebase !== 'undefined' && firebase.auth) {
         firebase.auth().onAuthStateChanged((user) => {
+            if (typeof applyLanguageUI === 'function') applyLanguageUI();
+
             if (user) {
                 closeWelcomeModal();
                 syncSettingsUI();
-
-                // 🟢 登入成功時，立刻檢查並開啟新手設定彈窗
-                checkAndOpenOnboardingModal();
+                // 新手設定交由 StorageEngine.loadData() 完成雲端同步後再判斷開啟，避免換新裝置時誤彈視窗
             } else if (isGuest && tosAccepted) {
                 closeWelcomeModal();
             } else {
@@ -349,38 +354,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (themeSelect) themeSelect.value = preference;
     applyTheme(preference);
 
+    syncSettingsUI();
     checkAuthAndTosState();
-
-    if (typeof firebase !== 'undefined' && firebase.auth) {
-        firebase.auth().onAuthStateChanged(() => {
-            if (typeof applyLanguageUI === 'function') applyLanguageUI();
-        });
-    }
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-    initLanguageSettings();
-
-    const preference = localStorage.getItem('theme_preference') || 'system';
-    const themeSelect = document.getElementById('themeSelect');
-    if (themeSelect) themeSelect.value = preference;
-    applyTheme(preference);
-
-    // 🎛️ 初始化 API 金鑰模式 (預設為 shared 免費共用模式)
-    const savedApiMode = localStorage.getItem('lzhcard_api_mode') || 'shared';
-    const radShared = document.getElementById('apiModeShared');
-    const radPersonal = document.getElementById('apiModePersonal');
-    if (savedApiMode === 'shared' && radShared) radShared.checked = true;
-    if (savedApiMode === 'personal' && radPersonal) radPersonal.checked = true;
-    switchApiMode(savedApiMode);
-
-    checkAuthAndTosState();
-
-    if (typeof firebase !== 'undefined' && firebase.auth) {
-        firebase.auth().onAuthStateChanged(() => {
-            if (typeof applyLanguageUI === 'function') applyLanguageUI();
-        });
-    }
 });
 
 /**

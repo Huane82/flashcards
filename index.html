@@ -864,8 +864,10 @@
                 <input type="hidden" id="editCardId">
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormCategory">歸屬字庫/分類名稱</label>
-                    <input type="text" id="formCategory" data-i18n-placeholder="phFormCategory" placeholder="例如: 預設字庫 / 核心單字" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none text-sm font-semibold">
+                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormCategory">歸屬字庫/分類名稱</label>
+ <select id="formCategorySelect" onchange="handleCategorySelectWithNew('form')" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none text-sm font-semibold cursor-pointer">
+ </select>
+ <input type="text" id="formCategory" data-i18n-placeholder="phFormCategory" placeholder="請輸入新字庫名稱..." class="hidden w-full px-3.5 py-2 rounded-lg border border-brand-400 dark:border-brand-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none text-sm font-semibold">
                 </div>
 
                 <div>
@@ -955,8 +957,10 @@
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblBatchCategory">匯入至此字庫名稱：</label>
-                    <input type="text" id="batchTargetCategory" data-i18n-placeholder="phBatchCategory" value="Default" placeholder="例如: 高中 7000 單 L1" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none font-semibold">
+                   <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblBatchCategory">匯入至此字庫名稱：</label>
+                    <select id="batchTargetCategorySelect" onchange="handleCategorySelectWithNew('batch')" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none font-semibold cursor-pointer">
+                    </select>
+                    <input type="text" id="batchTargetCategory" data-i18n-placeholder="phBatchCategory" placeholder="請輸入新字庫名稱..." class="hidden w-full px-3 py-2 text-xs rounded-lg border border-brand-400 dark:border-brand-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none font-semibold">
                 </div>
 
                 <div>
@@ -1161,7 +1165,9 @@
             <!-- 指定/選擇儲存字庫欄位 -->
             <div>
                 <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">儲存至字庫：</label>
-                <input type="text" id="quickAddCategoryInput" data-i18n-placeholder="phFormCategory" placeholder="預設字庫 / 或輸入新字庫名稱" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold">
+                <select id="quickAddCategorySelect" onchange="handleCategorySelectWithNew('quickAdd')" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold cursor-pointer">
+                </select>
+                <input type="text" id="quickAddCategoryInput" data-i18n-placeholder="phFormCategory" placeholder="請輸入新字庫名稱..." class="hidden w-full px-3 py-2 text-xs rounded-lg border border-brand-400 dark:border-brand-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold">
             </div>
 
             <div>

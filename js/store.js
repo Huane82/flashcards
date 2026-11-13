@@ -1,13 +1,26 @@
 /**
- * LZHCard - 社群字庫商店系統模組 (已補齊金幣交易 UI 即時刷新機制)
+ * LZHCard - 社群字庫商店系統模組 (store.js)
  */
 
 window.storeDecks = [];
 
-function isGuestUser() {
-    const isGuestMode = localStorage.getItem('lzhcard_guest_mode') === 'true';
-    const isFirebaseUser = typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser;
-    return isGuestMode || !isFirebaseUser;
+// 避免覆蓋 chat.js 中較完整的全域 isGuestUser()
+if (typeof window.isGuestUser !== 'function') {
+    window.isGuestUser = function () {
+        const isGuestMode = localStorage.getItem('lzhcard_guest_mode') === 'true';
+        const isFirebaseUser = typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser;
+        return isGuestMode || !isFirebaseUser;
+    };
+}
+
+function getStoreCurrentUser() {
+    if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+        return firebase.auth().currentUser;
+    }
+    if (typeof auth !== 'undefined' && auth.currentUser) {
+        return auth.currentUser;
+    }
+    return null;
 }
 
 async function renderStore() {
@@ -15,7 +28,7 @@ async function renderStore() {
     if (!container) return;
 
     const query = (document.getElementById('storeSearchInput')?.value || '').trim().toLowerCase();
-    const currentUser = (typeof auth !== 'undefined' && auth.currentUser) ? auth.currentUser : null;
+    const currentUser = getStoreCurrentUser();
     const currentUid = currentUser ? currentUser.uid : '';
     const isAdmin = window.userData ? window.userData.role === 'admin' : false;
 
@@ -113,7 +126,7 @@ function openStoreDeckPreview(deckId) {
         if (!deck.words || deck.words.length === 0) {
             container.innerHTML = `<div class="text-center text-slate-400 py-8">此字庫暫無單字內容</div>`;
         } else {
-            container.innerHTML = deck.words.map((w, idx) => `
+            container.innerHTML = deck.words.map((w) => `
                 <div class="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700 space-y-1">
                     <div class="flex justify-between items-center">
                         <div class="flex items-center space-x-2">
@@ -157,10 +170,11 @@ function openPublishModal() {
 
     select.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
     
+    const currentUser = getStoreCurrentUser();
     const pubAuthorDisplay = document.getElementById('pubAuthorDisplay');
     const fixedNickname = (window.userData && window.userData.nickname) 
         ? window.userData.nickname 
-        : (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email.split('@')[0]) : '匿名使用者');
+        : (currentUser ? (currentUser.displayName || currentUser.email.split('@')[0]) : '匿名使用者');
     
     if (pubAuthorDisplay) {
         pubAuthorDisplay.textContent = fixedNickname;
@@ -187,7 +201,9 @@ async function submitPublishDeck() {
         return;
     }
 
-    const currentUser = auth.currentUser;
+    const currentUser = getStoreCurrentUser();
+    if (!currentUser) return;
+
     const authorNickname = (window.userData && window.userData.nickname) 
         ? window.userData.nickname 
         : (currentUser.displayName || currentUser.email.split('@')[0]);
@@ -289,12 +305,14 @@ function importStoreDeck(deckId) {
 
     let addedCount = 0;
     (deck.words || []).forEach(w => {
-        const exists = wordList.some(item => item.word.toLowerCase() === w.word.toLowerCase() && item.category === deck.title);
+        if (!w || !w.word) return;
+        const cleanWord = w.word.trim();
+        const exists = wordList.some(item => item.word.trim().toLowerCase() === cleanWord.toLowerCase() && item.category === deck.title);
         if (!exists) {
             wordList.push({
                 id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 category: deck.title,
-                word: w.word,
+                word: cleanWord,
                 pos: w.pos || '',
                 phonetic: w.phonetic || '',
                 meaning: w.meaning || '',
@@ -324,7 +342,7 @@ async function purchaseStoreDeck(deckId) {
     if (!deck) return;
 
     const price = deck.price || 0;
-    const currentUser = auth.currentUser;
+    const currentUser = getStoreCurrentUser();
     if (!currentUser) return;
 
     // 1. 自己發布的字庫免費取得
@@ -334,13 +352,17 @@ async function purchaseStoreDeck(deckId) {
         return;
     }
 
+    const backendUrl = typeof SHARED_BACKEND_URL !== 'undefined'
+        ? SHARED_BACKEND_URL
+        : 'https://lzhcard.tomlin980415.workers.dev';
+
     if (confirm(`確認花費 ${price} 金幣購買「${deck.title}」？`)) {
         try {
             // 2. 取得 Firebase 簽發的個人 ID Token（防偽造身分憑證）
             const idToken = await currentUser.getIdToken();
 
             // 3. 發送交易請求給 Cloudflare Worker 後端進行真實扣款
-            const res = await fetch(`${SHARED_BACKEND_URL}/buy-deck`, {
+            const res = await fetch(`${backendUrl}/buy-deck`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -383,7 +405,8 @@ async function deleteStoreDeck(deckId) {
     const deck = window.storeDecks.find(d => d.id === deckId);
     if (!deck) return;
 
-    const currentUid = auth.currentUser ? auth.currentUser.uid : '';
+    const currentUser = getStoreCurrentUser();
+    const currentUid = currentUser ? currentUser.uid : '';
     const userRole = window.userData ? window.userData.role : 'user';
 
     const isAuthor = currentUid && deck.authorId === currentUid;
@@ -410,8 +433,8 @@ async function deleteStoreDeck(deckId) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    renderStore();
+document.addEventListener('DOMContentLoaded', async () => {
+    await renderStore();
 
     if (window.location.hash.startsWith('#share=')) {
         const deckId = decodeURIComponent(window.location.hash.replace('#share=', ''));

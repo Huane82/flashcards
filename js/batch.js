@@ -183,13 +183,12 @@ function autoDeduplicateWordList(options = {}) {
 })();
 
 /**
- * 🌐 依據目前設定的目標語言與選擇字庫動態切換範例提示與預設字庫名稱
+ * 🌐 依據目前設定的目標語言與選擇字庫動態切換範例提示與預設字庫選單
  */
 function updateBatchPlaceholders() {
     const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
     const batchRawInput = document.getElementById('batchRawInput');
     const quickAddInput = document.getElementById('quickAddInput');
-    const quickAddCatInput = document.getElementById('quickAddCategoryInput');
 
     let batchPlaceholder = "";
     let quickAddPlaceholder = "";
@@ -224,19 +223,20 @@ function updateBatchPlaceholders() {
     if (batchRawInput) batchRawInput.placeholder = batchPlaceholder;
     if (quickAddInput) quickAddInput.placeholder = quickAddPlaceholder;
 
-    // 🌟 優先讀取上次快速新增儲存的字庫名稱；若無紀錄則帶入目前選取的字庫
-    if (quickAddCatInput) {
-        const savedLastCat = localStorage.getItem('lzhcard_last_quick_add_cat');
-        if (savedLastCat) {
-            quickAddCatInput.value = savedLastCat;
-        } else {
-            const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
-            const activeCats = window.selectedCategories || ['ALL'];
-            const currentCat = (activeCats.length === 1 && activeCats[0] !== 'ALL') 
-                ? activeCats[0] 
-                : defaultCatName;
-            quickAddCatInput.value = currentCat;
-        }
+    // 🌟 同步初始化「快速填入」與「批量匯入」的字庫下拉選單
+    const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
+    const activeCats = window.selectedCategories || ['ALL'];
+    const currentCat = (activeCats.length === 1 && activeCats[0] !== 'ALL')
+        ? activeCats[0]
+        : defaultCatName;
+
+    const existingCats = typeof getAllCategories === 'function' ? getAllCategories() : [defaultCatName];
+    const savedLastCat = localStorage.getItem('lzhcard_last_quick_add_cat');
+    const initialQuickCat = (savedLastCat && existingCats.includes(savedLastCat)) ? savedLastCat : currentCat;
+
+    if (typeof setCategorySelectorValue === 'function') {
+        setCategorySelectorValue('quickAdd', initialQuickCat);
+        setCategorySelectorValue('batch', currentCat);
     }
 }
 
@@ -311,8 +311,12 @@ async function handleLoadPreset(levelNum) {
     }
 
     const catName = `高中 7000 單 L${levelNum}`;
-    const targetCategoryInput = document.getElementById('batchTargetCategory');
-    if (targetCategoryInput) targetCategoryInput.value = catName;
+    if (typeof setCategorySelectorValue === 'function') {
+        setCategorySelectorValue('batch', catName);
+    } else {
+        const targetCategoryInput = document.getElementById('batchTargetCategory');
+        if (targetCategoryInput) targetCategoryInput.value = catName;
+    }
 
     const seenSet = new Set();
     window.parsedBatchList = [];
@@ -567,8 +571,22 @@ function handleConfirmBatchImport() {
     if (!window.parsedBatchList || window.parsedBatchList.length === 0) return;
 
     const defaultCatName = safeT('defaultCategoryName', null, '預設字庫');
-    const targetCatElem = document.getElementById('batchTargetCategory');
-    const targetCategory = targetCatElem ? (targetCatElem.value.trim() || defaultCatName) : defaultCatName;
+    const catRes = (typeof getCategorySelectorValue === 'function')
+        ? getCategorySelectorValue('batch')
+        : { isNew: false, value: document.getElementById('batchTargetCategory')?.value.trim() || '' };
+
+    if (catRes.isNew && !catRes.value) {
+        let enterNewMsg = '請輸入新字庫名稱！';
+        if (typeof t === 'function') {
+            const translated = t('toastEnterNewDeckName');
+            if (translated && translated !== 'toastEnterNewDeckName') enterNewMsg = translated;
+        }
+        if (typeof showToast === 'function') showToast(enterNewMsg, 'warning');
+        document.getElementById('batchTargetCategory')?.focus();
+        return;
+    }
+    const targetCategory = catRes.value || defaultCatName;
+
     let addedCount = 0;
     let replacedCount = 0;
 
@@ -647,19 +665,32 @@ async function handleQuickAddWords() {
         return;
     }
 
+    const defaultCategoryName = safeT('defaultCategoryName', null, '預設字庫');
+    const defaultMeaningText = safeT('progressAiParsing', null, 'AI 自動解析中...');
+
+    // 🌟 讀取下拉選單或新輸入的目標字庫名稱
+    const catRes = (typeof getCategorySelectorValue === 'function')
+        ? getCategorySelectorValue('quickAdd')
+        : { isNew: false, value: catInputElem ? catInputElem.value.trim() : '' };
+
+    if (catRes.isNew && !catRes.value) {
+        let enterNewMsg = '請輸入新字庫名稱！';
+        if (typeof t === 'function') {
+            const translated = t('toastEnterNewDeckName');
+            if (translated && translated !== 'toastEnterNewDeckName') enterNewMsg = translated;
+        }
+        if (typeof showToast === 'function') showToast(enterNewMsg, 'warning');
+        document.getElementById('quickAddCategoryInput')?.focus();
+        return;
+    }
+    const targetCategory = catRes.value || defaultCategoryName;
+
     const btn = document.getElementById('quickAddConfirmBtn');
     const origText = btn ? btn.innerText : '';
     if (btn) {
         btn.disabled = true;
         btn.innerText = safeT('btnProcessing', null, '處理中...');
     }
-
-    const defaultCategoryName = safeT('defaultCategoryName', null, '預設字庫');
-    const defaultMeaningText = safeT('progressAiParsing', null, 'AI 自動解析中...');
-
-    // 🌟 讀取自訂/選取的目標字庫名稱
-    const userDefinedCat = catInputElem ? catInputElem.value.trim() : '';
-    const targetCategory = userDefinedCat || defaultCategoryName;
 
     // 🌟 記憶本次選擇的字庫至 localStorage
     localStorage.setItem('lzhcard_last_quick_add_cat', targetCategory);
