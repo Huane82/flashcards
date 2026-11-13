@@ -2,7 +2,7 @@
 const firebaseConfig = {
   apiKey: "AIzaSyCbAux_DnwsgYJn3tGwLPImcaIAzGkdiHE",
   authDomain: "flashcards-5f514.firebaseapp.com",
-  databaseURL: "https://flashcards-5f514-default-rtdb.asia-southeast1.firebasedatabase.app", // 👈 補上這行連線設定
+  databaseURL: "https://flashcards-5f514-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "flashcards-5f514",
   storageBucket: "flashcards-5f514.firebasestorage.app",
   messagingSenderId: "471941628425",
@@ -34,6 +34,7 @@ async function loginWithGoogle() {
 
   try {
     const result = await auth.signInWithPopup(provider);
+    localStorage.removeItem('lzhcard_guest_mode');
     console.log("Google 登入成功:", result.user);
 
     if (typeof loadStorage === 'function') {
@@ -57,12 +58,14 @@ async function loginWithGoogle() {
 async function loginWithEmail(email, password) {
   try {
     const result = await auth.signInWithEmailAndPassword(email, password);
+    localStorage.removeItem('lzhcard_guest_mode');
     if (typeof loadStorage === 'function') await loadStorage();
     return result.user;
   } catch (error) {
     if (error.code === 'auth/user-not-found') {
       try {
         const newResult = await auth.createUserWithEmailAndPassword(email, password);
+        localStorage.removeItem('lzhcard_guest_mode');
         if (typeof showToast === 'function') showToast("已自動為您註冊新帳號並登入！", "success");
         if (typeof loadStorage === 'function') await loadStorage();
         return newResult.user;
@@ -124,6 +127,10 @@ async function handleSaveNickname() {
     const emailEl = document.getElementById('settings-email');
     if (emailEl) emailEl.innerText = newNickname;
 
+    if (typeof writeCurrentUserOnlineStatus === 'function') {
+      writeCurrentUserOnlineStatus();
+    }
+
     if (typeof showToast === 'function') showToast(`固定暱稱已成功更新為「${newNickname}」！`, 'success');
   } catch (err) {
     console.error("更新暱稱失敗:", err);
@@ -177,10 +184,20 @@ auth.onAuthStateChanged(async (user) => {
   const loggedInEl = document.getElementById('settings-logged-in');
 
   if (user) {
+    // 登入後立即清除訪客模式標記，解除商城與聊天室限制
+    localStorage.removeItem('lzhcard_guest_mode');
+
     let userNickname = user.displayName || (user.email ? user.email.split('@')[0] : '使用者');
     let userRole = 'user';
     let userCoins = 500;
     let userFriends = [];
+
+    // 先寫入基本登入身分，避免 Firestore 讀取期間被誤判為訪客
+    if (!window.userData) window.userData = {};
+    window.userData.uid = user.uid;
+    window.userData.email = user.email || '';
+    window.userData.nickname = userNickname;
+    window.userData.username = userNickname;
 
     try {
       const userRef = db.collection('users').doc(user.uid);
@@ -210,7 +227,6 @@ auth.onAuthStateChanged(async (user) => {
       console.warn("無法同步或讀取雲端使用者資料：", e);
     }
 
-    if (!window.userData) window.userData = {};
     window.userData.nickname = userNickname;
     window.userData.username = userNickname;
     window.userData.role = userRole;
@@ -242,6 +258,8 @@ auth.onAuthStateChanged(async (user) => {
     }
   } else {
     if (!window.userData) window.userData = {};
+    window.userData.uid = '';
+    window.userData.email = '';
     window.userData.username = '訪客玩家';
     window.userData.role = 'user';
     window.userData.coins = 0;
@@ -272,9 +290,9 @@ auth.onAuthStateChanged(async (user) => {
     if (typeof renderStore === 'function') renderStore();
     if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
     if (typeof checkAdminPermissions === 'function') checkAdminPermissions();
+    if (typeof updateUnreadBadgeUI === 'function') updateUnreadBadgeUI();
   } finally {
     window.__appReadyToHideLoader = true;
-    // ✅ 所有雲端資料、字庫與權限同步完成，自動關閉載入畫面
     if (typeof hideAppLoader === 'function') hideAppLoader();
   }
 
@@ -320,6 +338,7 @@ function toggleAuthButtons() {
 
 async function handleWelcomeGoogleLogin() {
   localStorage.setItem('lzhcard_tos_accepted', 'true');
+  localStorage.removeItem('lzhcard_guest_mode');
 
   const user = await loginWithGoogle();
   if (user) {
