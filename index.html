@@ -336,13 +336,18 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl mx-auto">
                 <!-- 模式 1：卡片輪播 -->
                 <button type="button" onclick="startFocusMode('flashcard')" class="group p-6 bg-white dark:bg-slate-800 hover:bg-brand-50/50 dark:hover:bg-slate-700/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md hover:shadow-xl hover:border-brand-300 dark:hover:border-brand-500 transition-all text-left flex flex-col justify-between h-56 relative overflow-hidden">
-                    <div class="space-y-3 z-10">
-                        <div class="w-12 h-12 rounded-xl bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-300 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">
-                            <i class="fa-solid fa-clone"></i>
+                    <div class="space-y-3 z-10 w-full">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="w-12 h-12 rounded-xl bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-300 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-clone"></i>
+                            </div>
+                            <span id="homeFsrsDueBadge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+                                FSRS 排程就緒
+                            </span>
                         </div>
                         <div>
                             <h3 class="text-xl font-extrabold text-slate-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition" data-i18n="modeFlashcard">卡片輪播</h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" data-i18n="modeFlashcardDesc">5 級艾賓浩斯記憶權重與焦點池演算法</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" data-i18n="modeFlashcardDesc">FSRS 科學遺忘曲線排程與焦點池演算法</p>
                         </div>
                     </div>
                     <div class="flex items-center text-xs font-bold text-brand-600 dark:text-brand-400 space-x-1 z-10">
@@ -373,8 +378,8 @@
         </section>
 
         <!-- 區塊 1：專注卡片輪播模式 -->
-        <section id="sec-flashcard" class="hidden space-y-6">
-            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium">
+        <section id="sec-flashcard" class="hidden space-y-5">
+            <div class="flex items-center justify-between flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
                 <div class="flex items-center space-x-2">
                     <button type="button" onclick="exitFocusMode()" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center space-x-1 transition">
                         <i class="fa-solid fa-arrow-left"></i>
@@ -386,19 +391,25 @@
                         <span data-i18n="btnQuickAdd">快速填入</span>
                     </button>
                 </div>
-                <div><span data-i18n="stockCount">當前庫存:</span> <span id="cardCountDisplay" class="font-bold text-slate-700 dark:text-slate-200">0</span></div>
+                <div class="flex items-center space-x-2">
+                    <span id="fsrsSessionBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+                        FSRS 排程
+                    </span>
+                    <div><span data-i18n="stockCount">當前庫存:</span> <span id="cardCountDisplay" class="font-bold text-slate-700 dark:text-slate-200">0</span></div>
+                </div>
             </div>
 
             <!-- 3D 卡片 -->
             <div class="perspective-1000 w-full max-w-lg mx-auto h-[380px] cursor-pointer group" onclick="flipCard()">
                 <div id="flashcard" class="relative w-full h-full transform-style-3d card-flip-duration shadow-xl rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800">
                     <div class="absolute inset-0 backface-hidden rounded-2xl p-8 flex flex-col justify-between bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                                 <span id="cardPosFront" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 dark:bg-brand-900/50 dark:text-brand-300 border border-brand-100 dark:border-brand-800">POS</span>
                                 <span id="cardLevelFront" class="px-2.5 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800">Lv.1</span>
+                                <span id="cardFsrsMetaFront" class="text-[11px] font-semibold text-slate-400 dark:text-slate-400"></span>
                             </div>
-                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀" class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center justify-center transition">
+                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀" class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center justify-center transition shrink-0">
                                 <i class="fa-solid fa-volume-high"></i>
                             </button>
                         </div>
@@ -413,12 +424,13 @@
                     </div>
 
                     <div class="absolute inset-0 backface-hidden rotate-y-180 rounded-2xl p-8 flex flex-col justify-between bg-slate-900 text-white">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                                 <span id="cardPosBack" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-brand-500/20 text-brand-300 border border-brand-500/30">POS</span>
                                 <span id="cardLevelBack" class="px-2.5 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200">Lv.1</span>
+                                <span id="cardFsrsMetaBack" class="text-[11px] font-semibold text-slate-400"></span>
                             </div>
-                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀" class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition">
+                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀" class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition shrink-0">
                                 <i class="fa-solid fa-volume-high"></i>
                             </button>
                         </div>
@@ -435,15 +447,39 @@
                 </div>
             </div>
 
-            <!-- 控制按鈕 -->
-            <div class="flex items-center justify-center space-x-3 max-w-lg mx-auto pt-2">
-                <button type="button" onclick="handleDontKnow()" class="flex-1 py-3.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-base shadow-lg transition flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                    <span data-i18n="btnDontKnow">不熟悉 (降級)</span>
+            <!-- 控制按鈕 (FSRS 四段記憶回饋 + 下次複習間隔預覽) -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-w-lg mx-auto pt-1">
+                <button type="button" onclick="handleDontKnow()" class="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition flex flex-col items-center justify-center">
+                    <span class="text-sm flex items-center space-x-1">
+                        <i class="fa-solid fa-xmark"></i>
+                        <span data-i18n="btnDontKnow">不熟悉</span>
+                    </span>
+                    <span id="fsrsPreview1" class="text-[10px] font-normal text-rose-100 mt-0.5">10 分鐘後</span>
                 </button>
-                <button type="button" onclick="handleKnow()" class="flex-1 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-lg transition flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-check text-lg"></i>
-                    <span><span data-i18n="btnKnow">已掌握</span> (<span id="knowStreakText">0/2</span>)</span>
+
+                <button type="button" onclick="typeof handleFSRSGrade === 'function' ? handleFSRSGrade(2) : handleDontKnow()" class="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-md transition flex flex-col items-center justify-center">
+                    <span class="text-sm flex items-center space-x-1">
+                        <i class="fa-solid fa-circle-question"></i>
+                        <span data-i18n="btnHard">模糊</span>
+                    </span>
+                    <span id="fsrsPreview2" class="text-[10px] font-normal text-amber-100 mt-0.5">12 小時後</span>
+                </button>
+
+                <button type="button" onclick="handleKnow()" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition flex flex-col items-center justify-center">
+                    <span class="text-sm flex items-center space-x-1">
+                        <i class="fa-solid fa-check"></i>
+                        <span data-i18n="btnKnow">已掌握</span>
+                        <span id="knowStreakText" class="hidden">0/2</span>
+                    </span>
+                    <span id="fsrsPreview3" class="text-[10px] font-normal text-emerald-100 mt-0.5">1 天後</span>
+                </button>
+
+                <button type="button" onclick="typeof handleFSRSGrade === 'function' ? handleFSRSGrade(4) : handleKnow()" class="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-md transition flex flex-col items-center justify-center">
+                    <span class="text-sm flex items-center space-x-1">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span data-i18n="btnEasy">秒答</span>
+                    </span>
+                    <span id="fsrsPreview4" class="text-[10px] font-normal text-sky-100 mt-0.5">4 天後</span>
                 </button>
             </div>
         </section>
@@ -495,7 +531,7 @@
                 <form onsubmit="handleQuizSubmit(event)" class="space-y-4">
                     <input type="text" id="quizInput" autocomplete="off" data-i18n-placeholder="quizInputPlaceholder" placeholder="在此輸入答案..." class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:border-brand-500 outline-none text-base font-semibold">
                     <div class="flex space-x-2">
-                        <button type="submit" class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-sm" data-i18n="btnSubmit">提交答案</button>
+                        <button type="submit" id="quizSubmitBtn" class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-sm" data-i18n="btnSubmit">提交答案</button>
                         <button type="button" onclick="nextQuizQuestion()" class="px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl" data-i18n="btnNext">下一題</button>
                     </div>
                 </form>
@@ -635,7 +671,7 @@
                         </label>
                         <label class="flex items-center space-x-2 cursor-pointer bg-slate-50 dark:bg-slate-700/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-600 hover:bg-slate-100 transition">
                             <input type="checkbox" id="chkShowLevel" checked onchange="renderStats()" class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500">
-                            <span class="font-semibold text-slate-800 dark:text-slate-200" data-i18n="lblShowLevel">📈 艾賓浩斯等級熟悉度分佈</span>
+                            <span class="font-semibold text-slate-800 dark:text-slate-200" data-i18n="lblShowLevel">📈 FSRS 記憶穩定度等級分佈</span>
                         </label>
                         <label class="flex items-center space-x-2 cursor-pointer bg-slate-50 dark:bg-slate-700/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-600 hover:bg-slate-100 transition">
                             <input type="checkbox" id="chkShowCategory" checked onchange="renderStats()" class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500">
@@ -892,13 +928,13 @@
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormLevel">熟悉度等級 (Level 1~5)</label>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormLevel">記憶穩定度等級 (Level 1~5)</label>
                     <select id="formLevel" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-brand-500 font-semibold transition">
-                        <option value="1">Lv.1 - 新單字 / 不熟悉</option>
-                        <option value="2">Lv.2 - 尚可 (需加強)</option>
-                        <option value="3">Lv.3 - 中等認知</option>
-                        <option value="4">Lv.4 - 熟練</option>
-                        <option value="5">Lv.5 - 完全掌握</option>
+                        <option value="1">Lv.1 - 新單字 / 短期重學</option>
+                        <option value="2">Lv.2 - 初步印象 (穩定 1~3 天)</option>
+                        <option value="3">Lv.3 - 中等鞏固 (穩定 3~8 天)</option>
+                        <option value="4">Lv.4 - 高度熟練 (穩定 8~21 天)</option>
+                        <option value="5">Lv.5 - 長期記憶 (穩定 21 天+)</option>
                     </select>
                 </div>
 
@@ -1430,10 +1466,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     
-    <!-- 正確腳本載入順序 -->
+    <!-- 正確腳本載入順序 (algorithm.js 優先於 storage.js 以確保 FSRS 遷移可用) -->
     <script src="js/firebase.js"></script>
-    <script src="js/storage.js"></script>
     <script src="js/algorithm.js"></script>
+    <script src="js/storage.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/ai.js"></script>
     <script src="js/quiz.js"></script>
@@ -1444,5 +1480,131 @@
     <script src="js/settings.js"></script>
     <script src="js/app.js"></script>
     <script src="js/onboarding.js"></script>
+
+    <!-- 🧠 FSRS 介面狀態同步器（自動更新首頁待複習數、卡片記憶保留率與間隔預覽） -->
+    <script>
+    (function () {
+        function formatIntervalShort(days) {
+            if (!days || days < 0.02) return '10 分鐘後';
+            if (days < 1) {
+                const hrs = Math.max(1, Math.round(days * 24));
+                return `${hrs} 小時後`;
+            }
+            const d = Math.round(days);
+            return `${d} 天後`;
+        }
+
+        function getActiveFilteredCards() {
+            if (typeof wordList === 'undefined' || !Array.isArray(wordList)) return [];
+            const activeCats = window.selectedCategories || ['ALL'];
+            const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+            if (activeCats.includes('ALL')) return wordList;
+            return wordList.filter(w => activeCats.includes(w.category || defaultCatName));
+        }
+
+        function findDisplayedCard() {
+            if (typeof currentCard !== 'undefined' && currentCard) return currentCard;
+            const wordText = (document.getElementById('cardWord')?.innerText || '').trim().toLowerCase();
+            if (!wordText || wordText === 'word') return null;
+            const pool = getActiveFilteredCards();
+            return pool.find(w => (w.word || '').trim().toLowerCase() === wordText) || null;
+        }
+
+        window.handleFSRSGrade = function (rating) {
+            const card = findDisplayedCard();
+            if (card && typeof recordCardReview === 'function') {
+                recordCardReview(card, rating);
+                if (typeof saveStorage === 'function') saveStorage();
+                if (typeof updateUI === 'function') updateUI();
+                if (typeof nextCard === 'function') nextCard();
+                return;
+            }
+            if (rating <= 2 && typeof handleDontKnow === 'function') handleDontKnow();
+            else if (typeof handleKnow === 'function') handleKnow();
+        };
+
+        window.refreshFSRSUIBadges = function () {
+            const pool = getActiveFilteredCards();
+            const now = Date.now();
+            const dueCount = pool.filter(w => w.state && w.state !== 'new' && (w.nextReview || 0) <= now).length;
+            const newCount = pool.filter(w => !w.state || w.state === 'new').length;
+
+            const homeBadge = document.getElementById('homeFsrsDueBadge');
+            if (homeBadge) {
+                if (pool.length === 0) {
+                    homeBadge.innerText = '尚無單字';
+                } else if (dueCount > 0) {
+                    homeBadge.innerText = `🔥 待複習 ${dueCount} · 新字 ${newCount}`;
+                } else if (newCount > 0) {
+                    homeBadge.innerText = `🆕 待學新字 ${newCount}`;
+                } else {
+                    homeBadge.innerText = '✨ 今日到期已清空';
+                }
+            }
+
+            const sessionBadge = document.getElementById('fsrsSessionBadge');
+            if (sessionBadge) {
+                if (dueCount > 0) {
+                    sessionBadge.innerText = `🔥 今日到期：${dueCount} 字`;
+                } else if (newCount > 0) {
+                    sessionBadge.innerText = `🆕 新字學習 (${newCount})`;
+                } else {
+                    sessionBadge.innerText = '✨ 自由加練模式';
+                }
+            }
+
+            const card = findDisplayedCard();
+            const metaFront = document.getElementById('cardFsrsMetaFront');
+            const metaBack = document.getElementById('cardFsrsMetaBack');
+            let metaText = '';
+
+            if (card) {
+                if (!card.state || card.state === 'new') {
+                    metaText = '🆕 全新單字';
+                } else if (typeof calculateRetrievability === 'function') {
+                    const rPct = Math.round(calculateRetrievability(card, now) * 100);
+                    const sDays = Math.max(0.1, card.stability || 0).toFixed(1);
+                    metaText = `保留率 ${rPct}% · 穩定度 ${sDays}天`;
+                }
+
+                // 更新四段按鈕下次複習間隔預覽
+                const s = Math.max(0.5, card.stability || 1);
+                const isNew = !card.state || card.state === 'new';
+                const p1 = document.getElementById('fsrsPreview1');
+                const p2 = document.getElementById('fsrsPreview2');
+                const p3 = document.getElementById('fsrsPreview3');
+                const p4 = document.getElementById('fsrsPreview4');
+
+                if (typeof previewNextIntervals === 'function') {
+                    const previews = previewNextIntervals(card);
+                    if (p1 && previews[1]) p1.innerText = previews[1];
+                    if (p2 && previews[2]) p2.innerText = previews[2];
+                    if (p3 && previews[3]) p3.innerText = previews[3];
+                    if (p4 && previews[4]) p4.innerText = previews[4];
+                } else {
+                    if (p1) p1.innerText = '10 分鐘後';
+                    if (p2) p2.innerText = isNew ? '12 小時後' : formatIntervalShort(s * 0.8);
+                    if (p3) p3.innerText = isNew ? '1 天後' : formatIntervalShort(s * 2.2);
+                    if (p4) p4.innerText = isNew ? '4 天後' : formatIntervalShort(s * 3.5);
+                }
+            }
+
+            if (metaFront) metaFront.innerText = metaText;
+            if (metaBack) metaBack.innerText = metaText;
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const targets = ['cardWord', 'cardCountDisplay', 'categoryDropdownBtnText'];
+            const observer = new MutationObserver(() => {
+                window.refreshFSRSUIBadges();
+            });
+            targets.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) observer.observe(el, { childList: true, characterData: true, subtree: true });
+            });
+            setTimeout(window.refreshFSRSUIBadges, 300);
+        });
+    })();
+    </script>
 </body>
 </html>

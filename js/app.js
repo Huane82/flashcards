@@ -1,5 +1,5 @@
 /**
- * LZHCard - 主程式交互控制器 (完整修正版)
+ * LZHCard - 主程式交互控制器 (FSRS 混合排程整合版)
  */
 
 function getSavedCategories() {
@@ -62,7 +62,6 @@ if (window.__appReadyToHideLoader) {
 
 // 🛡️ 安全保險機制：最多 5 秒後自動解除遮罩，避免離線或網路不穩時卡住
 setTimeout(hideAppLoader, 5000);
-
 
 let wordListRenderLimit = 100; // 🚀 單字列表每次渲染上限（避免一次塞入數千個 DOM）
 window._cachedFilteredWords = [];
@@ -367,8 +366,6 @@ function updateCategorySelects() {
     }
 }
 
-
-
 /**
  * 🎯 勾選/取消字庫事件
  */
@@ -426,6 +423,30 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+/**
+ * 📊 更新今日待複習 / 新字 / 自由加練狀態徽章
+ */
+function updateStudyQueueUI() {
+    if (typeof getStudyQueueSummary !== 'function') return;
+    const summary = getStudyQueueSummary();
+    const badge = document.getElementById('studyQueueBadge');
+    if (!badge) return;
+
+    if (summary.totalCount === 0) {
+        badge.classList.add('hidden');
+        return;
+    }
+
+    badge.classList.remove('hidden');
+    if (summary.isFreePractice) {
+        badge.className = 'inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
+        badge.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>今日進度已完成（自由加練模式）</span>`;
+    } else {
+        badge.className = 'inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
+        badge.innerHTML = `<i class="fa-solid fa-clock"></i><span>待複習 ${summary.dueCount} · 新字 ${summary.newCount}</span>`;
+    }
+}
+
 function updateUI() {
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
     const activeCats = window.selectedCategories || [];
@@ -452,6 +473,7 @@ function updateUI() {
     if (cardCountDisplayElem) cardCountDisplayElem.innerText = count;
 
     updateEmptyNoticeState(count);
+    updateStudyQueueUI();
     updateUserCoinsUI();
 
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
@@ -496,7 +518,6 @@ function updateEmptyNoticeState(precomputedCount) {
     }
 }
 
-
 /**
  * 🃏 抽取或更新字卡 (force = true 代表使用者主動換卡；false 則避免背景同步誤跳過當前卡片)
  */
@@ -533,6 +554,8 @@ function nextCard(force = false) {
         currentCard = getNextCardSpacedRepetition();
     }
 
+    updateStudyQueueUI();
+
     if (!currentCard) {
         if (document.getElementById('cardWord')) document.getElementById('cardWord').innerText = t('noWordAvailable');
         if (document.getElementById('cardPhonetic')) document.getElementById('cardPhonetic').innerText = "/---/";
@@ -545,11 +568,45 @@ function nextCard(force = false) {
         return;
     }
 
+    if (typeof migrateCardFSRS === 'function') {
+        migrateCardFSRS(currentCard);
+    }
+
     const lvInfo = getLevelInfo(currentCard.level || 1);
     const streak = currentCard.knowStreak || 0;
+    const intervals = (typeof previewNextIntervals === 'function')
+        ? previewNextIntervals(currentCard)
+        : { 1: '10 分鐘', 2: '10 分鐘', 3: '1 天', 4: '4 天' };
 
+    // 🕒 學習階段顯示短期確認次數 (0/2, 1/2)；已畢業進入長期排程則直接顯示下次複習天數
     const streakTextElem = document.getElementById('knowStreakText');
-    if (streakTextElem) streakTextElem.innerText = `${streak}/2`;
+    if (streakTextElem) {
+        if (currentCard.state === 'review') {
+            streakTextElem.innerText = intervals[3];
+        } else {
+            streakTextElem.innerText = `${streak}/2`;
+        }
+    }
+
+    // 預留多段間隔提示文字節點（供 index.html 顯示各按鈕預計間隔）
+    [1, 2, 3, 4].forEach(rating => {
+        const hintEl = document.getElementById(`intervalHint${rating}`);
+        if (hintEl) hintEl.innerText = intervals[rating] || '';
+    });
+
+    const memoryMetaEl = document.getElementById('cardMemoryMeta');
+    if (memoryMetaEl) {
+        const lapses = currentCard.lapses || 0;
+        if (lapses >= 2) {
+            memoryMetaEl.innerText = `易忘 ×${lapses}`;
+            memoryMetaEl.classList.remove('hidden');
+        } else if (currentCard.state === 'review' && currentCard.stability >= 1) {
+            memoryMetaEl.innerText = `記憶穩定 ${Math.round(currentCard.stability)}天`;
+            memoryMetaEl.classList.remove('hidden');
+        } else {
+            memoryMetaEl.classList.add('hidden');
+        }
+    }
 
     const displayMode = localStorage.getItem('lzhcard_display_mode') || 'target_front';
     const wordText = currentCard.word || '';
@@ -600,7 +657,10 @@ function nextCard(force = false) {
     if (document.getElementById('cardTranslation')) document.getElementById('cardTranslation').innerText = currentCard.translation || '';
 }
 
-function handleDontKnow(e) {
+/**
+ * 🧠 統一處理卡片記憶評分回饋（1: 不熟悉 | 2: 模糊 | 3: 已掌握 | 4: 秒答）
+ */
+function handleCardRating(rating, e) {
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
     setTimeout(() => { isCardActionLocked = false; }, 50);
@@ -608,53 +668,46 @@ function handleDontKnow(e) {
     if (e && e.currentTarget) e.currentTarget.blur();
     else if (document.activeElement) document.activeElement.blur();
 
-    const targetWord = (currentCard.word || '').trim().toLowerCase();
-    
-    // 🌟 找到全站所有同名單字同步降級
-    wordList.forEach(w => {
-        if ((w.word || '').trim().toLowerCase() === targetWord) {
-            w.level = Math.max(1, (w.level || 1) - 1);
-            w.knowStreak = 0;
-            w.updatedAt = Date.now();
-        }
-    });
+    if (typeof recordCardReview === 'function') {
+        recordCardReview(currentCard, rating);
+    } else {
+        const targetWord = (currentCard.word || '').trim().toLowerCase();
+        wordList.forEach(w => {
+            if ((w.word || '').trim().toLowerCase() === targetWord) {
+                if (rating === 1) {
+                    w.level = Math.max(1, (w.level || 1) - 1);
+                    w.knowStreak = 0;
+                } else {
+                    w.knowStreak = (w.knowStreak || 0) + 1;
+                    if (w.knowStreak >= 2 && (w.level || 1) < 5) {
+                        w.level = (w.level || 1) + 1;
+                        w.knowStreak = 0;
+                    }
+                }
+                w.updatedAt = Date.now();
+            }
+        });
+    }
 
     saveStorage();
     updateUI();
     nextCard(true);
 }
 
+function handleDontKnow(e) {
+    handleCardRating(1, e);
+}
+
+function handleHard(e) {
+    handleCardRating(2, e);
+}
+
 function handleKnow(e) {
-    if (isCardActionLocked || !currentCard) return;
-    isCardActionLocked = true;
-    setTimeout(() => { isCardActionLocked = false; }, 50);
+    handleCardRating(3, e);
+}
 
-    if (e && e.currentTarget) e.currentTarget.blur();
-    else if (document.activeElement) document.activeElement.blur();
-
-    const targetWord = (currentCard.word || '').trim().toLowerCase();
-
-    // 🌟 找到全站所有同名單字同步升級
-    wordList.forEach(w => {
-        if ((w.word || '').trim().toLowerCase() === targetWord) {
-            if (!w.level) w.level = 1;
-            w.knowStreak = (w.knowStreak || 0) + 1;
-
-            if (w.knowStreak >= 2) {
-                if (w.level < 5) {
-                    w.level += 1;
-                    w.knowStreak = 0;
-                } else {
-                    w.knowStreak = 2;
-                }
-            }
-            w.updatedAt = Date.now();
-        }
-    });
-
-    saveStorage();
-    updateUI();
-    nextCard(true);
+function handleEasy(e) {
+    handleCardRating(4, e);
 }
 
 function flipCard() {
@@ -712,6 +765,7 @@ function switchTab(tab) {
     if (tab === 'home') {
         if (secHome) secHome.classList.remove('hidden');
         if (bnavHome) bnavHome.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
+        updateStudyQueueUI();
     } else if (tab === 'list') {
         if (secList) secList.classList.remove('hidden');
         if (bnavList) bnavList.className = "flex flex-col items-center justify-center text-brand-600 dark:text-brand-400 space-y-1 font-bold";
@@ -876,6 +930,11 @@ function renderWordList(resetLimit = true) {
             const isChecked = selectedWordIds.has(item.id) ? 'checked' : '';
             const safeId = escapeHtml(item.id);
             const catText = escapeHtml(item.category || defaultCatName);
+            const stabilityDays = typeof item.stability === 'number' ? Math.round(item.stability * 10) / 10 : 0;
+            const lapsesCount = item.lapses || 0;
+            const lvTitle = `記憶穩定度: ${stabilityDays} 天 | 累計遺忘: ${lapsesCount} 次`;
+            const leechMark = lapsesCount >= 2 ? `<span class="ml-1 text-[10px] font-bold text-rose-500">×${lapsesCount}</span>` : '';
+
             return `
                 <tr class="group hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
                     <td class="py-3 px-2.5 whitespace-nowrap">
@@ -888,8 +947,8 @@ function renderWordList(resetLimit = true) {
                     <td class="py-3 px-2.5 whitespace-nowrap">
                         <span title="${catText}" class="inline-block max-w-[84px] sm:max-w-[130px] truncate align-bottom px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">${catText}</span>
                     </td>
-                    <td class="py-3 px-2.5 whitespace-nowrap">
-                        <span class="px-2 py-0.5 rounded text-xs font-semibold ${lvInfo.color} border">${lvInfo.name}</span>
+                    <td class="py-3 px-2.5 whitespace-nowrap" title="${escapeHtml(lvTitle)}">
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold ${lvInfo.color} border">${lvInfo.name}</span>${leechMark}
                     </td>
                     <td class="py-3 px-2.5 font-medium text-slate-800 dark:text-slate-200 max-w-[140px] sm:max-w-xs [overflow-wrap:anywhere]">
                         ${escapeHtml(item.meaning)}
@@ -925,9 +984,6 @@ function renderWordList(resetLimit = true) {
 
     updateBatchBadgeUI();
 }
-
-
-
 
 function toggleSelectWord(id, isChecked) {
     if (isChecked) {
@@ -1076,18 +1132,32 @@ function handleSaveCardForm(e) {
     if (id) {
         const index = wordList.findIndex(w => w.id === id);
         if (index !== -1) {
-            wordList[index] = { 
-                ...wordList[index], 
-                category, 
-                word: cleanObj.word, 
-                pos: cleanObj.pos, 
-                phonetic, 
-                meaning: cleanObj.meaning, 
-                sentence, 
-                translation, 
+            const prevCard = wordList[index];
+            const levelChanged = (prevCard.level || 1) !== level;
+            const updatedCard = {
+                ...prevCard,
+                category,
+                word: cleanObj.word,
+                pos: cleanObj.pos,
+                phonetic,
+                meaning: cleanObj.meaning,
+                sentence,
+                translation,
                 level,
-                updatedAt: Date.now() 
+                updatedAt: Date.now()
             };
+
+            // 若使用者在表單中手動變更了等級，同步重算對應的 FSRS 穩定度與排程
+            if (levelChanged) {
+                delete updatedCard.stability;
+                delete updatedCard.difficulty;
+                delete updatedCard.nextReview;
+                updatedCard.knowStreak = 0;
+            }
+            if (typeof migrateCardFSRS === 'function') {
+                migrateCardFSRS(updatedCard);
+            }
+            wordList[index] = updatedCard;
         }
         showToast(typeof t === 'function' ? t('toastCardSaved') : '單字已儲存！', 'success');
     } else {
@@ -1104,6 +1174,9 @@ function handleSaveCardForm(e) {
             knowStreak: 0, 
             updatedAt: Date.now()
         };
+        if (typeof migrateCardFSRS === 'function') {
+            migrateCardFSRS(newCard);
+        }
         wordList.unshift(newCard);
         showToast(typeof t === 'function' ? t('toastCardAdded') : '新增單字成功！', 'success');
     }

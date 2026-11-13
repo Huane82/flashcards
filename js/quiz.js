@@ -1,5 +1,5 @@
 /**
- * LZHCard - 隨堂測驗模組 (支援多國語言切換與多選字庫連動)
+ * LZHCard - 隨堂測驗模組 (FSRS 排程雙向連動版)
  */
 
 let currentQuizWord = null;
@@ -7,6 +7,8 @@ let currentQuizMode = 1;
 let currentQuizLang = 'en'; // 預設英文測驗
 let quizScoreCorrect = 0;
 let quizScoreTotal = 0;
+let lastQuizWordKey = null;
+let isQuizAnswerLocked = false;
 
 /**
  * 🌐 切換測驗語言 (英文 / 中文 / 日文)
@@ -49,9 +51,86 @@ function setQuizMode(mode) {
 }
 
 /**
+ * 🎯 針對具備例句的候選池執行 FSRS 三層優先級抽題
+ */
+function pickNextQuizCandidate(candidates) {
+    if (!candidates || candidates.length === 0) return null;
+
+    // 依單字小寫去重，避免多字庫勾選時重複單字機率加倍
+    const uniqueMap = new Map();
+    candidates.forEach(w => {
+        if (!w || !w.word) return;
+        const key = w.word.trim().toLowerCase();
+        if (!uniqueMap.has(key)) {
+            if (typeof migrateCardFSRS === 'function') migrateCardFSRS(w);
+            uniqueMap.set(key, w);
+        }
+    });
+
+    const pool = Array.from(uniqueMap.values());
+    if (pool.length === 1) return pool[0];
+
+    // 排除上一題剛考過的單字
+    const nonRepeatPool = lastQuizWordKey
+        ? pool.filter(w => w.word.trim().toLowerCase() !== lastQuizWordKey)
+        : pool;
+    const activePool = nonRepeatPool.length > 0 ? nonRepeatPool : pool;
+
+    // 若尚未載入 FSRS 引擎則退回隨機抽題
+    if (typeof calculateRetrievability !== 'function' || typeof weightedRandomPick !== 'function') {
+        return activePool[Math.floor(Math.random() * activePool.length)];
+    }
+
+    const now = Date.now();
+
+    // 🥇 Tier 1：已到期複習字與重學字（包含測驗答錯或字卡按不熟悉的單字）
+    const dueCards = activePool.filter(w => w.state !== 'new' && (w.nextReview || 0) <= now);
+    if (dueCards.length > 0) {
+        const weighted = dueCards.map(word => {
+            const r = calculateRetrievability(word, now);
+            const isRelearning = word.state === 'relearning' || word.state === 'learning';
+            const lapsesBoost = 1 + (word.lapses || 0) * 0.45;
+            const urgency = Math.pow(Math.max(0.05, 1.15 - r), 2) * 100;
+            return {
+                word,
+                weight: Math.max((isRelearning ? 140 : urgency) * lapsesBoost, 0.1)
+            };
+        });
+        return weightedRandomPick(weighted);
+    }
+
+    // 🥈 Tier 2：正在學習中的單字 ＋ 定量新字焦點組（最多 6 個新字）
+    const learningCards = activePool.filter(w => w.state === 'learning' || w.state === 'relearning');
+    const newCards = activePool.filter(w => w.state === 'new').slice(0, 6);
+    const tier2Pool = [...learningCards, ...newCards];
+
+    if (tier2Pool.length > 0) {
+        const weighted = tier2Pool.map(word => ({
+            word,
+            weight: word.state === 'new' ? 100 : 120
+        }));
+        return weightedRandomPick(weighted);
+    }
+
+    // 🥉 Tier 3：自由加練模式（依記憶脆弱度與歷史易忘次數加權）
+    const weighted = activePool.map(word => {
+        const r = calculateRetrievability(word, now);
+        const s = Math.max(0.5, word.stability || 1);
+        const lapsesBoost = 1 + (word.lapses || 0) * 0.5;
+        const difficultyBoost = 0.6 + (word.difficulty || 5) / 10;
+        const vulnerability = ((1.05 - r) * 80 + (15 / s)) * lapsesBoost * difficultyBoost;
+        return { word, weight: Math.max(vulnerability, 0.5) };
+    });
+
+    return weightedRandomPick(weighted);
+}
+
+/**
  * 🎲 產生下一題隨堂測驗題目
  */
 function nextQuizQuestion() {
+    isQuizAnswerLocked = false;
+
     const inputElem = document.getElementById('quizInput');
     const feedbackElem = document.getElementById('quizFeedback');
     const submitBtn = document.getElementById('quizSubmitBtn');
@@ -120,27 +199,13 @@ function nextQuizQuestion() {
         return;
     }
 
-    let attempts = 0;
-    let picked = null;
-    while (attempts < 20) {
-        if (typeof getNextCardSpacedRepetition === 'function') {
-            picked = getNextCardSpacedRepetition();
-        } else {
-            picked = validQuizCandidates[Math.floor(Math.random() * validQuizCandidates.length)];
-        }
-
-        if (picked && picked.sentence && picked.sentence.trim() !== '') {
-            break;
-        }
-        attempts++;
-    }
-
-    currentQuizWord = (picked && picked.sentence && picked.sentence.trim() !== '')
-        ? picked
-        : validQuizCandidates[Math.floor(Math.random() * validQuizCandidates.length)];
+    currentQuizWord = pickNextQuizCandidate(validQuizCandidates);
+    lastQuizWordKey = currentQuizWord.word.trim().toLowerCase();
 
     const word = currentQuizWord.word.trim();
     const sentence = currentQuizWord.sentence.trim();
+    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escapedWord}\\b`, 'gi');
 
     if (currentQuizMode === 1) {
         if (badgeElem) badgeElem.innerText = typeof t === 'function' ? t('quizBadgeMode1') : '模式 1：純英文上下文聯想';
@@ -148,12 +213,11 @@ function nextQuizQuestion() {
 
         let hintWord = '';
         if (word.length <= 2) {
-            hintWord = word[0] + '_'.repeat(word.length - 1);
+            hintWord = word[0] + '_'.repeat(Math.max(0, word.length - 1));
         } else {
             hintWord = word[0] + '_'.repeat(word.length - 2) + word[word.length - 1];
         }
 
-        const regex = new RegExp(`\\b${word}\\b`, 'gi');
         let maskedSentence = sentence.replace(regex, `<span class="text-brand-500 dark:text-sky-400 font-extrabold border-b-2 border-brand-500 dark:border-sky-400 px-1 py-0.5">${hintWord}</span>`);
         
         if (maskedSentence === sentence) {
@@ -178,7 +242,6 @@ function nextQuizQuestion() {
         if (badgeElem) badgeElem.innerText = typeof t === 'function' ? t('quizBadgeMode3') : '模式 3：🎯 句意對照挖空';
         if (promptTitleElem) promptTitleElem.innerText = typeof t === 'function' ? t('quizTitleMode3') : '中英文句意對照：';
 
-        const regex = new RegExp(`\\b${word}\\b`, 'gi');
         const blankedSentence = sentence.replace(regex, '<span class="text-brand-500 dark:text-sky-400 font-bold border-b-2 border-brand-500 dark:border-sky-400 px-2">____</span>');
         const translation = currentQuizWord.translation || currentQuizWord.meaning || (typeof t === 'function' ? t('quizNoTranslation') : '（無翻譯對照）');
 
@@ -192,11 +255,26 @@ function nextQuizQuestion() {
 }
 
 /**
- * 📝 提交答案與對錯判定
+ * 🕒 格式化距離下次複習的時間描述
+ */
+function formatNextReviewLabel(nextReviewTs) {
+    if (!nextReviewTs || nextReviewTs <= Date.now()) return '10 分鐘後';
+    const diffMin = Math.round((nextReviewTs - Date.now()) / 60000);
+    if (diffMin < 60) return `${Math.max(1, diffMin)} 分鐘後`;
+    const diffHours = Math.round(diffMin / 60);
+    if (diffHours < 24) return `${diffHours} 小時後`;
+    const diffDays = Math.round(diffHours / 24);
+    return `${diffDays} 天後`;
+}
+
+/**
+ * 📝 提交答案與對錯判定（同步寫入 FSRS 記憶排程）
  */
 function handleQuizSubmit(e) {
     if (e) e.preventDefault();
-    if (!currentQuizWord || currentQuizLang !== 'en') return;
+    if (!currentQuizWord || currentQuizLang !== 'en' || isQuizAnswerLocked) return;
+
+    isQuizAnswerLocked = true;
 
     const inputElem = document.getElementById('quizInput');
     const feedbackElem = document.getElementById('quizFeedback');
@@ -204,53 +282,64 @@ function handleQuizSubmit(e) {
     const targetAns = currentQuizWord.word.trim().toLowerCase();
 
     quizScoreTotal += 1;
+    const isCorrect = userAns === targetAns;
 
-    if (userAns === targetAns) {
-        quizScoreCorrect += 1;
-
-        // 🌟 全站同名單字同步加分
+    // 🧠 寫入 FSRS 記憶排程（答對 = rating 3 記憶鞏固；答錯 = rating 1 重學急救）
+    if (typeof recordCardReview === 'function') {
+        recordCardReview(currentQuizWord, isCorrect ? 3 : 1);
+    } else {
         wordList.forEach(w => {
             if ((w.word || '').trim().toLowerCase() === targetAns) {
-                if (!w.level) w.level = 1;
-                if (typeof w.knowStreak === 'undefined') w.knowStreak = 0;
-                w.knowStreak += 1;
-                if (w.knowStreak >= 3) {
-                    if (w.level < 5) {
-                        w.level += 1;
+                if (isCorrect) {
+                    w.knowStreak = (w.knowStreak || 0) + 1;
+                    if (w.knowStreak >= 2 && (w.level || 1) < 5) {
+                        w.level = (w.level || 1) + 1;
                         w.knowStreak = 0;
-                    } else {
-                        w.knowStreak = 3;
                     }
+                } else {
+                    w.level = Math.max(1, (w.level || 1) - 1);
+                    w.knowStreak = 0;
                 }
                 w.updatedAt = Date.now();
             }
         });
-        if (typeof saveStorage === 'function') saveStorage();
+    }
+
+    if (typeof saveStorage === 'function') saveStorage();
+    if (typeof updateUI === 'function') updateUI();
+
+    const lvInfo = (typeof getLevelInfo === 'function')
+        ? getLevelInfo(currentQuizWord.level || 1)
+        : { name: `Lv.${currentQuizWord.level || 1}` };
+    const nextDueText = formatNextReviewLabel(currentQuizWord.nextReview);
+
+    if (isCorrect) {
+        quizScoreCorrect += 1;
 
         feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 block";
         feedbackElem.innerHTML = `
-            <div class="flex items-center space-x-2">
-                <i class="fa-solid fa-circle-check text-emerald-600 dark:text-emerald-400 text-lg"></i>
-                <span>${typeof t === 'function' ? t('quizCorrectMsg') : '恭喜答對！'} <strong>${currentQuizWord.word}</strong> (${currentQuizWord.meaning || ''})</span>
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-check text-emerald-600 dark:text-emerald-400 text-lg"></i>
+                    <span>${typeof t === 'function' ? t('quizCorrectMsg') : '恭喜答對！'} <strong>${currentQuizWord.word}</strong> (${currentQuizWord.meaning || ''})</span>
+                </div>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/70 text-emerald-700 dark:text-emerald-300 font-bold">
+                    ${lvInfo.name} · 下次複習：${nextDueText}
+                </span>
             </div>
         `;
     } else {
-        // 🌟 全站同名單字同步扣分
-        wordList.forEach(w => {
-            if ((w.word || '').trim().toLowerCase() === targetAns) {
-                w.level = Math.max(1, (w.level || 1) - 1);
-                w.knowStreak = 0;
-                w.updatedAt = Date.now();
-            }
-        });
-        if (typeof saveStorage === 'function') saveStorage();
-
         feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 block";
         feedbackElem.innerHTML = `
-            <div class="space-y-1">
-                <div class="flex items-center space-x-2">
-                    <i class="fa-solid fa-circle-xmark text-rose-600 dark:text-rose-400 text-lg"></i>
-                    <span>${typeof t === 'function' ? t('quizWrongMsg') : '答錯了！正確答案是：'}<strong class="text-rose-900 dark:text-rose-300 underline">${currentQuizWord.word}</strong></span>
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-circle-xmark text-rose-600 dark:text-rose-400 text-lg"></i>
+                        <span>${typeof t === 'function' ? t('quizWrongMsg') : '答錯了！正確答案是：'}<strong class="text-rose-900 dark:text-rose-300 underline">${currentQuizWord.word}</strong></span>
+                    </div>
+                    <span class="text-[11px] px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/70 text-rose-700 dark:text-rose-300 font-bold">
+                        已排入重點重學 · 10 分鐘後再測
+                    </span>
                 </div>
                 <p class="text-xs text-rose-700 dark:text-rose-400 pl-6">${typeof t === 'function' ? t('quizMeaningLabel') : '釋義：'}${currentQuizWord.meaning || ''} ${currentQuizWord.phonetic ? `(${currentQuizWord.phonetic})` : ''}</p>
             </div>

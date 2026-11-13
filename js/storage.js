@@ -12,6 +12,57 @@ const StorageEngine = {
   },
 
   /**
+   * 🔄 為整份字庫補齊 FSRS 記憶排程欄位（相容舊版資料與匯入備份）
+   * @returns {boolean} 是否有舊卡片剛完成欄位遷移
+   */
+  migrateAllCardsFSRS(decks) {
+    if (!Array.isArray(decks)) return false;
+    let hasMigrated = false;
+
+    for (let i = 0; i < decks.length; i++) {
+      const card = decks[i];
+      if (!card || typeof card !== 'object') continue;
+
+      const neededMigration = (
+        typeof card.stability !== 'number' ||
+        typeof card.difficulty !== 'number' ||
+        typeof card.nextReview !== 'number' ||
+        !card.state
+      );
+
+      if (typeof migrateCardFSRS === 'function') {
+        migrateCardFSRS(card);
+      }
+
+      if (neededMigration) {
+        hasMigrated = true;
+      }
+    }
+
+    return hasMigrated;
+  },
+
+  /**
+   * 🧹 淨化單字物件（補齊 FSRS 欄位並移除 undefined，避免 Firestore 寫入失敗）
+   */
+  sanitizeDecksForStorage(decks) {
+    if (!Array.isArray(decks)) return [];
+    return decks.map(card => {
+      if (!card || typeof card !== 'object') return card;
+      if (typeof migrateCardFSRS === 'function') {
+        migrateCardFSRS(card);
+      }
+      const clean = {};
+      Object.keys(card).forEach(k => {
+        if (card[k] !== undefined) {
+          clean[k] = card[k];
+        }
+      });
+      return clean;
+    });
+  },
+
+  /**
    * 抓取當前裝置的所有偏好設定（含 API 金鑰模式與新手導覽狀態）
    */
   getLocalSettings() {
@@ -73,13 +124,17 @@ const StorageEngine = {
         if (doc.exists) {
           const data = doc.data();
 
-          // 1. 同步雲端字庫
+          // 1. 同步雲端字庫並自動執行 FSRS 欄位遷移
           if (data.decks && Array.isArray(data.decks)) {
-            localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(data.decks));
             wordList = data.decks;
           } else if (data.wordList && Array.isArray(data.wordList)) {
-            localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(data.wordList));
             wordList = data.wordList;
+          }
+
+          const migrated = this.migrateAllCardsFSRS(wordList);
+          localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+          if (migrated) {
+            this.saveData(wordList);
           }
 
           // 2. 同步雲端 API Key
@@ -104,16 +159,19 @@ const StorageEngine = {
           const localDecks = localStorage.getItem(this.LOCAL_DECKS_KEY);
           const localApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
           const initialDecks = localDecks ? JSON.parse(localDecks) : [];
+          this.migrateAllCardsFSRS(initialDecks);
+          const sanitizedDecks = this.sanitizeDecksForStorage(initialDecks);
           const currentSettings = this.getLocalSettings();
 
           await docRef.set({
-            decks: initialDecks,
+            decks: sanitizedDecks,
             apiKey: localApiKey,
             settings: currentSettings,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
 
-          wordList = initialDecks;
+          wordList = sanitizedDecks;
+          localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
 
           // 新帳號初始化完成後開啟新手導覽
           if (typeof checkAndOpenOnboardingModal === 'function') {
@@ -130,46 +188,72 @@ const StorageEngine = {
       }
     }
     
-    // 未登入狀態：從本機 LocalStorage 讀取
+    // 未登入狀態：從本機 LocalStorage 讀取並補齊 FSRS 欄位
     const localData = localStorage.getItem(this.LOCAL_DECKS_KEY);
     wordList = localData ? JSON.parse(localData) : [];
+    const migratedLocal = this.migrateAllCardsFSRS(wordList);
+    if (migratedLocal) {
+      localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+    }
     return wordList;
+  },
+
+  /**
+   * 立即執行 pending 中的雲端同步（切換分頁或關閉視窗時呼叫）
+   */
+  async flushCloudSave() {
+    if (this._cloudSaveTimer) {
+      clearTimeout(this._cloudSaveTimer);
+      this._cloudSaveTimer = null;
+    }
+
+    const uid = this.getCurrentUid();
+    const currentApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
+    const currentSettings = this.getLocalSettings();
+    const sanitizedDecks = this.sanitizeDecksForStorage(wordList);
+
+    if (uid && typeof db !== 'undefined') {
+      try {
+        await db.collection('users').doc(uid).set({
+          decks: sanitizedDecks,
+          apiKey: currentApiKey,
+          settings: currentSettings,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        console.log("已成功同步字庫、FSRS 排程、API Key 與系統設定至 Cloud Firestore");
+      } catch (e) {
+        console.error("雲端同步失敗:", e);
+      }
+    }
   },
 
   /**
    * 儲存字庫、API Key 與系統設定至本機與雲端（雲端寫入採 1.5 秒防抖合併）
    */
   async saveData(decks) {
+    const sanitizedDecks = this.sanitizeDecksForStorage(decks);
+
     // 1. 立即寫入本機 LocalStorage，確保進度不遺失
-    localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(decks));
+    localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(sanitizedDecks));
 
     // 2. 防抖寫入雲端 Firestore（連續刷卡時合併為停手後 1.5 秒一次上傳）
     if (this._cloudSaveTimer) {
       clearTimeout(this._cloudSaveTimer);
     }
 
-    this._cloudSaveTimer = setTimeout(async () => {
-      this._cloudSaveTimer = null;
-      const uid = this.getCurrentUid();
-      const currentApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
-      const currentSettings = this.getLocalSettings();
-
-      if (uid && typeof db !== 'undefined') {
-        try {
-          await db.collection('users').doc(uid).set({
-            decks: decks,
-            apiKey: currentApiKey,
-            settings: currentSettings,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-          console.log("已成功同步字庫、API Key 與系統設定至 Cloud Firestore");
-        } catch (e) {
-          console.error("雲端同步失敗:", e);
-        }
-      }
+    this._cloudSaveTimer = setTimeout(() => {
+      this.flushCloudSave();
     }, 1500);
   }
 };
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && StorageEngine._cloudSaveTimer) {
+      StorageEngine.flushCloudSave();
+    }
+  });
+}
 
 async function loadStorage() {
   await StorageEngine.loadData();
