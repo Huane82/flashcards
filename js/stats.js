@@ -1,13 +1,32 @@
 /**
- * LZHCard - 學習數據與成果統計模組 (FSRS 排程分析版 - stats.js)
+ * LZHCard - 學習數據與成果統計模組 (FSRS + 自由練習雙軌分析 & 完整 i18n 版 - stats.js)
  */
+
+/**
+ * 🌐 i18n 安全轉接函式（支援 {key} 動態參數替換，未定義時自動退回預設文字）
+ */
+function statsTr(key, fallback, params = null) {
+    let text = fallback;
+    if (typeof t === 'function') {
+        const translated = t(key);
+        if (translated && translated !== key) {
+            text = translated;
+        }
+    }
+    if (params && typeof text === 'string') {
+        Object.keys(params).forEach(k => {
+            text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), params[k]);
+        });
+    }
+    return text;
+}
 
 /**
  * 🔍 取得當前勾選字庫的原始單字清單（含跨字庫未去重，用於單字庫個別統計）
  */
 function getStatsRawFilteredWords() {
     const activeCats = window.selectedCategories || ['ALL'];
-    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+    const defaultCatName = statsTr('defaultCategoryName', '預設字庫');
     if (!wordList || !Array.isArray(wordList)) return [];
 
     const filtered = activeCats.includes("ALL")
@@ -69,8 +88,8 @@ function renderStats() {
     const showCategory = document.getElementById('chkShowCategory')?.checked ?? true;
     const showCatLevel = document.getElementById('chkShowCatLevel')?.checked ?? true;
 
-    const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
-    const unitItemLabel = typeof t === 'function' ? t('unitItem') : '個';
+    const defaultCatName = statsTr('defaultCategoryName', '預設字庫');
+    const unitItemLabel = statsTr('unitItem', '個');
 
     const escapeHtml = (str) => String(str ?? '')
         .replace(/&/g, '&amp;')
@@ -88,8 +107,9 @@ function renderStats() {
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
 
-    // 1. 統計總體記憶等級分佈 (Lv.1~5)
+    // 1. 統計總體 FSRS 記憶等級分佈 (Lv.1~5) 與自由練習臨時等級分佈 (臨時 Lv.1~5)
     const levelCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const freeLevelCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const catStats = {};
 
     // 2. 統計 FSRS 未來 7 天複習量預測與平均記憶保留率
@@ -110,6 +130,9 @@ function renderStats() {
     currentWordList.forEach(w => {
         const lv = Math.min(5, Math.max(1, w.level || 1));
         levelCounts[lv]++;
+
+        const freeLv = Math.min(5, Math.max(1, w.freeLevel || 1));
+        freeLevelCounts[freeLv]++;
 
         if (w.state === 'new') {
             newUnlearnedCount++;
@@ -163,8 +186,13 @@ function renderStats() {
     // 卡片 A: 總單字量與掌握率
     // -------------------------------------------------------------
     if (showTotal) {
-        const totalWordsLabel = typeof t === 'function' ? t('statsTotalWords') : '總單字量 (不重複)';
-        const masteredRateLabel = typeof t === 'function' ? t('statsMasteredRate') : '熟練率 (Lv.4~5)';
+        const totalWordsLabel = statsTr('statsTotalWords', '總單字量 (不重複)');
+        const masteredRateLabel = statsTr('statsMasteredRate', '熟練率 (Lv.4~5)');
+        const retentionSummaryText = statsTr(
+            'statsRetentionSummary',
+            '未學新字 {newCount} · 當前記憶保留率 {retention}%',
+            { newCount: newUnlearnedCount, retention: avgRetentionPct }
+        );
 
         html += `
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -175,7 +203,7 @@ function renderStats() {
                     <div>
                         <span class="text-xs font-semibold text-slate-400 block">${totalWordsLabel}</span>
                         <span class="text-2xl font-black text-slate-900 dark:text-white">${totalWords} <span class="text-xs font-normal text-slate-400">${unitItemLabel}</span></span>
-                        <span class="text-[11px] text-slate-400 block mt-0.5">未學新字 ${newUnlearnedCount} · 當前記憶保留率 ${avgRetentionPct}%</span>
+                        <span class="text-[11px] text-slate-400 block mt-0.5">${retentionSummaryText}</span>
                     </div>
                 </div>
 
@@ -203,7 +231,21 @@ function renderStats() {
     // -------------------------------------------------------------
     if (totalWords > 0) {
         const maxForecast = Math.max(...forecastCounts, 1);
-        const dayLabels = ['今天', '明天', '+2天', '+3天', '+4天', '+5天', '+6天'];
+        const dayLabels = [
+            statsTr('statsDayToday', '今天'),
+            statsTr('statsDayTomorrow', '明天'),
+            statsTr('statsDayPlus', '+{days}天', { days: 2 }),
+            statsTr('statsDayPlus', '+{days}天', { days: 3 }),
+            statsTr('statsDayPlus', '+{days}天', { days: 4 }),
+            statsTr('statsDayPlus', '+{days}天', { days: 5 }),
+            statsTr('statsDayPlus', '+{days}天', { days: 6 })
+        ];
+
+        const forecastTitle = statsTr('statsForecastTitle', 'FSRS 未來 7 天待複習預測');
+        const forecastDesc = statsTr('statsForecastDesc', '依據每張單字的遺忘曲線 (90% 保留率臨界點) 自動排程');
+        const dueBadgeText = dueTodayCount > 0
+            ? statsTr('statsDueTodayCount', '目前待複習：{count} {unit}', { count: dueTodayCount, unit: unitItemLabel })
+            : statsTr('statsDueTodayCleared', '今日到期已全數清空');
 
         html += `
             <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
@@ -211,12 +253,12 @@ function renderStats() {
                     <div>
                         <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                             <i class="fa-solid fa-calendar-check text-brand-500"></i>
-                            <span>FSRS 未來 7 天待複習預測</span>
+                            <span>${forecastTitle}</span>
                         </h3>
-                        <p class="text-[11px] text-slate-400 mt-0.5">依據每張單字的遺忘曲線 (90% 保留率臨界點) 自動排程</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">${forecastDesc}</p>
                     </div>
                     <span class="px-2.5 py-1 rounded-full text-xs font-bold ${dueTodayCount > 0 ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'}">
-                        ${dueTodayCount > 0 ? `目前待複習：${dueTodayCount} ${unitItemLabel}` : '今日到期已全數清空'}
+                        ${dueBadgeText}
                     </span>
                 </div>
 
@@ -243,17 +285,17 @@ function renderStats() {
     }
 
     // -------------------------------------------------------------
-    // 卡片 B: 全局記憶等級熟悉度分佈 (Lv.1~5 + 穩定度天數區間)
+    // 卡片 B: 全局記憶等級熟悉度分佈 (FSRS Lv.1~5 + 自由練習臨時 Lv.1~5)
     // -------------------------------------------------------------
     if (showLevel) {
-        const levelDetailLabel = typeof t === 'function' ? t('statsLevelDetail') : '記憶穩定度等級分佈';
+        const levelDetailLabel = statsTr('statsLevelDetail', '記憶穩定度等級分佈');
 
         const lvColors = {
-            1: { bg: 'bg-rose-500', span: '新學 / 短期重學', badge: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800' },
-            2: { bg: 'bg-amber-500', span: '穩定 1~3 天', badge: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' },
-            3: { bg: 'bg-blue-500', span: '穩定 3~8 天', badge: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' },
-            4: { bg: 'bg-indigo-500', span: '穩定 8~21 天', badge: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' },
-            5: { bg: 'bg-emerald-500', span: '長期記憶 21 天+', badge: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' }
+            1: { bg: 'bg-rose-500', span: statsTr('statsLv1Span', '新學 / 短期重學'), badge: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800' },
+            2: { bg: 'bg-amber-500', span: statsTr('statsLv2Span', '穩定 1~3 天'), badge: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' },
+            3: { bg: 'bg-blue-500', span: statsTr('statsLv3Span', '穩定 3~8 天'), badge: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' },
+            4: { bg: 'bg-indigo-500', span: statsTr('statsLv4Span', '穩定 8~21 天'), badge: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' },
+            5: { bg: 'bg-emerald-500', span: statsTr('statsLv5Span', '長期記憶 21 天+'), badge: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' }
         };
 
         html += `
@@ -288,14 +330,62 @@ function renderStats() {
         }
 
         html += `</div></div>`;
+
+        // 自由練習臨時等級分佈卡片
+        const freeLevelDetailLabel = statsTr('statsFreeLevelDetail', '自由練習臨時等級分佈');
+        const freeLevelDesc = statsTr('statsFreeLevelDesc', '考前密集加練與今日排程清空後的動態抽卡池');
+        const freeLvSpans = {
+            1: statsTr('statsFreeLv1Span', '高頻焦點池 (最多 6 字)'),
+            2: statsTr('statsFreeLv2Span', '次高頻焦點池 (最多 4 字)'),
+            3: statsTr('statsFreeLv3Span', '初步熟悉'),
+            4: statsTr('statsFreeLv4Span', '考前熟練'),
+            5: statsTr('statsFreeLv5Span', '完全掌握 (低頻抽考)')
+        };
+
+        html += `
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <i class="fa-solid fa-bolt text-amber-500"></i>
+                        <span>${freeLevelDetailLabel}</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">${freeLevelDesc}</p>
+                </div>
+                <div class="space-y-3">
+        `;
+
+        for (let lv = 1; lv <= 5; lv++) {
+            const count = freeLevelCounts[lv];
+            const pct = totalWords > 0 ? Math.round((count / totalWords) * 100) : 0;
+            const freeBadgeLabel = statsTr('freeLevelShort', '臨時 Lv.{lv}', { lv });
+
+            html += `
+                <div class="space-y-1">
+                    <div class="flex justify-between items-center text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-0.5 rounded text-[11px] font-bold border ${lvColors[lv].badge}">
+                                ${freeBadgeLabel}
+                            </span>
+                            <span class="text-[11px] text-slate-400">${freeLvSpans[lv]}</span>
+                        </div>
+                        <span class="font-bold text-slate-700 dark:text-slate-300">${count} ${unitItemLabel} <span class="text-slate-400 font-normal">(${pct}%)</span></span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full ${lvColors[lv].bg} rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `</div></div>`;
     }
 
     // -------------------------------------------------------------
     // 卡片 C & D: 各字庫/語言分佈與等級細節
     // -------------------------------------------------------------
     if (showCategory || showCatLevel) {
-        const catBreakdownLabel = typeof t === 'function' ? t('statsCatBreakdown') : '各字庫學習進度';
-        const accuracyRateLabel = typeof t === 'function' ? t('accuracyRate') : '熟練率';
+        const catBreakdownLabel = statsTr('statsCatBreakdown', '各字庫學習進度');
+        const accuracyRateLabel = statsTr('accuracyRate', '熟練率');
         const catKeys = Object.keys(catStats);
         const rawTotal = rawWordList.length;
 
@@ -331,7 +421,12 @@ function renderStats() {
                     const c = data.levels[lv];
                     if (c > 0) {
                         const p = ((c / data.total) * 100).toFixed(1);
-                        html += `<div class="h-full ${colorMap[lv]}" style="width: ${p}%" title="Lv.${lv}: ${c}字 (${p}%)"></div>`;
+                        const barTooltip = statsTr(
+                            'statsCatBarTooltip',
+                            'Lv.{lv}: {count} {unit} ({pct}%)',
+                            { lv, count: c, unit: unitItemLabel, pct: p }
+                        );
+                        html += `<div class="h-full ${colorMap[lv]}" style="width: ${p}%" title="${escapeHtml(barTooltip)}"></div>`;
                     }
                 }
                 html += `</div>`;
@@ -351,35 +446,41 @@ function renderStats() {
         .slice(0, 8);
 
     if (topLeeches.length > 0) {
+        const leechTitle = statsTr('statsLeechTitle', '高遺忘頑固難字榜 (Top {count})', { count: topLeeches.length });
+        const leechDesc = statsTr('statsLeechDesc', '曾背熟後又多次遺忘的單字，系統已自動提高出現加權');
+        const practiceBtnLabel = statsTr('btnPracticeLeech', '立即強訓');
+
         html += `
             <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                             <i class="fa-solid fa-fire text-rose-500"></i>
-                            <span>高遺忘頑固難字榜 (Top ${topLeeches.length})</span>
+                            <span>${leechTitle}</span>
                         </h3>
-                        <p class="text-[11px] text-slate-400 mt-0.5">曾背熟後又多次遺忘的單字，系統已自動提高出現加權</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">${leechDesc}</p>
                     </div>
                 </div>
                 <div class="divide-y divide-slate-100 dark:divide-slate-700">
                     ${topLeeches.map(item => {
                         const safeId = escapeHtml(item.id);
                         const diffScore = typeof item.difficulty === 'number' ? item.difficulty.toFixed(1) : '5.5';
+                        const lapsesLabel = statsTr('statsLeechLapses', '遺忘 {count} 次', { count: item.lapses });
+                        const diffLabel = statsTr('statsLeechDifficulty', '難度 {score}/10', { score: diffScore });
                         return `
                             <div class="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="font-bold text-sm text-slate-900 dark:text-white truncate">${escapeHtml(item.word)}</span>
                                         <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shrink-0">
-                                            遺忘 ${item.lapses} 次
+                                            ${lapsesLabel}
                                         </span>
-                                        <span class="text-[10px] text-slate-400 shrink-0">難度 ${diffScore}/10</span>
+                                        <span class="text-[10px] text-slate-400 shrink-0">${diffLabel}</span>
                                     </div>
                                     <p class="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">${escapeHtml(item.meaning || '')}</p>
                                 </div>
                                 <button type="button" onclick="practiceLeechWord('${safeId}')" class="px-2.5 py-1.5 rounded-lg bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/50 dark:hover:bg-brand-900/70 text-brand-600 dark:text-brand-300 text-xs font-bold transition shrink-0">
-                                    立即強訓
+                                    ${practiceBtnLabel}
                                 </button>
                             </div>
                         `;
@@ -389,5 +490,6 @@ function renderStats() {
         `;
     }
 
-    container.innerHTML = html || `<div class="text-center text-slate-400 text-xs py-10">請最少勾選一個顯示指標</div>`;
+    const selectAtLeastOneText = statsTr('statsSelectAtLeastOne', '請最少勾選一個顯示指標');
+    container.innerHTML = html || `<div class="text-center text-slate-400 text-xs py-10">${selectAtLeastOneText}</div>`;
 }

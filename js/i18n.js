@@ -43,6 +43,10 @@ const I18N_DICTIONARY = {
         tipUndoCard: "還原上一張評分",
         fsrsScheduleBadge: "FSRS 排程",
         fsrsFreeBadge: "自由加練中",
+        fsrsFreePracticeLabel: "自由練習",
+        freeLvBadge: "⚡ 臨時 Lv.{lv}",
+        fsrsLvBadge: "📅 FSRS Lv.{lv}",
+        badgeFreeLvShort: "臨時 Lv.{lv}",
         tipToggleFreePractice: "點擊切換排程 / 自由加練模式",
         tipSpeakWord: "朗讀",
         stockCount: "當前庫存:",
@@ -99,6 +103,7 @@ const I18N_DICTIONARY = {
         btnRenameDeck: "重命名字庫",
         btnBatchMove: "移動字庫",
         btnBatchReset: "還原進度",
+        btnBatchResetFree: "重置臨時等級",
         btnBatchAi: "✨ AI 補齊",
         btnBatchDelete: "刪除",
         libAiProgressText: "AI 自動補充中...",
@@ -110,6 +115,7 @@ const I18N_DICTIONARY = {
         thMeaning: "中文釋義",
         thAction: "操作",
         wordStabilityTooltip: "記憶穩定度: {days} 天 | 累計遺忘: {lapses} 次",
+        wordDualLevelTooltip: "FSRS 排程 Lv.{level}（穩定度 {days} 天 · 遺忘 {lapses} 次）｜自由練習 臨時 Lv.{freeLevel}",
         btnLoadMoreWords: "顯示更多單字（還有 {count} 筆）",
         emptySearchResult: "查無相關單字資料",
         emptyNoticeTitle: "目前選擇的字庫沒有單字！",
@@ -139,6 +145,14 @@ const I18N_DICTIONARY = {
         optOnlyLevel3: "僅顯示 Lv.3",
         optOnlyLevel4: "僅顯示 Lv.4",
         optOnlyLevel5: "僅顯示 Lv.5",
+        optGroupFreeLevel: "⚡ 自由練習臨時等級",
+        optSortFreeAsc: "自由練習：臨時 Lv.1 → Lv.5",
+        optSortFreeDesc: "自由練習：臨時 Lv.5 → Lv.1",
+        optOnlyFreeLv1: "僅顯示：臨時 Lv.1",
+        optOnlyFreeLv2: "僅顯示：臨時 Lv.2",
+        optOnlyFreeLv3: "僅顯示：臨時 Lv.3",
+        optOnlyFreeLv4: "僅顯示：臨時 Lv.4",
+        optOnlyFreeLv5: "僅顯示：臨時 Lv.5",
 
         // 設定 View
         settingsTitle: "帳號與系統設定",
@@ -217,6 +231,12 @@ const I18N_DICTIONARY = {
         optLevel3: "Lv.3 - 中等鞏固 (穩定 3~8 天)",
         optLevel4: "Lv.4 - 高度熟練 (穩定 8~21 天)",
         optLevel5: "Lv.5 - 長期記憶 (穩定 21 天+)",
+        labelFreeLevel: "⚡ 自由練習臨時等級 (臨時 Lv.1~5)",
+        optFreeLv1: "臨時 Lv.1 - 高頻焦點池 (最多 6 字)",
+        optFreeLv2: "臨時 Lv.2 - 次高頻焦點池 (最多 4 字)",
+        optFreeLv3: "臨時 Lv.3 - 初步熟悉",
+        optFreeLv4: "臨時 Lv.4 - 考前熟練",
+        optFreeLv5: "臨時 Lv.5 - 完全掌握 (低頻抽考)",
         phFormCategory: "請輸入新字庫名稱...",
         lblFormWord: "目標語言單字 / 詞彙",
         phFormWord: "例如: resilient / 食べる",
@@ -394,6 +414,9 @@ const I18N_DICTIONARY = {
         toastMoveSuccess: "成功將 {count} 筆單字移至【{name}】！",
         toastSelectResetWords: "請先勾選要還原進度的單字！",
         toastBatchResetSuccess: "🔄 已將 {count} 筆單字的記憶進度還原為 Lv.1 新單字！",
+        toastSelectResetFreeWords: "請先勾選要重置臨時等級的單字！",
+        toastBatchResetFreeSuccess: "⚡ 已將 {count} 筆單字的自由練習臨時等級重置為臨時 Lv.1！",
+        toastFreeLevelReset: "⚡ 已重置 {count} 個單字的自由練習臨時等級為臨時 Lv.1！",
         toastProgressReset: "已重置 {count} 個單字的記憶進度與權重！",
         toastUndoSuccess: "↩️ 已還原【{word}】的評分進度！",
         toastNothingToUndo: "目前沒有可還原的評分紀錄！",
@@ -451,6 +474,7 @@ const I18N_DICTIONARY = {
         promptNewDeckName: "請輸入【{name}】字庫的新名稱：",
         promptMoveTarget: "將已選取的 {count} 筆單字移至新的字庫名稱：",
         confirmBatchReset: "確定要將已勾選的 {count} 筆單字記憶進度還原為 Lv.1（新單字）嗎？",
+        confirmBatchResetFree: "確定要將已勾選的 {count} 筆單字「自由練習臨時等級」重置為臨時 Lv.1 嗎？（不會影響 FSRS 正式排程等級）",
         confirmResetProgress: "確定要將所有單字的「記憶進度、等級與權重」全部歸零嗎？\\n（放心：單字、詞性、音標、釋義與例句都會完整保留）",
         confirmDeleteBatch: "確定要批量刪除已勾選的 {count} 筆單字嗎？此操作無法復原！",
         confirmBatchAiFill: "找到 {count} 筆缺漏欄位的單字，確定要讓 AI 自動補充嗎？",
@@ -570,6 +594,10 @@ const I18N_DICTIONARY = {
         tipUndoCard: "Undo last card rating",
         fsrsScheduleBadge: "FSRS Schedule",
         fsrsFreeBadge: "Free Practice",
+        fsrsFreePracticeLabel: "Free Practice",
+        freeLvBadge: "⚡ Temp Lv.{lv}",
+        fsrsLvBadge: "📅 FSRS Lv.{lv}",
+        badgeFreeLvShort: "Temp Lv.{lv}",
         tipToggleFreePractice: "Click to toggle FSRS Schedule / Free Practice mode",
         tipSpeakWord: "Pronounce",
         stockCount: "Current Total:",
@@ -624,6 +652,7 @@ const I18N_DICTIONARY = {
         btnRenameDeck: "Rename Deck",
         btnBatchMove: "Move Deck",
         btnBatchReset: "Reset Progress",
+        btnBatchResetFree: "Reset Temp Lv",
         btnBatchAi: "✨ AI Auto-fill",
         btnBatchDelete: "Delete",
         libAiProgressText: "AI auto-filling...",
@@ -635,6 +664,7 @@ const I18N_DICTIONARY = {
         thMeaning: "Definition",
         thAction: "Actions",
         wordStabilityTooltip: "Stability: {days} days | Lapses: {lapses}",
+        wordDualLevelTooltip: "FSRS Lv.{level} (Stability {days}d · Lapses {lapses}) | Free Practice Temp Lv.{freeLevel}",
         btnLoadMoreWords: "Show more words ({count} remaining)",
         emptySearchResult: "No matching words found",
         emptyNoticeTitle: "No words in the selected deck!",
@@ -663,6 +693,14 @@ const I18N_DICTIONARY = {
         optOnlyLevel3: "Show Lv.3 Only",
         optOnlyLevel4: "Show Lv.4 Only",
         optOnlyLevel5: "Show Lv.5 Only",
+        optGroupFreeLevel: "⚡ Free Practice Temp Level",
+        optSortFreeAsc: "Free Practice: Temp Lv.1 → Lv.5",
+        optSortFreeDesc: "Free Practice: Temp Lv.5 → Lv.1",
+        optOnlyFreeLv1: "Show Only: Temp Lv.1",
+        optOnlyFreeLv2: "Show Only: Temp Lv.2",
+        optOnlyFreeLv3: "Show Only: Temp Lv.3",
+        optOnlyFreeLv4: "Show Only: Temp Lv.4",
+        optOnlyFreeLv5: "Show Only: Temp Lv.5",
 
         settingsTitle: "Settings",
         settingsDesc: "Manage your profile, preferences, themes & API key",
@@ -737,6 +775,12 @@ const I18N_DICTIONARY = {
         optLevel3: "Lv.3 - Moderate Consolidation (3~8 days)",
         optLevel4: "Lv.4 - High Proficiency (8~21 days)",
         optLevel5: "Lv.5 - Long-term Memory (21+ days)",
+        labelFreeLevel: "⚡ Free Practice Temp Level (Temp Lv.1~5)",
+        optFreeLv1: "Temp Lv.1 - High-Freq Focus Pool (Max 6)",
+        optFreeLv2: "Temp Lv.2 - Secondary Focus Pool (Max 4)",
+        optFreeLv3: "Temp Lv.3 - Initial Familiarity",
+        optFreeLv4: "Temp Lv.4 - Pre-Exam Mastery",
+        optFreeLv5: "Temp Lv.5 - Fully Mastered (Low-Freq Review)",
         phFormCategory: "Enter new deck name...",
         lblFormWord: "Target Word / Vocabulary",
         phFormWord: "e.g., resilient / 食べる",
@@ -909,6 +953,9 @@ const I18N_DICTIONARY = {
         toastMoveSuccess: "Successfully moved {count} words to '{name}'!",
         toastSelectResetWords: "Please select words to reset progress!",
         toastBatchResetSuccess: "🔄 Reset {count} words back to Lv.1 new status!",
+        toastSelectResetFreeWords: "Please select words to reset temp level first!",
+        toastBatchResetFreeSuccess: "⚡ Reset Free Practice Temp Level to Temp Lv.1 for {count} words!",
+        toastFreeLevelReset: "⚡ Reset free practice temp level to Temp Lv.1 for {count} words!",
         toastProgressReset: "Reset memory progress & weights for {count} words!",
         toastUndoSuccess: "↩️ Undid rating for '{word}'!",
         toastNothingToUndo: "Nothing to undo!",
@@ -965,6 +1012,7 @@ const I18N_DICTIONARY = {
         promptNewDeckName: "Enter new name for deck '{name}':",
         promptMoveTarget: "Move selected {count} words to new deck name:",
         confirmBatchReset: "Reset memory progress of selected {count} words back to Lv.1 (New)?",
+        confirmBatchResetFree: "Reset Free Practice Temp Level to Temp Lv.1 for {count} selected words? (FSRS schedule level will not be affected)",
         confirmResetProgress: "Reset all words' memory progress, levels, and weights to zero?\\n(Your words, POS, phonetics, meanings, and sentences will be kept intact.)",
         confirmDeleteBatch: "Are you sure you want to delete selected {count} words? This cannot be undone!",
         confirmBatchAiFill: "Found {count} words with missing fields. Let AI auto-fill them?",
@@ -1083,6 +1131,10 @@ const I18N_DICTIONARY = {
         tipUndoCard: "直前のカード評価を元に戻す",
         fsrsScheduleBadge: "FSRS スケジュール",
         fsrsFreeBadge: "フリー練習中",
+        fsrsFreePracticeLabel: "フリー練習",
+        freeLvBadge: "⚡ 臨時 Lv.{lv}",
+        fsrsLvBadge: "📅 FSRS Lv.{lv}",
+        badgeFreeLvShort: "臨時 Lv.{lv}",
         tipToggleFreePractice: "クリックしてスケジュール / フリー練習モードを切替",
         tipSpeakWord: "発音",
         stockCount: "現在の登録数:",
@@ -1137,6 +1189,7 @@ const I18N_DICTIONARY = {
         btnRenameDeck: "名前変更",
         btnBatchMove: "移動",
         btnBatchReset: "進捗リセット",
+        btnBatchResetFree: "臨時Lvリセット",
         btnBatchAi: "✨ AI補完",
         btnBatchDelete: "削除",
         libAiProgressText: "AI自動補完中...",
@@ -1148,6 +1201,7 @@ const I18N_DICTIONARY = {
         thMeaning: "意味",
         thAction: "操作",
         wordStabilityTooltip: "記憶安定度: {days} 日 | 忘却回数: {lapses} 回",
+        wordDualLevelTooltip: "FSRS Lv.{level}（安定度 {days}日 · 忘却 {lapses}回）｜フリー練習 臨時 Lv.{freeLevel}",
         btnLoadMoreWords: "さらに表示（残り {count} 件）",
         emptySearchResult: "該当する単語が見つかりません",
         emptyNoticeTitle: "選択した単語帳に単語がありません！",
@@ -1176,6 +1230,14 @@ const I18N_DICTIONARY = {
         optOnlyLevel3: "Lv.3 のみ表示",
         optOnlyLevel4: "Lv.4 のみ表示",
         optOnlyLevel5: "Lv.5 のみ表示",
+        optGroupFreeLevel: "⚡ フリー練習臨時レベル",
+        optSortFreeAsc: "フリー練習：臨時 Lv.1 → Lv.5",
+        optSortFreeDesc: "フリー練習：臨時 Lv.5 → Lv.1",
+        optOnlyFreeLv1: "のみ表示：臨時 Lv.1",
+        optOnlyFreeLv2: "のみ表示：臨時 Lv.2",
+        optOnlyFreeLv3: "のみ表示：臨時 Lv.3",
+        optOnlyFreeLv4: "のみ表示：臨時 Lv.4",
+        optOnlyFreeLv5: "のみ表示：臨時 Lv.5",
 
         settingsTitle: "アカウントと設定",
         settingsDesc: "個人設定、テーマ、APIキーの管理",
@@ -1250,6 +1312,12 @@ const I18N_DICTIONARY = {
         optLevel3: "Lv.3 - 中期定着 (安定 3〜8日)",
         optLevel4: "Lv.4 - 高度熟練 (安定 8〜21日)",
         optLevel5: "Lv.5 - 長期記憶 (安定 21日以上)",
+        labelFreeLevel: "⚡ フリー練習臨時レベル (臨時 Lv.1~5)",
+        optFreeLv1: "臨時 Lv.1 - 高頻度フォーカスプール (最大 6 語)",
+        optFreeLv2: "臨時 Lv.2 - 次高頻度フォーカスプール (最大 4 語)",
+        optFreeLv3: "臨時 Lv.3 - 初期定着",
+        optFreeLv4: "臨時 Lv.4 - 試験前熟練",
+        optFreeLv5: "臨時 Lv.5 - 完全習得 (低頻度テスト)",
         phFormCategory: "新しい単語帳名を入力...",
         lblFormWord: "学習言語の単語・語彙",
         phFormWord: "例: resilient / 食べる",
@@ -1422,6 +1490,9 @@ const I18N_DICTIONARY = {
         toastMoveSuccess: "{count} 件の単語を「{name}」に移動しました！",
         toastSelectResetWords: "進捗をリセットする単語を選択してください！",
         toastBatchResetSuccess: "🔄 {count} 件の単語を Lv.1（新規）にリセットしました！",
+        toastSelectResetFreeWords: "臨時レベルをリセットする単語を先に選択してください！",
+        toastBatchResetFreeSuccess: "⚡ {count} 語のフリー練習臨時レベルを臨時 Lv.1 にリセットしました！",
+        toastFreeLevelReset: "⚡ {count} 語のフリー練習臨時レベルを臨時 Lv.1 にリセットしました！",
         toastProgressReset: "{count} 件の単語の記憶進捗と重みをリセットしました！",
         toastUndoSuccess: "↩️ 「{word}」の評価を元に戻しました！",
         toastNothingToUndo: "元に戻せる評価履歴がありません！",
@@ -1478,6 +1549,7 @@ const I18N_DICTIONARY = {
         promptNewDeckName: "「{name}」の新しい名前を入力してください：",
         promptMoveTarget: "選択した {count} 件の単語の移動先を入力：",
         confirmBatchReset: "選択した {count} 件の単語の記憶進捗を Lv.1（新規）にリセットしますか？",
+        confirmBatchResetFree: "選択した {count} 語の「フリー練習臨時レベル」を臨時 Lv.1 にリセットしますか？（FSRS公式スケジュールには影響しません）",
         confirmResetProgress: "すべての単語の「記憶進捗・レベル・重み」をリセットしますか？\\n（単語、品詞、発音記号、意味、例文はすべて保持されます）",
         confirmDeleteBatch: "選択した {count} 件の単語を削除しますか？元に戻せません！",
         confirmBatchAiFill: "未入力欄のある単語が {count} 件あります。AIで自動補完しますか？",
@@ -1673,6 +1745,17 @@ function applyLanguageUI() {
     if (typeof updateBatchPlaceholders === 'function') {
         updateBatchPlaceholders();
     }
+
+    if (typeof renderCard === 'function' && typeof currentCard !== 'undefined' && currentCard) {
+        renderCard();
+    }
+
+    if (typeof renderWordList === 'function') {
+        const secList = document.getElementById('sec-list');
+        if (secList && !secList.classList.contains('hidden')) {
+            renderWordList();
+        }
+    }
 }
 
 function updatePageTranslations() {
@@ -1696,7 +1779,9 @@ Source: ${JSON.stringify(sourceDict)}
 Return ONLY valid JSON.`;
 
     try {
-        const apiUrl = buildGeminiUrl(rawKey);
+        const apiUrl = typeof buildGeminiUrl === 'function'
+            ? buildGeminiUrl(rawKey)
+            : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${rawKey}`;
         const res = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -52,7 +52,7 @@ function isValidFieldValue(val) {
 }
 
 /**
- * 🔀 合併兩筆重複單字資料（完整保留較高的 FSRS 學習進度、權重與最完整的欄位內容）
+ * 🔀 合併兩筆重複單字資料（完整保留較高的 FSRS 學習進度、自由練習等級與最完整的欄位內容）
  */
 function mergeDuplicateWordRecord(baseItem, otherItem, preferOtherFields = false) {
     let useOtherProgress = false;
@@ -582,6 +582,7 @@ function handleConfirmBatchImport() {
 
     let addedCount = 0;
     let replacedCount = 0;
+    const now = Date.now();
 
     window.parsedBatchList.forEach(item => {
         if (item && item.word) {
@@ -589,27 +590,36 @@ function handleConfirmBatchImport() {
             const normWord = normalizeWordKey(itemWord);
             if (!normWord) return;
 
+            // 若其他字庫已有同名單字，完整繼承其 FSRS 學習進度、自由練習等級與已解析欄位
+            const matchingOthers = wordList.filter(w => normalizeWordKey(w.word) === normWord);
+            let inherited = matchingOthers[0] || null;
+            if (matchingOthers.length > 1 && typeof compareCardProgress === 'function') {
+                matchingOthers.forEach(c => {
+                    if (compareCardProgress(c, inherited) > 0) inherited = c;
+                });
+            }
+
             const newCardData = {
-                id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                id: 'w_' + now + '_' + Math.random().toString(36).substr(2, 6),
                 category: targetCategory,
                 word: itemWord,
-                pos: String(item.pos || '').trim(),
-                phonetic: String(item.phonetic || '').trim(),
-                meaning: String(item.meaning || safeT('noMeaning', null, '無釋義')).trim(),
-                sentence: String(item.sentence || '').trim(),
-                translation: String(item.translation || '').trim(),
-                level: 1,
-                knowStreak: 0,
-                state: 'new',
-                stability: 0,
-                difficulty: 5.5,
-                reps: 0,
-                lapses: 0,
-                lastReview: 0,
-                nextReview: 0,
-                freeLevel: 1,
-                freeStreak: 0,
-                updatedAt: Date.now()
+                pos: String(item.pos || (inherited && isValidFieldValue(inherited.pos) ? inherited.pos : '')).trim(),
+                phonetic: String(item.phonetic || (inherited && isValidFieldValue(inherited.phonetic) ? inherited.phonetic : '')).trim(),
+                meaning: String(item.meaning || (inherited && isValidFieldValue(inherited.meaning) ? inherited.meaning : safeT('noMeaning', null, '無釋義'))).trim(),
+                sentence: String(item.sentence || (inherited && isValidFieldValue(inherited.sentence) ? inherited.sentence : '')).trim(),
+                translation: String(item.translation || (inherited && isValidFieldValue(inherited.translation) ? inherited.translation : '')).trim(),
+                level: inherited ? (inherited.level || 1) : 1,
+                knowStreak: inherited ? (inherited.knowStreak || 0) : 0,
+                state: inherited ? (inherited.state || 'new') : 'new',
+                stability: inherited && typeof inherited.stability === 'number' ? inherited.stability : 0,
+                difficulty: inherited && typeof inherited.difficulty === 'number' ? inherited.difficulty : 5.5,
+                reps: inherited ? (inherited.reps || 0) : 0,
+                lapses: inherited ? (inherited.lapses || 0) : 0,
+                lastReview: inherited ? (inherited.lastReview || 0) : 0,
+                nextReview: inherited ? (inherited.nextReview || 0) : 0,
+                freeLevel: inherited ? (inherited.freeLevel || 1) : 1,
+                freeStreak: inherited ? (inherited.freeStreak || 0) : 0,
+                updatedAt: now
             };
 
             const existingIndex = wordList.findIndex(w => 
@@ -785,10 +795,14 @@ async function handleQuickAddWords() {
     if (cardsNeedingAi.length > 0 && typeof runBatchAiAutoFill === 'function') {
         try {
             await runBatchAiAutoFill(cardsNeedingAi, (current, total) => {
+                const now = Date.now();
+                cardsNeedingAi.forEach(c => { c.updatedAt = now; });
                 if (typeof saveStorage === 'function') saveStorage();
                 if (typeof updateUI === 'function') updateUI();
             });
-            
+
+            const doneTs = Date.now();
+            cardsNeedingAi.forEach(c => { c.updatedAt = doneTs; });
             if (typeof saveStorage === 'function') saveStorage();
             if (typeof updateUI === 'function') updateUI();
 
@@ -829,12 +843,14 @@ function handleConfirmSplitDeck() {
         return;
     }
 
+    const now = Date.now();
     let partNum = 1;
     for (let i = 0; i < targetWords.length; i += chunkSize) {
         const chunk = targetWords.slice(i, i + chunkSize);
         const newCatName = `${targetCat} - ${partNum}`;
         chunk.forEach(w => {
             w.category = newCatName;
+            w.updatedAt = now;
         });
         partNum++;
     }
@@ -867,12 +883,14 @@ function handleRenameCategory() {
     if (!newName || !newName.trim() || newName.trim() === targetCat) return;
 
     const cleanNewName = newName.trim();
+    const now = Date.now();
     let updatedCount = 0;
 
     wordList.forEach(item => {
         const currentCat = item.category || defaultCatName;
         if (currentCat === targetCat) {
             item.category = cleanNewName;
+            item.updatedAt = now;
             updatedCount++;
         }
     });
@@ -910,11 +928,13 @@ function handleBatchChangeCategory() {
     if (!newCategory || !newCategory.trim()) return;
 
     const catName = newCategory.trim();
+    const now = Date.now();
     let count = 0;
 
     wordList.forEach(item => {
         if (selectedWordIds.has(item.id)) {
             item.category = catName;
+            item.updatedAt = now;
             count++;
         }
     });
@@ -1062,6 +1082,9 @@ async function handleBatchAiFillLibraryWords() {
                 if (progressPercent) progressPercent.innerText = `${pct}%`;
                 if (typeof renderWordList === 'function') renderWordList();
             }, forceOverwrite);
+
+            const now = Date.now();
+            targetBatch.forEach(item => { item.updatedAt = now; });
         }
 
         if (typeof saveStorage === 'function') saveStorage();

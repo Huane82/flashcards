@@ -21,6 +21,14 @@ function tr(key, fallback, params = null) {
     return text;
 }
 
+/**
+ * 🌐 取得本地化自由練習等級顯示文字
+ */
+function getLocalizedFreeLevelName(level) {
+    const lv = Math.min(5, Math.max(1, Number(level) || 1));
+    return tr('freeLevelShort', '臨時 Lv.{lv}', { lv });
+}
+
 function getSavedCategories() {
     try {
         const saved = localStorage.getItem('lzhcard_selected_categories');
@@ -164,13 +172,8 @@ function refreshCategoryDropdownWithNew(selectId, inputId) {
     const prevValue = select.value;
     const cats = getAllCategories();
     const defaultCatName = tr('defaultCategoryName', '預設字庫');
-    const nativeLang = localStorage.getItem('user_native_lang') || localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
-    const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
-
-    const fallbackCreateLabel = nativeLang === 'en'
-        ? '➕ Create new deck...'
-        : (nativeLang === 'ja' ? '➕ 新しい単語帳を作成...' : '➕ 創建新字庫...');
-    const createNewLabel = tr('optCreateNewDeck', fallbackCreateLabel);
+    const unitText = tr('unitWord', '字');
+    const createNewLabel = tr('optCreateNewDeck', '➕ 創建新字庫...');
 
     const escapeHtml = (str) => String(str)
         .replace(/&/g, '&amp;')
@@ -277,13 +280,12 @@ function toggleCategoryDropdown(e) {
 
 function updateCategorySelects() {
     const cats = getAllCategories();
-    const nativeLang = localStorage.getItem('user_native_lang') || localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
     const catAllText = tr('catAll', '全部字庫');
     const defaultCatName = tr('defaultCategoryName', '預設字庫');
     const noCatText = tr('noCategorySelected', '未選取字庫');
     const selectedPrefix = tr('selectedPrefix', '已選');
     const unitDeck = tr('unitDeck', '個字庫');
-    const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
+    const unitText = tr('unitWord', '字');
 
     const catCountMap = {};
     if (Array.isArray(wordList)) {
@@ -629,9 +631,22 @@ function nextCard(force = false) {
         migrateCardFSRS(currentCard);
     }
 
-    const lvInfo = (isFreeMode && typeof getFreeLevelInfo === 'function')
-        ? getFreeLevelInfo(currentCard.freeLevel || 1)
-        : getLevelInfo(currentCard.level || 1);
+    const fsrsLvNum = currentCard.level || 1;
+    const freeLvNum = currentCard.freeLevel || 1;
+    const fsrsLvInfo = getLevelInfo(fsrsLvNum);
+    const rawFreeInfo = (typeof getFreeLevelInfo === 'function')
+        ? getFreeLevelInfo(freeLvNum)
+        : { color: 'bg-slate-100 text-slate-600 border-slate-200' };
+    const freeLvInfo = {
+        name: getLocalizedFreeLevelName(freeLvNum),
+        color: rawFreeInfo.color
+    };
+
+    const primaryLvInfo = isFreeMode ? freeLvInfo : fsrsLvInfo;
+    const secondaryLvInfo = isFreeMode
+        ? { name: tr('fsrsLevelShort', 'FSRS Lv.{lv}', { lv: fsrsLvNum }), color: fsrsLvInfo.color }
+        : freeLvInfo;
+
     const streak = isFreeMode ? (currentCard.freeStreak || 0) : (currentCard.knowStreak || 0);
     const intervals = (isFreeMode && typeof previewFreePracticeTransitions === 'function')
         ? previewFreePracticeTransitions(currentCard)
@@ -702,19 +717,33 @@ function nextCard(force = false) {
         if (backPhonetic) backPhonetic.innerText = '';
     }
 
+    const syncSecondaryBadge = (anchorEl, badgeId, info) => {
+        if (!anchorEl || !anchorEl.parentNode) return;
+        let altEl = document.getElementById(badgeId);
+        if (!altEl) {
+            altEl = document.createElement('span');
+            altEl.id = badgeId;
+            anchorEl.insertAdjacentElement('afterend', altEl);
+        }
+        altEl.innerText = info.name;
+        altEl.className = `ml-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold border opacity-90 ${info.color}`;
+    };
+
     if (document.getElementById('cardPosFront')) document.getElementById('cardPosFront').innerText = currentCard.pos || 'N/A';
     
     const levelFront = document.getElementById('cardLevelFront');
     if (levelFront) {
-        levelFront.innerText = isFreeMode ? lvInfo.name : `${currentCard.category || defaultCatName} | ${lvInfo.name}`;
-        levelFront.className = `px-2.5 py-1 rounded-full text-xs font-bold border ${lvInfo.color}`;
+        levelFront.innerText = isFreeMode ? primaryLvInfo.name : `${currentCard.category || defaultCatName} | ${primaryLvInfo.name}`;
+        levelFront.className = `px-2.5 py-1 rounded-full text-xs font-bold border ${primaryLvInfo.color}`;
+        syncSecondaryBadge(levelFront, 'cardAltLevelFront', secondaryLvInfo);
     }
 
     if (document.getElementById('cardPosBack')) document.getElementById('cardPosBack').innerText = currentCard.pos || 'N/A';
     const levelBack = document.getElementById('cardLevelBack');
     if (levelBack) {
-        levelBack.innerText = isFreeMode ? lvInfo.name : `${currentCard.category || defaultCatName} | ${lvInfo.name}`;
-        levelBack.className = `px-2.5 py-1 rounded-full text-xs font-bold border ${lvInfo.color}`;
+        levelBack.innerText = isFreeMode ? primaryLvInfo.name : `${currentCard.category || defaultCatName} | ${primaryLvInfo.name}`;
+        levelBack.className = `px-2.5 py-1 rounded-full text-xs font-bold border ${primaryLvInfo.color}`;
+        syncSecondaryBadge(levelBack, 'cardAltLevelBack', secondaryLvInfo);
     }
 
     if (document.getElementById('cardSentence')) document.getElementById('cardSentence').innerText = currentCard.sentence ? `"${currentCard.sentence}"` : `"${tr('noSentence', '暫無例句')}"`;
@@ -816,7 +845,7 @@ function handleUndoLastCard() {
 const undoLastCardRating = handleUndoLastCard;
 
 /**
- * 🔄 批次還原已勾選單字的記憶進度（對應 index.html 字庫管理列的「還原進度」按鈕）
+ * 🔄 批次還原已勾選單字的記憶進度（同時歸零 FSRS 與自由練習臨時等級）
  */
 function handleBatchResetProgress() {
     if (selectedWordIds.size === 0) {
@@ -865,6 +894,48 @@ function handleBatchResetProgress() {
     updateUI();
     if (currentCard) nextCard(false);
     showToast(tr('toastBatchResetSuccess', '🔄 已將 {count} 筆單字的記憶進度還原為 Lv.1 新單字！', { count: resetCount }), 'success');
+}
+
+/**
+ * ⚡ 批次重置已勾選單字的「自由練習臨時等級」（完全不影響 FSRS 排程）
+ */
+function handleBatchResetFreeLevel() {
+    if (selectedWordIds.size === 0) {
+        showToast(tr('toastSelectResetFreeWords', '請先勾選要重置臨時等級的單字！'), 'warning');
+        return;
+    }
+
+    if (!confirm(tr('confirmBatchResetFree', '確定要將已勾選的 {count} 筆單字「自由練習臨時等級」重置為 Lv.1 嗎？（不會影響 FSRS 排程）', { count: selectedWordIds.size }))) {
+        return;
+    }
+
+    const now = Date.now();
+    const targetSpellings = new Set();
+
+    wordList.forEach(w => {
+        if (selectedWordIds.has(w.id) && w.word) {
+            targetSpellings.add(w.word.trim().toLowerCase());
+        }
+    });
+
+    let resetCount = 0;
+    wordList.forEach(w => {
+        if (!w || typeof w !== 'object') return;
+        const normWord = (w.word || '').trim().toLowerCase();
+        if (selectedWordIds.has(w.id) || (normWord && targetSpellings.has(normWord))) {
+            w.freeLevel = 1;
+            w.freeStreak = 0;
+            w.updatedAt = now;
+            if (selectedWordIds.has(w.id)) resetCount++;
+        }
+    });
+
+    selectedWordIds.clear();
+
+    saveStorage();
+    updateUI();
+    if (currentCard) nextCard(false);
+    showToast(tr('toastBatchResetFreeSuccess', '⚡ 已將 {count} 筆單字的自由練習等級重置為 臨時 Lv.1！', { count: resetCount }), 'success');
 }
 
 /**
@@ -942,6 +1013,7 @@ function handleCardRating(rating, e) {
                 if ((w.word || '').trim().toLowerCase() === targetWord) {
                     w.freeLevel = currentCard.freeLevel;
                     w.freeStreak = currentCard.freeStreak;
+                    w.updatedAt = currentCard.updatedAt || Date.now();
                 }
             });
         }
@@ -1115,6 +1187,51 @@ function exitFocusMode() {
     switchTab('home');
 }
 
+/**
+ * ⚡ 動態注入與更新字庫排序選單中的「自由練習臨時等級」選項（支援即時 i18n）
+ */
+function ensureFreeLevelSortOptions() {
+    const sortSelect = document.getElementById('sortSelect');
+    if (!sortSelect) return;
+
+    let group = document.getElementById('sortGroupFreeLevel');
+    if (!group) {
+        group = document.createElement('optgroup');
+        group.id = 'sortGroupFreeLevel';
+        sortSelect.appendChild(group);
+    }
+
+    group.label = tr('optGroupFreeLevel', '⚡ 自由練習臨時等級');
+    group.innerHTML = `
+        <option value="free-level-asc">${tr('optSortFreeAsc', '自由練習：臨時 Lv.1 → Lv.5')}</option>
+        <option value="free-level-desc">${tr('optSortFreeDesc', '自由練習：臨時 Lv.5 → Lv.1')}</option>
+        <option value="only_free_level_1">${tr('optOnlyFreeLv1', '僅顯示：臨時 Lv.1')}</option>
+        <option value="only_free_level_2">${tr('optOnlyFreeLv2', '僅顯示：臨時 Lv.2')}</option>
+        <option value="only_free_level_3">${tr('optOnlyFreeLv3', '僅顯示：臨時 Lv.3')}</option>
+        <option value="only_free_level_4">${tr('optOnlyFreeLv4', '僅顯示：臨時 Lv.4')}</option>
+        <option value="only_free_level_5">${tr('optOnlyFreeLv5', '僅顯示：臨時 Lv.5')}</option>
+    `;
+}
+
+/**
+ * ⚡ 動態注入與更新批次工具列的「重置臨時等級」按鈕（支援即時 i18n）
+ */
+function ensureBatchFreeResetButton() {
+    const resetBtn = document.querySelector('[onclick*="handleBatchResetProgress"]');
+    if (!resetBtn || !resetBtn.parentNode) return;
+
+    let btn = document.getElementById('batchResetFreeLevelBtn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'batchResetFreeLevelBtn';
+        btn.type = 'button';
+        btn.onclick = handleBatchResetFreeLevel;
+        btn.className = resetBtn.className;
+        resetBtn.insertAdjacentElement('afterend', btn);
+    }
+    btn.innerText = tr('btnBatchResetFree', '重置臨時等級');
+}
+
 function getFilteredWords() {
     const searchInput = document.getElementById('searchInput');
     const sortSelect = document.getElementById('sortSelect');
@@ -1145,10 +1262,16 @@ function getFilteredWords() {
         if (sortBy === 'only_missing_pos' && !isMissing(item, 'pos')) return false;
         if (sortBy === 'only_missing_phonetic' && !isMissing(item, 'phonetic')) return false;
 
-        // 僅顯示指定記憶等級 (Lv.1 ~ Lv.5)
+        // 僅顯示指定 FSRS 記憶等級 (Lv.1 ~ Lv.5)
         if (sortBy.startsWith('only_level_')) {
             const targetLv = parseInt(sortBy.replace('only_level_', ''), 10);
             if ((item.level || 1) !== targetLv) return false;
+        }
+
+        // 僅顯示指定自由練習臨時等級 (臨時 Lv.1 ~ Lv.5)
+        if (sortBy.startsWith('only_free_level_')) {
+            const targetFreeLv = parseInt(sortBy.replace('only_free_level_', ''), 10);
+            if ((item.freeLevel || 1) !== targetFreeLv) return false;
         }
 
         return matchesSearch && matchesCategory;
@@ -1183,11 +1306,44 @@ function getFilteredWords() {
         if (sortBy === 'pos') return (a.pos || '').localeCompare(b.pos || '');
         if (sortBy === 'level-asc') return (a.level || 1) - (b.level || 1);
         if (sortBy === 'level-desc') return (b.level || 1) - (a.level || 1);
+        if (sortBy === 'free-level-asc') return (a.freeLevel || 1) - (b.freeLevel || 1);
+        if (sortBy === 'free-level-desc') return (b.freeLevel || 1) - (a.freeLevel || 1);
 
         return 0;
     });
 
     return filtered;
+}
+
+/**
+ * ⚡ 在字庫列表直接點擊徽章循環切換自由練習等級 (1 -> 2 -> 3 -> 4 -> 5 -> 1)
+ */
+function cycleWordFreeLevel(id) {
+    const item = wordList.find(w => w.id === id);
+    if (!item) return;
+
+    const currentFreeLv = Math.min(5, Math.max(1, item.freeLevel || 1));
+    const nextFreeLv = currentFreeLv >= 5 ? 1 : currentFreeLv + 1;
+    const now = Date.now();
+
+    item.freeLevel = nextFreeLv;
+    item.freeStreak = 0;
+    item.updatedAt = now;
+
+    if (typeof syncDuplicateWordsProgress === 'function') {
+        syncDuplicateWordsProgress(item);
+    }
+
+    saveStorage();
+    renderWordList(false);
+    updateStudyQueueUI();
+    showToast(
+        tr('toastFreeLevelCycled', '【{word}】已調整為 {level}', {
+            word: item.word,
+            level: getLocalizedFreeLevelName(nextFreeLv)
+        }),
+        'info'
+    );
 }
 
 function loadMoreWordList() {
@@ -1196,6 +1352,9 @@ function loadMoreWordList() {
 }
 
 function renderWordList(resetLimit = true) {
+    ensureFreeLevelSortOptions();
+    ensureBatchFreeResetButton();
+
     const tbody = document.getElementById('wordTableBody');
     if (!tbody) return;
 
@@ -1207,6 +1366,7 @@ function renderWordList(resetLimit = true) {
     const emptySearchResultText = tr('emptySearchResult', '查無符合條件的單字');
     const editTooltipText = tr('modalTitleEdit', '編輯單字');
     const deleteTooltipText = tr('btnBatchDelete', '刪除');
+    const cycleFreeTooltipText = tr('titleCycleFreeLevel', '點擊直接切換自由練習等級');
 
     const escapeHtml = (str) => String(str ?? '')
         .replace(/&/g, '&amp;')
@@ -1233,14 +1393,21 @@ function renderWordList(resetLimit = true) {
 
         let rowsHtml = visibleItems.map(item => {
             const lvInfo = getLevelInfo(item.level || 1);
+            const freeLvNum = item.freeLevel || 1;
+            const rawFreeInfo = (typeof getFreeLevelInfo === 'function')
+                ? getFreeLevelInfo(freeLvNum)
+                : { color: 'bg-slate-100 text-slate-600 border-slate-200' };
+            const freeLvText = getLocalizedFreeLevelName(freeLvNum);
+
             const isChecked = selectedWordIds.has(item.id) ? 'checked' : '';
             const safeId = escapeHtml(item.id);
             const catText = escapeHtml(item.category || defaultCatName);
             const stabilityDays = typeof item.stability === 'number' ? Math.round(item.stability * 10) / 10 : 0;
             const lapsesCount = item.lapses || 0;
-            const lvTitle = tr('wordStabilityTooltip', '記憶穩定度: {days} 天 | 累計遺忘: {lapses} 次', {
+            const lvTitle = tr('wordDualStabilityTooltip', 'FSRS 穩定度: {days} 天 | 遺忘: {lapses} 次 | 自由練習: {freeLv}', {
                 days: stabilityDays,
-                lapses: lapsesCount
+                lapses: lapsesCount,
+                freeLv: freeLvText
             });
             const leechMark = lapsesCount >= 2 ? `<span class="ml-1 text-[10px] font-bold text-rose-500">×${lapsesCount}</span>` : '';
 
@@ -1257,7 +1424,14 @@ function renderWordList(resetLimit = true) {
                         <span title="${catText}" class="inline-block max-w-[84px] sm:max-w-[130px] truncate align-bottom px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">${catText}</span>
                     </td>
                     <td class="py-3 px-2.5 whitespace-nowrap" title="${escapeHtml(lvTitle)}">
-                        <span class="px-2 py-0.5 rounded text-xs font-semibold ${lvInfo.color} border">${lvInfo.name}</span>${leechMark}
+                        <div class="flex flex-col items-start gap-1">
+                            <div>
+                                <span class="px-2 py-0.5 rounded text-xs font-semibold ${lvInfo.color} border">${lvInfo.name}</span>${leechMark}
+                            </div>
+                            <button type="button" onclick="cycleWordFreeLevel('${safeId}')" title="${escapeHtml(cycleFreeTooltipText)}" class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${rawFreeInfo.color} border hover:opacity-80 active:scale-95 transition cursor-pointer">
+                                ${escapeHtml(freeLvText)} <i class="fa-solid fa-rotate text-[9px] ml-0.5 opacity-70"></i>
+                            </button>
+                        </div>
                     </td>
                     <td class="py-3 px-2.5 font-medium text-slate-800 dark:text-slate-200 max-w-[140px] sm:max-w-xs [overflow-wrap:anywhere]">
                         ${escapeHtml(item.meaning)}
@@ -1343,12 +1517,57 @@ function updateBatchBadgeUI() {
    ✏️ 單字新增與編輯表單控制
    ========================================================================== */
 
+/**
+ * ⚡ 動態建立與更新單字編輯視窗中的「自由練習臨時等級」選單（支援即時 i18n）
+ */
+function ensureFreeLevelFormField() {
+    const levelSelect = document.getElementById('formLevel');
+    if (!levelSelect) return;
+
+    const wrapper = levelSelect.closest('div');
+    if (!wrapper || !wrapper.parentNode) return;
+
+    let freeWrapper = document.getElementById('formFreeLevelWrapper');
+    if (!freeWrapper) {
+        freeWrapper = wrapper.cloneNode(true);
+        freeWrapper.id = 'formFreeLevelWrapper';
+        const clonedSelect = freeWrapper.querySelector('select');
+        if (clonedSelect) {
+            clonedSelect.id = 'formFreeLevel';
+            clonedSelect.removeAttribute('data-i18n');
+        }
+        wrapper.insertAdjacentElement('afterend', freeWrapper);
+    }
+
+    const labelEl = freeWrapper.querySelector('label');
+    if (labelEl) {
+        labelEl.removeAttribute('data-i18n');
+        labelEl.setAttribute('for', 'formFreeLevel');
+        labelEl.innerText = tr('labelFreeLevel', '⚡ 自由練習臨時等級 (臨時 Lv.1~5)');
+    }
+
+    const selectEl = document.getElementById('formFreeLevel');
+    if (selectEl) {
+        const prevVal = selectEl.value || '1';
+        selectEl.innerHTML = `
+            <option value="1">${tr('optFreeLv1', '臨時 Lv.1 - 高頻焦點池 (最多 6 字)')}</option>
+            <option value="2">${tr('optFreeLv2', '臨時 Lv.2 - 次高頻焦點池 (最多 4 字)')}</option>
+            <option value="3">${tr('optFreeLv3', '臨時 Lv.3 - 初步熟悉')}</option>
+            <option value="4">${tr('optFreeLv4', '臨時 Lv.4 - 考前熟練')}</option>
+            <option value="5">${tr('optFreeLv5', '臨時 Lv.5 - 完全掌握 (低頻抽考)')}</option>
+        `;
+        selectEl.value = prevVal;
+    }
+}
+
 function editCard(id) {
     const item = wordList.find(w => w.id === id);
     if (!item) return;
 
     const defaultCatName = tr('defaultCategoryName', '預設字庫');
     const targetCat = item.category || defaultCatName;
+
+    ensureFreeLevelFormField();
 
     document.getElementById('editCardId').value = item.id;
     if (typeof setCategorySelectorValue === 'function') {
@@ -1365,6 +1584,9 @@ function editCard(id) {
 
     const levelSelect = document.getElementById('formLevel');
     if (levelSelect) levelSelect.value = item.level || 1;
+
+    const freeLevelSelect = document.getElementById('formFreeLevel');
+    if (freeLevelSelect) freeLevelSelect.value = item.freeLevel || 1;
 
     document.getElementById('cardModalTitle').innerText = tr('modalTitleEdit', '編輯單字');
     openModal('cardModal');
@@ -1424,6 +1646,9 @@ function handleSaveCardForm(e) {
     const levelElem = document.getElementById('formLevel');
     const level = levelElem ? (parseInt(levelElem.value, 10) || 1) : 1;
 
+    const freeLevelElem = document.getElementById('formFreeLevel');
+    const freeLevel = freeLevelElem ? (parseInt(freeLevelElem.value, 10) || 1) : 1;
+
     if (!rawWord) {
         showToast(tr('toastFillWordFirst', '請先輸入單字！'), 'warning');
         return;
@@ -1438,6 +1663,7 @@ function handleSaveCardForm(e) {
         if (index !== -1) {
             const prevCard = wordList[index];
             const levelChanged = (prevCard.level || 1) !== level;
+            const freeLevelChanged = (prevCard.freeLevel || 1) !== freeLevel;
             const updatedCard = {
                 ...prevCard,
                 category,
@@ -1448,6 +1674,8 @@ function handleSaveCardForm(e) {
                 sentence,
                 translation,
                 level,
+                freeLevel,
+                freeStreak: freeLevelChanged ? 0 : (prevCard.freeStreak || 0),
                 updatedAt: Date.now()
             };
 
@@ -1461,7 +1689,7 @@ function handleSaveCardForm(e) {
                 migrateCardFSRS(updatedCard);
             }
             wordList[index] = updatedCard;
-            if (levelChanged && typeof syncDuplicateWordsProgress === 'function') {
+            if ((levelChanged || freeLevelChanged) && typeof syncDuplicateWordsProgress === 'function') {
                 syncDuplicateWordsProgress(updatedCard);
             }
         }
@@ -1476,6 +1704,7 @@ function handleSaveCardForm(e) {
         if (sameDeckIdx !== -1) {
             const existing = wordList[sameDeckIdx];
             const keepHigherLevel = Math.max(existing.level || 1, level);
+            const keepHigherFreeLevel = Math.max(existing.freeLevel || 1, freeLevel);
             const mergedCard = {
                 ...existing,
                 pos: cleanObj.pos || existing.pos,
@@ -1484,6 +1713,8 @@ function handleSaveCardForm(e) {
                 sentence: sentence || existing.sentence,
                 translation: translation || existing.translation,
                 level: keepHigherLevel,
+                freeLevel: keepHigherFreeLevel,
+                freeStreak: keepHigherFreeLevel !== (existing.freeLevel || 1) ? 0 : (existing.freeStreak || 0),
                 updatedAt: Date.now()
             };
             if (keepHigherLevel !== (existing.level || 1)) {
@@ -1509,7 +1740,7 @@ function handleSaveCardForm(e) {
                 translation,
                 level,
                 knowStreak: 0,
-                freeLevel: 1,
+                freeLevel,
                 freeStreak: 0,
                 updatedAt: Date.now()
             };
@@ -1563,8 +1794,11 @@ function openModal(id) {
     modal.classList.add('flex');
 
     if (id === 'cardModal') {
+        ensureFreeLevelFormField();
         const isEditing = !!document.getElementById('editCardId')?.value;
         if (!isEditing) {
+            const freeLevelSelect = document.getElementById('formFreeLevel');
+            if (freeLevelSelect) freeLevelSelect.value = '1';
             const defaultCatName = tr('defaultCategoryName', '預設字庫');
             const activeCats = window.selectedCategories || ['ALL'];
             const initialCat = (activeCats.length === 1 && activeCats[0] !== 'ALL') ? activeCats[0] : defaultCatName;
@@ -1605,6 +1839,8 @@ function closeModal(id) {
         if (cardForm) cardForm.reset();
         const editIdInput = document.getElementById('editCardId');
         if (editIdInput) editIdInput.value = '';
+        const freeLevelSelect = document.getElementById('formFreeLevel');
+        if (freeLevelSelect) freeLevelSelect.value = '1';
         const defaultCatName = tr('defaultCategoryName', '預設字庫');
         setCategorySelectorValue('form', defaultCatName);
         const titleElem = document.getElementById('cardModalTitle');
