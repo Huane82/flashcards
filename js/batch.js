@@ -955,7 +955,7 @@ function handleBatchChangeCategory() {
     }
 }
 
-function handleBatchDeleteWords() {
+async function handleBatchDeleteWords() {
     if (typeof selectedWordIds === 'undefined' || selectedWordIds.size === 0) {
         if (typeof showToast === 'function') showToast(safeT('toastSelectDeleteWords', null, '請先勾選要刪除的單字！'), 'warning');
         return;
@@ -965,13 +965,14 @@ function handleBatchDeleteWords() {
     if (confirm(confirmMsg)) {
         wordList = wordList.filter(item => !selectedWordIds.has(item.id));
         selectedWordIds.clear();
-        if (typeof saveStorage === 'function') saveStorage();
+        if (typeof saveStorage === 'function') await saveStorage(true);
         if (typeof updateCategorySelects === 'function') updateCategorySelects();
         if (typeof updateUI === 'function') updateUI();
         if (typeof nextCard === 'function') nextCard();
         if (typeof showToast === 'function') showToast(safeT('toastDeleteBatchSuccess', null, '批量刪除完成！'), 'info');
     }
 }
+
 
 /**
  * 🤖 點擊畫面「✨ AI 補齊」觸發的 UI 互動與進度條控制

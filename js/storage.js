@@ -12,6 +12,41 @@ function getStorageDefaultCatName() {
 }
 
 /**
+ * 🔢 安全數值轉換（徹底阻絕 NaN / Infinity 進入 Firestore 導致整包寫入失敗）
+ */
+function toFiniteNumber(val, fallback = 0) {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+/**
+ * 🧹 遞迴淨化任何物件，移除 undefined / NaN / Infinity / function
+ */
+function deepSanitizeForFirestore(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => deepSanitizeForFirestore(item));
+  }
+  if (typeof value === 'object') {
+    const cleanObj = {};
+    Object.keys(value).forEach(key => {
+      const v = value[key];
+      if (v !== undefined && typeof v !== 'function') {
+        cleanObj[key] = deepSanitizeForFirestore(v);
+      }
+    });
+    return cleanObj;
+  }
+  return String(value);
+}
+
+/**
  * 🏆 比較兩張單字卡的學習進度（回傳 > 0 代表 a 進度高於 b）
  */
 function compareCardProgress(a, b) {
@@ -23,16 +58,16 @@ function compareCardProgress(a, b) {
   const bLearned = (b.state && b.state !== 'new') ? 1 : 0;
   if (aLearned !== bLearned) return aLearned - bLearned;
 
-  const aLv = a.level || 1;
-  const bLv = b.level || 1;
+  const aLv = toFiniteNumber(a.level, 1);
+  const bLv = toFiniteNumber(b.level, 1);
   if (aLv !== bLv) return aLv - bLv;
 
-  const aStab = typeof a.stability === 'number' ? a.stability : 0;
-  const bStab = typeof b.stability === 'number' ? b.stability : 0;
+  const aStab = toFiniteNumber(a.stability, 0);
+  const bStab = toFiniteNumber(b.stability, 0);
   if (Math.abs(aStab - bStab) > 0.001) return aStab - bStab;
 
-  const aReps = (a.reps || 0) + (a.knowStreak || a.streak || 0);
-  const bReps = (b.reps || 0) + (b.knowStreak || b.streak || 0);
+  const aReps = toFiniteNumber(a.reps, 0) + toFiniteNumber(a.knowStreak ?? a.streak, 0);
+  const bReps = toFiniteNumber(b.reps, 0) + toFiniteNumber(b.knowStreak ?? b.streak, 0);
   if (aReps !== bReps) return aReps - bReps;
 
   const completeness = (c) =>
@@ -90,18 +125,18 @@ function syncDuplicateWordsProgress(sourceCard, decks = wordList) {
     const target = decks[i];
     if (!target || target === sourceCard) continue;
     if ((target.word || '').trim().toLowerCase() === norm) {
-      target.level = sourceCard.level;
-      target.state = sourceCard.state;
-      target.stability = sourceCard.stability;
-      target.difficulty = sourceCard.difficulty;
-      target.reps = sourceCard.reps;
-      target.lapses = sourceCard.lapses;
-      target.knowStreak = sourceCard.knowStreak || 0;
-      target.lastReview = sourceCard.lastReview;
-      target.nextReview = sourceCard.nextReview;
-      target.freeLevel = typeof sourceCard.freeLevel === 'number' ? sourceCard.freeLevel : 1;
-      target.freeStreak = typeof sourceCard.freeStreak === 'number' ? sourceCard.freeStreak : 0;
-      target.updatedAt = sourceCard.updatedAt || Date.now();
+      target.level = toFiniteNumber(sourceCard.level, 1);
+      target.state = sourceCard.state || 'new';
+      target.stability = toFiniteNumber(sourceCard.stability, 0);
+      target.difficulty = toFiniteNumber(sourceCard.difficulty, 5.5);
+      target.reps = toFiniteNumber(sourceCard.reps, 0);
+      target.lapses = toFiniteNumber(sourceCard.lapses, 0);
+      target.knowStreak = toFiniteNumber(sourceCard.knowStreak, 0);
+      target.lastReview = toFiniteNumber(sourceCard.lastReview, 0);
+      target.nextReview = toFiniteNumber(sourceCard.nextReview, 0);
+      target.freeLevel = toFiniteNumber(sourceCard.freeLevel, 1);
+      target.freeStreak = toFiniteNumber(sourceCard.freeStreak, 0);
+      target.updatedAt = toFiniteNumber(sourceCard.updatedAt, Date.now());
       syncedCount++;
     }
   }
@@ -115,12 +150,20 @@ const StorageEngine = {
   LOCAL_DELETED_KEY: 'lzhcard_deleted_keys',
   LOCAL_QUIZ_SCORE_KEY: 'lzhcard_quiz_score',
   _cloudSaveTimer: null,
+  _retryTimer: null,
   _inFlightLoad: null,
+  _isFlushing: false,
+  _hasPendingFlush: false,
+  _lastSyncErrorToastAt: 0,
 
   getCurrentUid() {
-    return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)
-      ? firebase.auth().currentUser.uid
-      : null;
+    if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+      return firebase.auth().currentUser.uid;
+    }
+    if (typeof auth !== 'undefined' && auth && auth.currentUser) {
+      return auth.currentUser.uid;
+    }
+    return null;
   },
 
   buildCardCompositeKey(card, defaultCatName = getStorageDefaultCatName()) {
@@ -216,9 +259,9 @@ const StorageEngine = {
       if (!card || typeof card !== 'object') continue;
 
       const neededMigration = (
-        typeof card.stability !== 'number' ||
-        typeof card.difficulty !== 'number' ||
-        typeof card.nextReview !== 'number' ||
+        !Number.isFinite(card.stability) ||
+        !Number.isFinite(card.difficulty) ||
+        !Number.isFinite(card.nextReview) ||
         !card.state
       );
 
@@ -226,8 +269,17 @@ const StorageEngine = {
         migrateCardFSRS(card);
       }
 
-      if (typeof card.freeLevel !== 'number') card.freeLevel = 1;
-      if (typeof card.freeStreak !== 'number') card.freeStreak = 0;
+      card.level = toFiniteNumber(card.level, 1);
+      card.knowStreak = toFiniteNumber(card.knowStreak, 0);
+      card.stability = toFiniteNumber(card.stability, 0);
+      card.difficulty = toFiniteNumber(card.difficulty, 5.5);
+      card.reps = toFiniteNumber(card.reps, 0);
+      card.lapses = toFiniteNumber(card.lapses, 0);
+      card.lastReview = toFiniteNumber(card.lastReview, 0);
+      card.nextReview = toFiniteNumber(card.nextReview, 0);
+      card.freeLevel = toFiniteNumber(card.freeLevel, 1);
+      card.freeStreak = toFiniteNumber(card.freeStreak, 0);
+      card.updatedAt = toFiniteNumber(card.updatedAt, Date.now());
 
       if (neededMigration) {
         hasMigrated = true;
@@ -239,22 +291,46 @@ const StorageEngine = {
 
   sanitizeDecksForStorage(decks) {
     if (!Array.isArray(decks)) return [];
-    return decks.map(card => {
-      if (!card || typeof card !== 'object') return card;
-      if (typeof migrateCardFSRS === 'function') {
-        migrateCardFSRS(card);
-      }
-      if (typeof card.freeLevel !== 'number') card.freeLevel = 1;
-      if (typeof card.freeStreak !== 'number') card.freeStreak = 0;
+    const seenIds = new Set();
 
-      const clean = {};
-      Object.keys(card).forEach(k => {
-        if (card[k] !== undefined) {
-          clean[k] = card[k];
+    return decks
+      .filter(card => card && typeof card === 'object')
+      .map((card, idx) => {
+        if (typeof migrateCardFSRS === 'function') {
+          migrateCardFSRS(card);
         }
+
+        let safeId = card.id !== undefined && card.id !== null ? String(card.id).trim() : '';
+        if (!safeId || seenIds.has(safeId)) {
+          safeId = `w_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 5)}`;
+        }
+        seenIds.add(safeId);
+
+        const normalized = {
+          id: safeId,
+          category: String(card.category || getStorageDefaultCatName()).trim() || getStorageDefaultCatName(),
+          word: String(card.word || '').trim(),
+          pos: String(card.pos || '').trim(),
+          phonetic: String(card.phonetic || '').trim(),
+          meaning: String(card.meaning || '').trim(),
+          sentence: String(card.sentence || '').trim(),
+          translation: String(card.translation || '').trim(),
+          level: toFiniteNumber(card.level, 1),
+          knowStreak: toFiniteNumber(card.knowStreak, 0),
+          state: typeof card.state === 'string' && card.state ? card.state : 'new',
+          stability: toFiniteNumber(card.stability, 0),
+          difficulty: toFiniteNumber(card.difficulty, 5.5),
+          reps: toFiniteNumber(card.reps, 0),
+          lapses: toFiniteNumber(card.lapses, 0),
+          lastReview: toFiniteNumber(card.lastReview, 0),
+          nextReview: toFiniteNumber(card.nextReview, 0),
+          freeLevel: toFiniteNumber(card.freeLevel, 1),
+          freeStreak: toFiniteNumber(card.freeStreak, 0),
+          updatedAt: toFiniteNumber(card.updatedAt, Date.now())
+        };
+
+        return deepSanitizeForFirestore(normalized);
       });
-      return clean;
-    });
   },
 
   /**
@@ -310,8 +386,8 @@ const StorageEngine = {
         || (compositeKey && localByKey.get(compositeKey));
 
       if (localCard) {
-        const localTs = typeof localCard.updatedAt === 'number' ? localCard.updatedAt : 0;
-        const remoteTs = typeof remoteCard.updatedAt === 'number' ? remoteCard.updatedAt : 0;
+        const localTs = toFiniteNumber(localCard.updatedAt, 0);
+        const remoteTs = toFiniteNumber(remoteCard.updatedAt, 0);
 
         if (localTs > remoteTs) {
           needsCloudSync = true;
@@ -348,7 +424,11 @@ const StorageEngine = {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed.correct === 'number' && typeof parsed.total === 'number') {
-          return parsed;
+          return {
+            correct: toFiniteNumber(parsed.correct, 0),
+            total: toFiniteNumber(parsed.total, 0),
+            updatedAt: toFiniteNumber(parsed.updatedAt, 0)
+          };
         }
       }
     } catch (e) {}
@@ -357,17 +437,22 @@ const StorageEngine = {
 
   applyQuizScoreState(scoreObj) {
     if (!scoreObj || typeof scoreObj.correct !== 'number' || typeof scoreObj.total !== 'number') return;
-    localStorage.setItem(this.LOCAL_QUIZ_SCORE_KEY, JSON.stringify(scoreObj));
+    const cleanScore = {
+      correct: toFiniteNumber(scoreObj.correct, 0),
+      total: toFiniteNumber(scoreObj.total, 0),
+      updatedAt: toFiniteNumber(scoreObj.updatedAt, 0)
+    };
+    localStorage.setItem(this.LOCAL_QUIZ_SCORE_KEY, JSON.stringify(cleanScore));
     if (typeof window.syncQuizScoreFromStorage === 'function') {
-      window.syncQuizScoreFromStorage(scoreObj);
+      window.syncQuizScoreFromStorage(cleanScore);
     } else {
       const scoreElem = document.getElementById('quizScore');
-      if (scoreElem) scoreElem.innerText = `${scoreObj.correct}/${scoreObj.total}`;
+      if (scoreElem) scoreElem.innerText = `${cleanScore.correct}/${cleanScore.total}`;
     }
   },
 
   getLocalSettings() {
-    return {
+    return deepSanitizeForFirestore({
       nativeLang: localStorage.getItem('lzhcard_native_lang') || 'zh-TW',
       targetLang: localStorage.getItem('lzhcard_target_lang') || 'en',
       customNative: localStorage.getItem('lzhcard_custom_native') || '',
@@ -377,7 +462,7 @@ const StorageEngine = {
       theme: localStorage.getItem('theme_preference') || 'system',
       apiMode: localStorage.getItem('lzhcard_api_mode') || 'shared',
       onboardingCompleted: localStorage.getItem('lzhcard_onboarding_completed') === 'true'
-    };
+    });
   },
 
   applyRemoteSettings(settings) {
@@ -445,7 +530,7 @@ const StorageEngine = {
               isLocalDirty
             );
 
-            wordList = mergedDecks;
+            wordList = this.sanitizeDecksForStorage(mergedDecks);
             const migrated = this.migrateAllCardsFSRS(wordList);
             const deduped = this.deduplicateSameDeckWords(wordList);
             localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
@@ -456,7 +541,8 @@ const StorageEngine = {
             const bestQuiz = (localQuiz.updatedAt || 0) > (remoteQuiz.updatedAt || 0) ? localQuiz : remoteQuiz;
             this.applyQuizScoreState(bestQuiz);
 
-            if (migrated || deduped || needsCloudSync || (localQuiz.updatedAt || 0) > (remoteQuiz.updatedAt || 0)) {
+            const hasLegacyWordListField = Array.isArray(data.wordList);
+            if (migrated || deduped || needsCloudSync || hasLegacyWordListField || (localQuiz.updatedAt || 0) > (remoteQuiz.updatedAt || 0)) {
               await this.flushCloudSave();
             } else {
               localStorage.removeItem(this.LOCAL_DIRTY_KEY);
@@ -514,7 +600,7 @@ const StorageEngine = {
         }
       }
 
-      wordList = Array.isArray(localDecks) ? localDecks : [];
+      wordList = this.sanitizeDecksForStorage(Array.isArray(localDecks) ? localDecks : []);
       const migratedLocal = this.migrateAllCardsFSRS(wordList);
       const dedupedLocal = this.deduplicateSameDeckWords(wordList);
       if (migratedLocal || dedupedLocal) {
@@ -540,26 +626,80 @@ const StorageEngine = {
       this._cloudSaveTimer = null;
     }
 
-    const uid = this.getCurrentUid();
-    const currentApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
-    const currentSettings = this.getLocalSettings();
-    const sanitizedDecks = this.sanitizeDecksForStorage(wordList);
-    const currentQuizScore = this.getLocalQuizScore();
+    // 串行寫入鎖：避免多次刪除或同步請求並發時，舊資料覆蓋新資料
+    if (this._isFlushing) {
+      this._hasPendingFlush = true;
+      return;
+    }
 
-    if (uid && typeof db !== 'undefined') {
-      try {
-        await db.collection('users').doc(uid).set({
+    const uid = this.getCurrentUid();
+    if (!uid || typeof db === 'undefined') {
+      return;
+    }
+
+    this._isFlushing = true;
+    try {
+      do {
+        this._hasPendingFlush = false;
+
+        const currentApiKey = String(localStorage.getItem(this.LOCAL_APIKEY_KEY) || '');
+        const currentSettings = this.getLocalSettings();
+        const sanitizedDecks = this.sanitizeDecksForStorage(wordList);
+        const currentQuizScore = this.getLocalQuizScore();
+
+        const payload = {
           decks: sanitizedDecks,
           apiKey: currentApiKey,
           settings: currentSettings,
           quizScore: currentQuizScore,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        localStorage.removeItem(this.LOCAL_DIRTY_KEY);
-        localStorage.removeItem(this.LOCAL_DELETED_KEY);
-      } catch (e) {
-        console.error("雲端同步失敗:", e);
+        };
+
+        // 清除舊版殘留的 wordList 欄位，避免任何舊資料復活
+        if (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue) {
+          payload.wordList = firebase.firestore.FieldValue.delete();
+        }
+
+        // 檢查是否超過 Firestore 單一文件 1MB (1,048,576 bytes) 上限
+        const approxBytes = new Blob([JSON.stringify({
+          decks: sanitizedDecks,
+          apiKey: currentApiKey,
+          settings: currentSettings,
+          quizScore: currentQuizScore
+        })]).size;
+
+        if (approxBytes > 1000000) {
+          const kb = Math.round(approxBytes / 1024);
+          if (typeof showToast === 'function') {
+            showToast(`⚠️ 雲端同步失敗：單字庫資料量（${kb} KB）超過雲端單檔 1MB 上限，請先刪除部分字庫！`, 'error');
+          }
+          break;
+        }
+
+        await db.collection('users').doc(uid).set(payload, { merge: true });
+
+        // 寫入成功且期間沒有新的變更，才清除 dirty 與刪除紀錄
+        if (!this._hasPendingFlush) {
+          localStorage.removeItem(this.LOCAL_DIRTY_KEY);
+          localStorage.removeItem(this.LOCAL_DELETED_KEY);
+        }
+      } while (this._hasPendingFlush);
+    } catch (e) {
+      console.error("雲端同步失敗:", e);
+      const now = Date.now();
+      if (typeof showToast === 'function' && now - this._lastSyncErrorToastAt > 4000) {
+        this._lastSyncErrorToastAt = now;
+        const errCode = e && (e.code || e.message) ? ` (${e.code || e.message})` : '';
+        showToast(`⚠️ 雲端同步失敗${errCode}，系統將自動重試`, 'error');
       }
+      if (!this._retryTimer) {
+        this._retryTimer = setTimeout(() => {
+          this._retryTimer = null;
+          this.flushCloudSave();
+        }, 3000);
+      }
+    } finally {
+      this._isFlushing = false;
     }
   },
 
@@ -578,6 +718,12 @@ const StorageEngine = {
     }
     const sanitizedDecks = this.sanitizeDecksForStorage(decks);
 
+    // 同步回寫 wordList 確保記憶體內的物件也是乾淨的
+    if (Array.isArray(wordList)) {
+      wordList.length = 0;
+      wordList.push(...sanitizedDecks);
+    }
+
     // 比對前後單字清單，記錄本次被刪除的單字鍵值，並在刪除時立即同步雲端
     const nextIds = new Set();
     const nextKeys = new Set();
@@ -589,7 +735,6 @@ const StorageEngine = {
     });
 
     const deletedSet = this.getDeletedKeysSet();
-    // 若使用者重新新增了先前刪過的單字，將其從刪除名單移除
     nextIds.forEach(id => deletedSet.delete(id));
     nextKeys.forEach(key => deletedSet.delete(key));
 
@@ -618,7 +763,6 @@ const StorageEngine = {
       this._cloudSaveTimer = null;
     }
 
-    // 偵測到刪除單字或指定 immediate 時，0ms 立即上傳雲端，不等待 400ms
     if (immediate || hasNewDeletion) {
       await this.flushCloudSave();
     } else {
