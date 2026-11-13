@@ -848,6 +848,13 @@ function renderWordList(resetLimit = true) {
     const editTooltipText = typeof t === 'function' ? t('modalTitleEdit') : '編輯單字';
     const deleteTooltipText = typeof t === 'function' ? t('btnBatchDelete') : '刪除';
 
+    const escapeHtml = (str) => String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
     const filtered = getFilteredWords();
     window._cachedFilteredWords = filtered;
 
@@ -867,31 +874,34 @@ function renderWordList(resetLimit = true) {
         let rowsHtml = visibleItems.map(item => {
             const lvInfo = getLevelInfo(item.level || 1);
             const isChecked = selectedWordIds.has(item.id) ? 'checked' : '';
+            const safeId = escapeHtml(item.id);
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
-                    <td class="py-3 px-3">
-                        <input type="checkbox" value="${item.id}" ${isChecked} onchange="toggleSelectWord('${item.id}', this.checked)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+                    <td class="py-3 px-3 whitespace-nowrap">
+                        <input type="checkbox" value="${safeId}" ${isChecked} onchange="toggleSelectWord('${safeId}', this.checked)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
                     </td>
-                    <td class="py-3 px-3 font-bold text-slate-900 dark:text-white">
-                        ${item.word}
-                        <div class="text-xs font-mono font-normal text-slate-400">${item.phonetic || ''}</div>
+                    <td class="py-3 px-3 font-bold text-slate-900 dark:text-white max-w-[130px] sm:max-w-[200px] break-words">
+                        ${escapeHtml(item.word)}
+                        <div class="text-xs font-mono font-normal text-slate-400">${escapeHtml(item.phonetic)}</div>
                     </td>
-                    <td class="py-3 px-3">
-                        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">${item.category || defaultCatName}</span>
+                    <td class="py-3 px-3 whitespace-nowrap">
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">${escapeHtml(item.category || defaultCatName)}</span>
                     </td>
-                    <td class="py-3 px-3">
+                    <td class="py-3 px-3 whitespace-nowrap">
                         <span class="px-2 py-0.5 rounded text-xs font-semibold ${lvInfo.color} border">${lvInfo.name}</span>
                     </td>
-                    <td class="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                        ${item.meaning || ''}
+                    <td class="py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[160px] sm:max-w-xs break-words">
+                        ${escapeHtml(item.meaning)}
                     </td>
-                    <td class="py-3 px-3 text-right space-x-2">
-                        <button type="button" onclick="editCard('${item.id}')" class="p-1.5 text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-700 rounded transition" title="${editTooltipText}">
-                            <i class="fa-solid fa-pen-to-square"></i>
-                        </button>
-                        <button type="button" onclick="deleteCard('${item.id}')" class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-700 rounded transition" title="${deleteTooltipText}">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+                    <td class="py-3 px-3 text-right whitespace-nowrap">
+                        <div class="inline-flex items-center justify-end gap-1.5">
+                            <button type="button" onclick="editCard('${safeId}')" class="p-1.5 text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-700 rounded transition" title="${escapeHtml(editTooltipText)}">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button type="button" onclick="deleteCard('${safeId}')" class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-700 rounded transition" title="${escapeHtml(deleteTooltipText)}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -914,6 +924,7 @@ function renderWordList(resetLimit = true) {
 
     updateBatchBadgeUI();
 }
+
 
 
 function toggleSelectWord(id, isChecked) {
