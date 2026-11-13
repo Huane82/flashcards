@@ -361,10 +361,10 @@ async function handleLoadJlptPreset(nLevel, ev) {
     if (!confirm(confirmMsg)) return;
 
     const JLPT_SOURCES = [
-        { type: 'json', url: `[https://jlpt-vocab-api.vercel.app/api/words/all?level=$](https://jlpt-vocab-api.vercel.app/api/words/all?level=$){nLevel}` },
-        { type: 'csv', url: `[https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@main/src/n$](https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@main/src/n$){nLevel}.csv` },
-        { type: 'csv', url: `[https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/n$](https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/n$){nLevel}.csv` },
-        { type: 'csv', url: `[https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@master/src/n$](https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@master/src/n$){nLevel}.csv` }
+        { type: 'json', url: `https://jlpt-vocab-api.vercel.app/api/words/all?level=${nLevel}` },
+        { type: 'csv', url: `https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@main/src/n${nLevel}.csv` },
+        { type: 'csv', url: `https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/n${nLevel}.csv` },
+        { type: 'csv', url: `https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@master/src/n${nLevel}.csv` }
     ];
 
     const btn = ev ? (ev.currentTarget || ev.target) : null;
@@ -483,10 +483,10 @@ async function handleLoadPreset(levelNum, ev) {
     if (!confirm(confirmMsg)) return;
 
     const CDN_SOURCES = [
-        "[https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json](https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json)",
-        "[https://raw.githubusercontent.com/EngTW/English-for-Programmers/master/lists/Taiwan-high-school-6K-108-edition/words_full.json](https://raw.githubusercontent.com/EngTW/English-for-Programmers/master/lists/Taiwan-high-school-6K-108-edition/words_full.json)",
-        "[https://cdn.jsdelivr.net/gh/zenkarsha/words7000@main/words.json](https://cdn.jsdelivr.net/gh/zenkarsha/words7000@main/words.json)",
-        "[https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json](https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json)"
+        "https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json",
+        "https://raw.githubusercontent.com/EngTW/English-for-Programmers/master/lists/Taiwan-high-school-6K-108-edition/words_full.json",
+        "https://cdn.jsdelivr.net/gh/zenkarsha/words7000@main/words.json",
+        "https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json"
     ];
 
     const btn = ev ? (ev.currentTarget || ev.target) : (typeof event !== 'undefined' && event ? (event.currentTarget || event.target) : null);
@@ -584,7 +584,7 @@ async function handleLoadPreset(levelNum, ev) {
 }
 
 /**
- * 🌐 批量貼上文字解析器 (支援 日語假名/中文注音 與 多種分隔符，並自動過濾貼上內容中的重複字)
+ * 🌐 批量貼上文字解析器 (支援 日語假名/中文注音、自動去除行首序號與多種分隔符，並自動過濾重複字)
  */
 function parseBatchText(text) {
     if (!text || typeof text !== 'string') return [];
@@ -605,7 +605,8 @@ function parseBatchText(text) {
     const phoneticReadingRegex = /^[\u3040-\u309F\u30A0-\u30FF\u3100-\u312F\u02EA\u02EB\u02C5\u02C7\u02C9\u02CA\u02CBa-zA-Z\s\-\.\'\`]+$/;
 
     lines.forEach(line => {
-        let tempLine = line;
+        // 去除開頭列表序號（如 "1. "、"2、"、"3) "）
+        let tempLine = line.replace(/^\d+[\.\)、\)]\s+/, '');
         let word = '';
         let pos = '';
         let phonetic = '';
@@ -845,10 +846,33 @@ function handleConfirmBatchImport() {
         return;
     }
     const targetCategory = catRes.value || defaultCatName;
+    const targetCatLower = targetCategory.toLowerCase();
+
+    // 建立 Map 索引以加速大量單字（如 JLPT / 7000 單）匯入時的重複與進度繼承比對
+    const bestProgressMap = new Map();
+    const targetCatMap = new Map();
+
+    (wordList || []).forEach(w => {
+        if (!w || !w.word) return;
+        const k = normalizeWordKey(w.word);
+        if (!k) return;
+
+        const prevBest = bestProgressMap.get(k);
+        if (!prevBest || (typeof compareCardProgress === 'function' && compareCardProgress(w, prevBest) > 0)) {
+            bestProgressMap.set(k, w);
+        }
+
+        const wCatLower = (w.category || defaultCatName).trim().toLowerCase();
+        if (wCatLower === targetCatLower && !targetCatMap.has(k)) {
+            targetCatMap.set(k, w);
+        }
+    });
 
     let addedCount = 0;
     let replacedCount = 0;
     const now = Date.now();
+    const removedOldSet = new Set();
+    const newCardsToPrepend = [];
 
     window.parsedBatchList.forEach(item => {
         if (item && item.word) {
@@ -856,14 +880,7 @@ function handleConfirmBatchImport() {
             const normWord = normalizeWordKey(itemWord);
             if (!normWord) return;
 
-            // 若其他字庫已有同名單字，完整繼承其 FSRS 學習進度、自由練習等級與已解析欄位
-            const matchingOthers = wordList.filter(w => normalizeWordKey(w.word) === normWord);
-            let inherited = matchingOthers[0] || null;
-            if (matchingOthers.length > 1 && typeof compareCardProgress === 'function') {
-                matchingOthers.forEach(c => {
-                    if (compareCardProgress(c, inherited) > 0) inherited = c;
-                });
-            }
+            const inherited = bestProgressMap.get(normWord) || null;
 
             const newCardData = {
                 id: 'w_' + now + '_' + Math.random().toString(36).substr(2, 6),
@@ -888,22 +905,33 @@ function handleConfirmBatchImport() {
                 updatedAt: now
             };
 
-            const existingIndex = wordList.findIndex(w => 
-                (w.category || defaultCatName).trim().toLowerCase() === targetCategory.toLowerCase() &&
-                normalizeWordKey(w.word) === normWord
-            );
-
-            if (existingIndex !== -1) {
-                const existingItem = wordList[existingIndex];
-                wordList.splice(existingIndex, 1);
-                wordList.unshift(mergeDuplicateWordRecord(existingItem, newCardData, true));
+            const existingItem = targetCatMap.get(normWord);
+            if (existingItem) {
+                removedOldSet.add(existingItem);
+                const merged = mergeDuplicateWordRecord(existingItem, newCardData, true);
+                targetCatMap.set(normWord, merged);
+                bestProgressMap.set(normWord, merged);
+                newCardsToPrepend.unshift(merged);
                 replacedCount++;
             } else {
-                wordList.unshift(newCardData);
+                targetCatMap.set(normWord, newCardData);
+                bestProgressMap.set(normWord, newCardData);
+                newCardsToPrepend.unshift(newCardData);
             }
             addedCount++;
         }
     });
+
+    if (removedOldSet.size > 0) {
+        for (let i = wordList.length - 1; i >= 0; i--) {
+            if (removedOldSet.has(wordList[i])) {
+                wordList.splice(i, 1);
+            }
+        }
+    }
+    if (newCardsToPrepend.length > 0) {
+        wordList.unshift(...newCardsToPrepend);
+    }
 
     autoDeduplicateWordList({ silent: true });
 
@@ -1239,7 +1267,6 @@ async function handleBatchDeleteWords() {
     }
 }
 
-
 /**
  * 🤖 點擊畫面「✨ AI 補齊」觸發的 UI 互動與進度條控制
  */
@@ -1273,7 +1300,6 @@ async function handleBatchAiFillLibraryWords() {
             ) : (!item.meaning || !item.pos || !item.sentence);
         });
 
-        // 檢查是否已有部分舊資料（例如已有假名或舊釋義，但缺少例句等），有則一律提供「強制覆蓋」選項
         const hasAnyExistingData = targetWords.some(item =>
             Boolean((item.meaning && item.meaning.trim()) || (item.pos && item.pos.trim()) || (item.phonetic && item.phonetic.trim()) || (item.sentence && item.sentence.trim()))
         );
@@ -1380,7 +1406,6 @@ async function handleBatchAiFillLibraryWords() {
         }
     }
 }
-
 
 /**
  * 💾 匯出完整 JSON 備份（完整保留所有單字內容、FSRS 記憶曲線與自由練習進度）
