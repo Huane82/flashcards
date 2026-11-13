@@ -21,9 +21,6 @@ let isCardActionLocked = false;
 let isAppLoaderHidden = false;
 let currentLoaderProgress = 15;
 
-/**
- * 📊 更新初始化載入進度條
- */
 function setAppLoaderProgress(percent, statusText) {
     if (isAppLoaderHidden) return;
     currentLoaderProgress = Math.max(currentLoaderProgress, Math.min(100, percent));
@@ -37,9 +34,6 @@ function setAppLoaderProgress(percent, statusText) {
     if (statusEl && statusText) statusEl.innerText = statusText;
 }
 
-/**
- * 🔄 平滑關閉初始化載入遮罩
- */
 function hideAppLoader() {
     if (isAppLoaderHidden) return;
     setAppLoaderProgress(100, '初始化完成！');
@@ -60,17 +54,13 @@ if (window.__appReadyToHideLoader) {
     hideAppLoader();
 }
 
-// 🛡️ 安全保險機制：最多 5 秒後自動解除遮罩，避免離線或網路不穩時卡住
 setTimeout(hideAppLoader, 5000);
 
-let wordListRenderLimit = 100; // 🚀 單字列表每次渲染上限（避免一次塞入數千個 DOM）
+let wordListRenderLimit = 100;
 window._cachedFilteredWords = [];
 
 const MAX_AI_BATCH_LIMIT = 200;
 
-/**
- * ✨ 全域 Toast 浮態提示訊息系統
- */
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -104,9 +94,6 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-/**
- * 🪙 即時更新頁面上的金幣顯示數字
- */
 function updateUserCoinsUI() {
     const el = document.getElementById('userCoinsDisplay');
     if (el) {
@@ -115,9 +102,6 @@ function updateUserCoinsUI() {
     }
 }
 
-/**
- * 取得所有字庫類別名稱
- */
 function getAllCategories() {
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
     if (!wordList || !Array.isArray(wordList)) return [defaultCatName];
@@ -131,9 +115,6 @@ function getAllCategories() {
     return Array.from(categories);
 }
 
-/**
- * 📂 三個彈窗的字庫選單對應表與控制邏輯（最後一項固定為「創建新字庫」）
- */
 const CATEGORY_SELECTOR_MAP = {
     quickAdd: { selectId: 'quickAddCategorySelect', inputId: 'quickAddCategoryInput' },
     form: { selectId: 'formCategorySelect', inputId: 'formCategory' },
@@ -264,9 +245,6 @@ function toggleCategoryDropdown(e) {
     if (menu) menu.classList.toggle('hidden');
 }
 
-/**
- * 🔄 更新字庫多選選單 (渲染 Checkbox UI 與按鈕文字)
- */
 function updateCategorySelects() {
     const cats = getAllCategories();
     const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
@@ -277,7 +255,6 @@ function updateCategorySelects() {
     const unitDeck = (typeof t === 'function') ? t('unitDeck') : '個字庫';
     const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
 
-    // 🚀 單次遍歷統計各字庫單字數（取代原本多次 wordList.filter）
     const catCountMap = {};
     if (Array.isArray(wordList)) {
         for (let i = 0; i < wordList.length; i++) {
@@ -290,7 +267,6 @@ function updateCategorySelects() {
 
     let activeCats = window.selectedCategories || ['ALL'];
 
-    // 🧹 自動清除已被刪光或不存在的幽靈字庫紀錄
     const hadAll = activeCats.includes('ALL');
     const prevSubCats = activeCats.filter(c => c !== 'ALL');
     const validSubCats = prevSubCats.filter(c => cats.includes(c));
@@ -366,9 +342,6 @@ function updateCategorySelects() {
     }
 }
 
-/**
- * 🎯 勾選/取消字庫事件
- */
 function handleCategoryCheckboxChange(checkbox) {
     const val = checkbox.value;
     const cats = getAllCategories();
@@ -413,7 +386,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     updateUserCoinsUI();
 
-    // 🟢 登入身分驗證完成後，自動啟動 Realtime Database 在線狀態與聊天監聽
     if (typeof firebase !== 'undefined' && firebase.auth) {
         firebase.auth().onAuthStateChanged((user) => {
             if (user && typeof initChatRealtimeListeners === 'function') {
@@ -423,10 +395,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-/**
- * 📊 更新今日待複習 / 新字 / 自由加練狀態徽章
- */
 function updateStudyQueueUI() {
+    if (typeof refreshFSRSUIBadges === 'function') {
+        refreshFSRSUIBadges();
+    }
     if (typeof getStudyQueueSummary !== 'function') return;
     const summary = getStudyQueueSummary();
     const badge = document.getElementById('studyQueueBadge');
@@ -453,8 +425,11 @@ function updateUI() {
     const isAll = activeCats.includes("ALL");
     const activeSet = isAll ? null : new Set(activeCats);
 
+    // 跨字庫去重後的有效學習單字數（重複字只計 1 次）
     let count = 0;
-    if (Array.isArray(wordList)) {
+    if (typeof getDeduplicatedActiveWords === 'function') {
+        count = getDeduplicatedActiveWords().length;
+    } else if (Array.isArray(wordList)) {
         if (isAll) {
             count = wordList.length;
         } else {
@@ -478,7 +453,6 @@ function updateUI() {
 
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
 
-    // 🚀 只有在「單字列表」分頁時才渲染表格 DOM
     if (currentTab === 'list') {
         renderWordList(false);
     }
@@ -506,7 +480,6 @@ function updateEmptyNoticeState(precomputedCount) {
             isEmpty = false;
         } else {
             const activeSet = new Set(activeCats);
-            // 🚀 找到第一筆符合的單字就立刻停止搜尋，不用掃完整個字庫
             isEmpty = !wordList.some(w => activeSet.has(w.category || defaultCatName));
         }
     }
@@ -519,7 +492,7 @@ function updateEmptyNoticeState(precomputedCount) {
 }
 
 /**
- * 🃏 抽取或更新字卡 (force = true 代表使用者主動換卡；false 則避免背景同步誤跳過當前卡片)
+ * 🃏 抽取或更新字卡 (force = true 代表使用者主動換卡)
  */
 function nextCard(force = false) {
     const flashcardElem = document.getElementById('flashcard');
@@ -528,17 +501,22 @@ function nextCard(force = false) {
 
     let shouldDrawNew = force || !currentCard;
 
-    // 🌟 若非主動換卡（例如刷新後幾秒雲端同步完成觸發），檢查當前卡片是否仍有效
     if (!shouldDrawNew && currentCard && Array.isArray(wordList)) {
         const targetWord = (currentCard.word || '').trim().toLowerCase();
-        const syncedCard = wordList.find(w => {
-            const matchIdOrWord = (w.id === currentCard.id) || ((w.word || '').trim().toLowerCase() === targetWord);
+        const matching = wordList.filter(w => {
+            const matchWord = (w.word || '').trim().toLowerCase() === targetWord;
             const matchCat = activeCats.includes("ALL") || activeCats.includes(w.category || defaultCatName);
-            return matchIdOrWord && matchCat;
+            return matchWord && matchCat;
         });
 
-        if (syncedCard) {
-            currentCard = syncedCard;
+        if (matching.length > 0) {
+            let best = matching[0];
+            matching.forEach(c => {
+                if (typeof compareCardProgress === 'function' && compareCardProgress(c, best) > 0) {
+                    best = c;
+                }
+            });
+            currentCard = best;
         } else {
             shouldDrawNew = true;
         }
@@ -576,9 +554,8 @@ function nextCard(force = false) {
     const streak = currentCard.knowStreak || 0;
     const intervals = (typeof previewNextIntervals === 'function')
         ? previewNextIntervals(currentCard)
-        : { 1: '10 分鐘', 2: '10 分鐘', 3: '1 天', 4: '4 天' };
+        : { 1: '10 分鐘後', 2: '10 分鐘後', 3: '1 天後', 4: '4 天後' };
 
-    // 🕒 學習階段顯示短期確認次數 (0/2, 1/2)；已畢業進入長期排程則直接顯示下次複習天數
     const streakTextElem = document.getElementById('knowStreakText');
     if (streakTextElem) {
         if (currentCard.state === 'review') {
@@ -588,9 +565,8 @@ function nextCard(force = false) {
         }
     }
 
-    // 預留多段間隔提示文字節點（供 index.html 顯示各按鈕預計間隔）
     [1, 2, 3, 4].forEach(rating => {
-        const hintEl = document.getElementById(`intervalHint${rating}`);
+        const hintEl = document.getElementById(`intervalHint${rating}`) || document.getElementById(`fsrsPreview${rating}`);
         if (hintEl) hintEl.innerText = intervals[rating] || '';
     });
 
@@ -655,15 +631,20 @@ function nextCard(force = false) {
 
     if (document.getElementById('cardSentence')) document.getElementById('cardSentence').innerText = currentCard.sentence ? `"${currentCard.sentence}"` : `"${t('noSentence')}"`;
     if (document.getElementById('cardTranslation')) document.getElementById('cardTranslation').innerText = currentCard.translation || '';
+
+    if (typeof refreshFSRSUIBadges === 'function') {
+        refreshFSRSUIBadges();
+    }
 }
 
 /**
  * 🧠 統一處理卡片記憶評分回饋（1: 不熟悉 | 2: 模糊 | 3: 已掌握 | 4: 秒答）
  */
 function handleCardRating(rating, e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
     if (isCardActionLocked || !currentCard) return;
     isCardActionLocked = true;
-    setTimeout(() => { isCardActionLocked = false; }, 50);
+    setTimeout(() => { isCardActionLocked = false; }, 60);
 
     if (e && e.currentTarget) e.currentTarget.blur();
     else if (document.activeElement) document.activeElement.blur();
@@ -812,6 +793,7 @@ function startFocusMode(mode) {
 }
 
 function exitFocusMode() {
+    window.isManualFreePractice = false;
     switchTab('home');
 }
 
@@ -1147,7 +1129,6 @@ function handleSaveCardForm(e) {
                 updatedAt: Date.now()
             };
 
-            // 若使用者在表單中手動變更了等級，同步重算對應的 FSRS 穩定度與排程
             if (levelChanged) {
                 delete updatedCard.stability;
                 delete updatedCard.difficulty;
@@ -1158,27 +1139,62 @@ function handleSaveCardForm(e) {
                 migrateCardFSRS(updatedCard);
             }
             wordList[index] = updatedCard;
+            if (levelChanged && typeof syncDuplicateWordsProgress === 'function') {
+                syncDuplicateWordsProgress(updatedCard);
+            }
         }
         showToast(typeof t === 'function' ? t('toastCardSaved') : '單字已儲存！', 'success');
     } else {
-        const newCard = {
-            id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            category, 
-            word: cleanObj.word, 
-            pos: cleanObj.pos, 
-            phonetic, 
-            meaning: cleanObj.meaning, 
-            sentence, 
-            translation,
-            level,
-            knowStreak: 0, 
-            updatedAt: Date.now()
-        };
-        if (typeof migrateCardFSRS === 'function') {
-            migrateCardFSRS(newCard);
+        const normWord = cleanObj.word.trim().toLowerCase();
+        const sameDeckIdx = wordList.findIndex(w =>
+            (w.category || defaultCategoryName).trim() === category.trim() &&
+            (w.word || '').trim().toLowerCase() === normWord
+        );
+
+        if (sameDeckIdx !== -1) {
+            const existing = wordList[sameDeckIdx];
+            const keepHigherLevel = Math.max(existing.level || 1, level);
+            const mergedCard = {
+                ...existing,
+                pos: cleanObj.pos || existing.pos,
+                phonetic: phonetic || existing.phonetic,
+                meaning: (cleanObj.meaning && cleanObj.meaning !== defaultMeaningText) ? cleanObj.meaning : existing.meaning,
+                sentence: sentence || existing.sentence,
+                translation: translation || existing.translation,
+                level: keepHigherLevel,
+                updatedAt: Date.now()
+            };
+            if (keepHigherLevel !== (existing.level || 1)) {
+                delete mergedCard.stability;
+                delete mergedCard.difficulty;
+                delete mergedCard.nextReview;
+                mergedCard.knowStreak = 0;
+            }
+            if (typeof migrateCardFSRS === 'function') {
+                migrateCardFSRS(mergedCard);
+            }
+            wordList[sameDeckIdx] = mergedCard;
+            showToast('同字庫已存在相同單字，已自動合併並保留最高進度！', 'info');
+        } else {
+            const newCard = {
+                id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                category, 
+                word: cleanObj.word, 
+                pos: cleanObj.pos, 
+                phonetic, 
+                meaning: cleanObj.meaning, 
+                sentence, 
+                translation,
+                level,
+                knowStreak: 0, 
+                updatedAt: Date.now()
+            };
+            if (typeof migrateCardFSRS === 'function') {
+                migrateCardFSRS(newCard);
+            }
+            wordList.unshift(newCard);
+            showToast(typeof t === 'function' ? t('toastCardAdded') : '新增單字成功！', 'success');
         }
-        wordList.unshift(newCard);
-        showToast(typeof t === 'function' ? t('toastCardAdded') : '新增單字成功！', 'success');
     }
 
     saveStorage();

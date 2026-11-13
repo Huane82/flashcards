@@ -53,16 +53,21 @@ function setQuizMode(mode) {
 /**
  * 🎯 針對具備例句的候選池執行 FSRS 三層優先級抽題
  */
+/**
+ * 🎯 針對具備例句的候選池執行 FSRS 三層優先級抽題（重複字取進度最高者）
+ */
 function pickNextQuizCandidate(candidates) {
     if (!candidates || candidates.length === 0) return null;
 
-    // 依單字小寫去重，避免多字庫勾選時重複單字機率加倍
+    // 依單字小寫去重，只保留進度最高的那一張
     const uniqueMap = new Map();
     candidates.forEach(w => {
         if (!w || !w.word) return;
+        if (typeof migrateCardFSRS === 'function') migrateCardFSRS(w);
         const key = w.word.trim().toLowerCase();
         if (!uniqueMap.has(key)) {
-            if (typeof migrateCardFSRS === 'function') migrateCardFSRS(w);
+            uniqueMap.set(key, w);
+        } else if (typeof compareCardProgress === 'function' && compareCardProgress(w, uniqueMap.get(key)) > 0) {
             uniqueMap.set(key, w);
         }
     });
@@ -70,20 +75,17 @@ function pickNextQuizCandidate(candidates) {
     const pool = Array.from(uniqueMap.values());
     if (pool.length === 1) return pool[0];
 
-    // 排除上一題剛考過的單字
     const nonRepeatPool = lastQuizWordKey
         ? pool.filter(w => w.word.trim().toLowerCase() !== lastQuizWordKey)
         : pool;
     const activePool = nonRepeatPool.length > 0 ? nonRepeatPool : pool;
 
-    // 若尚未載入 FSRS 引擎則退回隨機抽題
     if (typeof calculateRetrievability !== 'function' || typeof weightedRandomPick !== 'function') {
         return activePool[Math.floor(Math.random() * activePool.length)];
     }
 
     const now = Date.now();
 
-    // 🥇 Tier 1：已到期複習字與重學字（包含測驗答錯或字卡按不熟悉的單字）
     const dueCards = activePool.filter(w => w.state !== 'new' && (w.nextReview || 0) <= now);
     if (dueCards.length > 0) {
         const weighted = dueCards.map(word => {
@@ -99,7 +101,6 @@ function pickNextQuizCandidate(candidates) {
         return weightedRandomPick(weighted);
     }
 
-    // 🥈 Tier 2：正在學習中的單字 ＋ 定量新字焦點組（最多 6 個新字）
     const learningCards = activePool.filter(w => w.state === 'learning' || w.state === 'relearning');
     const newCards = activePool.filter(w => w.state === 'new').slice(0, 6);
     const tier2Pool = [...learningCards, ...newCards];
@@ -112,7 +113,6 @@ function pickNextQuizCandidate(candidates) {
         return weightedRandomPick(weighted);
     }
 
-    // 🥉 Tier 3：自由加練模式（依記憶脆弱度與歷史易忘次數加權）
     const weighted = activePool.map(word => {
         const r = calculateRetrievability(word, now);
         const s = Math.max(0.5, word.stability || 1);
@@ -124,6 +124,7 @@ function pickNextQuizCandidate(candidates) {
 
     return weightedRandomPick(weighted);
 }
+
 
 /**
  * 🎲 產生下一題隨堂測驗題目

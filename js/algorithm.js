@@ -1,7 +1,5 @@
 /**
  * 🧠 FSRS 現代認知記憶演算法與混合排程引擎 (js/algorithm.js)
- * 結合 FSRS-4.5 DSR 模型（難度 Difficulty / 穩定度 Stability / 可提取性 Retrievability）
- * 與「到期優先 + 定量新字 + 自由加練」三層佇列架構
  */
 
 const LEVEL_NAMES = {
@@ -20,20 +18,19 @@ const LEVEL_COLORS = {
     5: "bg-emerald-50 text-emerald-700 border-emerald-200"
 };
 
-// 📐 FSRS-4.5 核心常數與預設權重（目標保留率 90%）
 const FSRS_CONFIG = {
     REQUEST_RETENTION: 0.90,
     DECAY: -0.5,
-    FACTOR: 19 / 81, // 當 t = S 時，R = (1 + 19/81)^(-0.5) = 0.90
+    FACTOR: 19 / 81,
     MAX_INTERVAL_DAYS: 365,
-    LEARNING_STEP_MS: 10 * 60 * 1000, // 新字 / 遺忘字的短期鞏固間隔：10 分鐘
-    NEW_FOCUS_BATCH_SIZE: 6,          // 每次導入的新字焦點上限
+    LEARNING_STEP_MS: 10 * 60 * 1000,
+    NEW_FOCUS_BATCH_SIZE: 6,
     W: [
-        0.4072, 1.1829, 3.1262, 15.4722, // w0~w3: 初始穩定度 (Again, Hard, Good, Easy)
-        7.2102, 0.5316, 1.0651, 0.0234,  // w4~w7: 難度初始化與均值回歸
-        1.6160, 0.1544, 1.0824,          // w8~w10: 答對後穩定度成長因子
-        1.9813, 0.0953, 0.2975, 2.2042,  // w11~w14: 遺忘後穩定度重設因子
-        0.2407, 2.9466                   // w15~w16: Hard 懲罰倍率 / Easy 獎勵倍率
+        0.4072, 1.1829, 3.1262, 15.4722,
+        7.2102, 0.5316, 1.0651, 0.0234,
+        1.6160, 0.1544, 1.0824,
+        1.9813, 0.0953, 0.2975, 2.2042,
+        0.2407, 2.9466
     ]
 };
 
@@ -41,6 +38,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 let activeNewFocusPool = [];
 let recentHistoryIds = [];
+window.isManualFreePractice = false;
 
 /**
  * 🏷️ 取得等級顯示名稱與樣式
@@ -54,8 +52,7 @@ function getLevelInfo(level) {
 }
 
 /**
- * 📊 根據記憶穩定度 (Stability, 天數) 與學習階段，映射視覺等級 Lv.1 ~ Lv.5
- * 防止同一天內連按直接跳上 Lv.5，必須經過跨日間隔驗證才能升級
+ * 📊 根據記憶穩定度映射視覺等級 Lv.1 ~ Lv.5
  */
 function computeLevelFromStability(card) {
     if (!card || card.state === 'new' || card.state === 'learning' || card.state === 'relearning') {
@@ -70,7 +67,7 @@ function computeLevelFromStability(card) {
 }
 
 /**
- * 🔄 為單張卡片補齊或遷移 FSRS 記憶欄位（完全相容舊版字庫資料）
+ * 🔄 為單張卡片補齊或遷移 FSRS 記憶欄位
  */
 function migrateCardFSRS(card) {
     if (!card || typeof card !== 'object') return card;
@@ -80,7 +77,6 @@ function migrateCardFSRS(card) {
         const legacyStreak = card.knowStreak || 0;
         const baseTime = typeof card.updatedAt === 'number' ? card.updatedAt : Date.now();
 
-        // 依舊等級推算合理的初始穩定度與難度，避免舊資料全數歸零
         const initStabilityMap = { 1: 0, 2: 1.5, 3: 4.0, 4: 10.0, 5: 24.0 };
         const s = initStabilityMap[legacyLevel] || 0;
 
@@ -92,7 +88,7 @@ function migrateCardFSRS(card) {
 
         if (legacyLevel <= 1 && legacyStreak === 0 && card.reps === 0) {
             card.state = 'new';
-            card.nextReview = 0; // 新字立即可學
+            card.nextReview = 0;
         } else if (legacyLevel <= 1) {
             card.state = 'learning';
             card.nextReview = baseTime + FSRS_CONFIG.LEARNING_STEP_MS;
@@ -109,7 +105,6 @@ function migrateCardFSRS(card) {
 
 /**
  * 📉 計算單張卡片在「此時此刻」的可提取性 Retrievability (0 ~ 1)
- * 數值越低代表大腦越接近遺忘臨界點
  */
 function calculateRetrievability(card, now = Date.now()) {
     migrateCardFSRS(card);
@@ -129,10 +124,6 @@ function nextIntervalDays(stability) {
     return Math.min(FSRS_CONFIG.MAX_INTERVAL_DAYS, Math.max(1, rawDays));
 }
 
-/**
- * 🧮 FSRS 難度更新公式 D'(D, rating)
- * rating: 1=Again(不熟悉), 2=Hard(模糊), 3=Good(已掌握), 4=Easy(秒答)
- */
 function updateDifficulty(currentD, rating) {
     const W = FSRS_CONFIG.W;
     const d0Easy = W[4] - Math.exp(W[5] * 3) + 1;
@@ -141,11 +132,6 @@ function updateDifficulty(currentD, rating) {
     return Math.min(10, Math.max(1, Number(meanReverted.toFixed(3))));
 }
 
-/**
- * 📈 FSRS 答對後的記憶穩定度成長公式 S'_r(D, S, R, rating)
- * 核心特性：若在剛背完幾分鐘內重複刷題 (R ≈ 0.999)，1 - R ≈ 0，穩定度幾乎不增加，
- * 徹底杜絕同一天連按刷上 Lv.5 的假性熟練。
- */
 function updateRecallStability(d, s, r, rating) {
     const W = FSRS_CONFIG.W;
     const hardPenalty = rating === 2 ? W[15] : 1;
@@ -162,10 +148,6 @@ function updateRecallStability(d, s, r, rating) {
     return Number((s * growth).toFixed(3));
 }
 
-/**
- * 📉 FSRS 遺忘後的記憶穩定度重設公式 S'_f(D, S, R)
- * 保留部分歷史記憶痕跡，避免完全歸零，但強制進入短期重學步驟
- */
 function updateLapseStability(d, s, r) {
     const W = FSRS_CONFIG.W;
     const postLapseS = W[11] *
@@ -173,43 +155,65 @@ function updateLapseStability(d, s, r) {
         (Math.pow(s + 1, W[13]) - 1) *
         Math.exp((1 - r) * W[14]);
 
-    // 限制在 0.5 ~ 2.5 天之間，確保通過今天 10 分鐘重測後，明天一定會再次複習驗證
     const capped = Math.min(Math.max(postLapseS, 0.5), Math.min(Math.max(s * 0.4, 0.5), 2.5));
     return Number(capped.toFixed(3));
 }
 
 /**
- * ✍️ 核心複習狀態更新器（供卡片輪播與隨堂測驗共同呼叫）
- * @param {Object|string} cardOrId - 卡片物件或卡片 ID
- * @param {number} rating - 1: 不熟悉(Again) | 2: 模糊(Hard) | 3: 已掌握(Good) | 4: 秒答(Easy)
- * @param {number} now - 當前時間戳記
+ * 🏆 內部進度比對（回傳 > 0 代表 a 進度高於 b）
+ */
+function _compareProgress(a, b) {
+    if (typeof compareCardProgress === 'function') {
+        return compareCardProgress(a, b);
+    }
+    const aLv = a?.level || 1;
+    const bLv = b?.level || 1;
+    if (aLv !== bLv) return aLv - bLv;
+    return (a?.stability || 0) - (b?.stability || 0);
+}
+
+/**
+ * ✍️ 核心複習狀態更新器（以最高進度為基準計算，並同步升級所有字庫的同名單字）
  */
 function recordCardReview(cardOrId, rating = 3, now = Date.now()) {
     if (!Array.isArray(wordList) || wordList.length === 0) return null;
 
-    const targetCard = typeof cardOrId === 'object'
+    const rawCard = typeof cardOrId === 'object'
         ? cardOrId
         : wordList.find(w => w.id === cardOrId);
 
-    if (!targetCard) return null;
-    migrateCardFSRS(targetCard);
+    if (!rawCard) return null;
+
+    // 找出所有字庫中的同名單字，並取進度最高者作為計算基準
+    const normalizedWord = (rawCard.word || '').trim().toLowerCase();
+    const matchingCards = normalizedWord
+        ? wordList.filter(w => (w.word || '').trim().toLowerCase() === normalizedWord)
+        : [rawCard];
+
+    let baseCard = rawCard;
+    matchingCards.forEach(c => {
+        migrateCardFSRS(c);
+        if (_compareProgress(c, baseCard) > 0) {
+            baseCard = c;
+        }
+    });
+    migrateCardFSRS(baseCard);
 
     const W = FSRS_CONFIG.W;
-    const prevState = targetCard.state;
-    const prevS = targetCard.stability || 0;
-    const prevD = targetCard.difficulty || 5.5;
-    const r = calculateRetrievability(targetCard, now);
+    const prevState = baseCard.state;
+    const prevS = baseCard.stability || 0;
+    const prevD = baseCard.difficulty || 5.5;
+    const r = calculateRetrievability(baseCard, now);
 
     let nextState = prevState;
     let nextS = prevS;
     let nextD = prevD;
     let nextReview = now;
-    let nextLapses = targetCard.lapses || 0;
-    let nextReps = (targetCard.reps || 0) + 1;
-    let nextStreak = targetCard.knowStreak || 0;
+    let nextLapses = baseCard.lapses || 0;
+    let nextReps = (baseCard.reps || 0) + 1;
+    let nextStreak = baseCard.knowStreak || 0;
 
     if (rating === 1) {
-        // ❌ 不熟悉 (Again)：增加遺忘次數，進入 10 分鐘短期急救循環
         nextStreak = 0;
         if (prevState === 'review') {
             nextLapses += 1;
@@ -224,25 +228,21 @@ function recordCardReview(cardOrId, rating = 3, now = Date.now()) {
         nextReview = now + FSRS_CONFIG.LEARNING_STEP_MS;
 
     } else if (prevState === 'new' || prevState === 'learning' || prevState === 'relearning') {
-        // 🌱 處於「新字」或「短期鞏固」階段
         nextD = prevState === 'new'
             ? Math.min(10, Math.max(1, W[4] - Math.exp(W[5] * (rating - 1)) + 1))
             : updateDifficulty(prevD, rating);
 
         if (rating === 2) {
-            // 模糊：延長 10 分鐘再確認一次
             nextState = prevState === 'new' ? 'learning' : prevState;
             nextS = Math.max(prevS, W[1] * 0.6);
             nextReview = now + FSRS_CONFIG.LEARNING_STEP_MS;
         } else if (rating === 3) {
-            // 已掌握：需累計 2 次短期確認（相隔 10 分鐘）才正式畢業進入跨日排程
             nextStreak += 1;
             if (nextStreak < 2) {
                 nextState = prevState === 'new' ? 'learning' : prevState;
                 nextS = Math.max(prevS, 0.6);
                 nextReview = now + FSRS_CONFIG.LEARNING_STEP_MS;
             } else {
-                // 畢業！排入明天（約 1.2 ~ 1.8 天後）進行跨日睡眠鞏固驗收
                 nextState = 'review';
                 nextStreak = 0;
                 nextS = prevState === 'relearning' && prevS > 0
@@ -251,7 +251,6 @@ function recordCardReview(cardOrId, rating = 3, now = Date.now()) {
                 nextReview = now + nextIntervalDays(nextS) * DAY_MS;
             }
         } else if (rating === 4) {
-            // 秒答：直接畢業，排入 4 天後複習
             nextState = 'review';
             nextStreak = 0;
             nextS = 4.0;
@@ -259,7 +258,6 @@ function recordCardReview(cardOrId, rating = 3, now = Date.now()) {
         }
 
     } else {
-        // 🌳 已在長期記憶排程 ('review') 中的單字
         nextD = updateDifficulty(prevD, rating);
         nextS = updateRecallStability(prevD, prevS, r, rating);
         nextState = 'review';
@@ -273,54 +271,49 @@ function recordCardReview(cardOrId, rating = 3, now = Date.now()) {
         stability: nextS
     });
 
-    // 🔗 同步更新全站所有相同拼字的單字（多字庫共享學習進度）
-    const normalizedWord = (targetCard.word || '').trim().toLowerCase();
-    wordList.forEach(w => {
-        if ((w.word || '').trim().toLowerCase() === normalizedWord) {
-            w.state = nextState;
-            w.stability = nextS;
-            w.difficulty = nextD;
-            w.lapses = nextLapses;
-            w.reps = nextReps;
-            w.knowStreak = nextStreak;
-            w.level = updatedLevel;
-            w.lastReview = now;
-            w.nextReview = nextReview;
-            w.updatedAt = now;
-        }
+    // 🔗 同步升級所有字庫中的同名單字
+    matchingCards.forEach(w => {
+        w.state = nextState;
+        w.stability = nextS;
+        w.difficulty = nextD;
+        w.lapses = nextLapses;
+        w.reps = nextReps;
+        w.knowStreak = nextStreak;
+        w.level = updatedLevel;
+        w.lastReview = now;
+        w.nextReview = nextReview;
+        w.updatedAt = now;
     });
 
-    return targetCard;
+    return baseCard;
 }
 
 /**
- * 🔮 預覽各選項的下次複習時間文字（供 UI 按鈕提示使用）
+ * 🔮 預覽各選項的下次複習時間文字
  */
 function previewNextIntervals(card, now = Date.now()) {
-    if (!card) return { 1: '10 分鐘', 2: '10 分鐘', 3: '1 天', 4: '4 天' };
+    if (!card) return { 1: '10 分鐘後', 2: '10 分鐘後', 3: '1 天後', 4: '4 天後' };
     migrateCardFSRS(card);
 
     const formatSpan = (ms) => {
         const diffMin = Math.round((ms - now) / 60000);
-        if (diffMin < 60) return `${Math.max(1, diffMin)} 分鐘`;
+        if (diffMin < 60) return `${Math.max(1, diffMin)} 分鐘後`;
         const diffHours = Math.round(diffMin / 60);
-        if (diffHours < 24) return `${diffHours} 小時`;
+        if (diffHours < 24) return `${diffHours} 小時後`;
         const diffDays = Math.round(diffHours / 24);
-        return `${diffDays} 天`;
+        return `${diffDays} 天後`;
     };
 
     const result = {};
     [1, 2, 3, 4].forEach(rating => {
-        // 使用淺拷貝模擬計算，不污染原卡片資料
         const clone = { ...card };
-        const W = FSRS_CONFIG.W;
         const r = calculateRetrievability(clone, now);
 
         if (rating === 1) {
-            result[rating] = '10 分鐘';
+            result[rating] = '10 分鐘後';
         } else if (clone.state === 'new' || clone.state === 'learning' || clone.state === 'relearning') {
             if (rating === 2 || (rating === 3 && (clone.knowStreak || 0) + 1 < 2)) {
-                result[rating] = '10 分鐘';
+                result[rating] = '10 分鐘後';
             } else if (rating === 3) {
                 const d = updateDifficulty(clone.difficulty || 5.5, 3);
                 const s = clone.state === 'relearning' && clone.stability > 0
@@ -328,7 +321,7 @@ function previewNextIntervals(card, now = Date.now()) {
                     : 1.2 + (10 - d) * 0.08;
                 result[rating] = formatSpan(now + nextIntervalDays(s) * DAY_MS);
             } else {
-                result[rating] = '4 天';
+                result[rating] = '4 天後';
             }
         } else {
             const s = updateRecallStability(clone.difficulty || 5.5, clone.stability || 1, r, rating);
@@ -340,7 +333,7 @@ function previewNextIntervals(card, now = Date.now()) {
 }
 
 /**
- * 🔎 取得當前勾選字庫並去重後的有效單字清單
+ * 🔎 取得當前勾選字庫並去重後的有效單字清單（重複字只出現一次，以進度最高者為主）
  */
 function getDeduplicatedActiveWords() {
     if (!wordList || wordList.length === 0) return [];
@@ -356,9 +349,11 @@ function getDeduplicatedActiveWords() {
         const cat = w.category || defaultCatName;
         if (!activeCats.includes("ALL") && !activeCats.includes(cat)) continue;
 
+        migrateCardFSRS(w);
         const key = w.word.trim().toLowerCase();
         if (!uniqueMap.has(key)) {
-            migrateCardFSRS(w);
+            uniqueMap.set(key, w);
+        } else if (_compareProgress(w, uniqueMap.get(key)) > 0) {
             uniqueMap.set(key, w);
         }
     }
@@ -367,7 +362,7 @@ function getDeduplicatedActiveWords() {
 }
 
 /**
- * 📊 取得目前選取字庫的學習進度統計（供主畫面徽章與統計頁使用）
+ * 📊 取得目前選取字庫的學習進度統計
  */
 function getStudyQueueSummary(now = Date.now()) {
     const words = getDeduplicatedActiveWords();
@@ -387,12 +382,15 @@ function getStudyQueueSummary(now = Date.now()) {
         }
     }
 
+    const autoFreePractice = words.length > 0 && dueCount === 0 && newCount === 0;
+
     return {
         totalCount: words.length,
         dueCount,
         newCount,
         learningCount,
-        isFreePractice: words.length > 0 && dueCount === 0 && newCount === 0 && learningCount === 0
+        isFreePractice: Boolean(window.isManualFreePractice) || autoFreePractice,
+        isManualFreePractice: Boolean(window.isManualFreePractice)
     };
 }
 
@@ -417,10 +415,7 @@ function weightedRandomPick(items) {
 }
 
 /**
- * 🎯 核心抽卡排程器（三層混合佇列）
- * Tier 1: 已到期複習字 & 昨日遺忘字 (nextReview <= now)
- * Tier 2: 定量新字焦點池 (每次最多 6 個新字交替導入)
- * Tier 3: 自由加練模式 (所有今日進度完成後，依遺忘風險與難度加權無限練習)
+ * 🎯 核心抽卡排程器（支援手動/自動自由加練模式，且避免單卡無限重複）
  */
 function getNextCardSpacedRepetition() {
     const filteredList = getDeduplicatedActiveWords();
@@ -428,17 +423,45 @@ function getNextCardSpacedRepetition() {
     if (filteredList.length === 1) return filteredList[0];
 
     const now = Date.now();
-    const lastCardId = recentHistoryIds.length > 0 ? recentHistoryIds[recentHistoryIds.length - 1] : null;
+    const lastWordKey = recentHistoryIds.length > 0 ? recentHistoryIds[recentHistoryIds.length - 1] : null;
 
-    // 排除上一張剛出現過的卡片（避免連續重複）
     const excludeLast = (pool) => {
-        if (pool.length <= 1 || !lastCardId) return pool;
-        const withoutLast = pool.filter(w => w.id !== lastCardId);
+        if (pool.length <= 1 || !lastWordKey) return pool;
+        const withoutLast = pool.filter(w => (w.word || '').trim().toLowerCase() !== lastWordKey);
         return withoutLast.length > 0 ? withoutLast : pool;
     };
 
+    const pickFromFreePracticePool = (pool) => {
+        const candidates = excludeLast(pool);
+        const weighted = candidates.map(word => {
+            const r = calculateRetrievability(word, now);
+            const s = Math.max(0.5, word.stability || 1);
+            const lapsesBoost = 1 + (word.lapses || 0) * 0.5;
+            const difficultyBoost = 0.6 + (word.difficulty || 5) / 10;
+            const isUnlearnedBonus = word.state === 'new' ? 1.25 : 1.0;
+
+            const vulnerability = ((1.05 - r) * 80 + (15 / s)) * lapsesBoost * difficultyBoost * isUnlearnedBonus;
+            let weight = Math.max(vulnerability, 0.5);
+
+            const wKey = (word.word || '').trim().toLowerCase();
+            if (recentHistoryIds.includes(wKey)) {
+                weight *= 0.15;
+            }
+            return { word, weight };
+        });
+
+        const picked = weightedRandomPick(weighted);
+        recordHistoryKey((picked.word || '').trim().toLowerCase());
+        return picked;
+    };
+
+    // 🔥 若已手動開啟「自由加練模式」，直接對所有去重單字加權自由練習
+    if (window.isManualFreePractice) {
+        return pickFromFreePracticePool(filteredList);
+    }
+
     // =========================================================================
-    // 🥇 Tier 1：到期池（包含「今天該複習的熟字」與「昨天／剛剛沒背起來的字」）
+    // 🥇 Tier 1：到期池
     // =========================================================================
     const dueCards = filteredList.filter(w => w.state !== 'new' && (w.nextReview || 0) <= now);
 
@@ -448,93 +471,119 @@ function getNextCardSpacedRepetition() {
             const r = calculateRetrievability(word, now);
             const isRelearning = word.state === 'relearning' || word.state === 'learning';
             const lapsesBoost = 1 + (word.lapses || 0) * 0.45;
-            // 可提取性 R 越低（越快徹底遺忘），權重呈平方級上升
             const urgency = Math.pow(Math.max(0.05, 1.15 - r), 2) * 100;
             let weight = (isRelearning ? 140 : urgency) * lapsesBoost;
 
-            if (recentHistoryIds.includes(word.id)) {
+            const wKey = (word.word || '').trim().toLowerCase();
+            if (recentHistoryIds.includes(wKey)) {
                 weight *= 0.2;
             }
             return { word, weight: Math.max(weight, 0.1) };
         });
 
         const picked = weightedRandomPick(weighted);
-        recordHistoryId(picked.id);
+        recordHistoryKey((picked.word || '').trim().toLowerCase());
         return picked;
     }
 
     // =========================================================================
-    // 🥈 Tier 2：定量新字焦點池 ＋ 尚未滿 10 分鐘的短期學習字
+    // 🥈 Tier 2：定量新字焦點池 ＋ 短期學習字
     // =========================================================================
-    const validIds = new Set(filteredList.map(w => w.id));
-    activeNewFocusPool = activeNewFocusPool.filter(id => {
-        if (!validIds.has(id)) return false;
-        const w = filteredList.find(item => item.id === id);
+    const validKeys = new Set(filteredList.map(w => (w.word || '').trim().toLowerCase()));
+    activeNewFocusPool = activeNewFocusPool.filter(k => {
+        if (!validKeys.has(k)) return false;
+        const w = filteredList.find(item => (item.word || '').trim().toLowerCase() === k);
         return w && (w.state === 'new' || w.state === 'learning');
     });
 
     const unseenNewWords = filteredList.filter(w => w.state === 'new');
     for (const w of unseenNewWords) {
         if (activeNewFocusPool.length >= FSRS_CONFIG.NEW_FOCUS_BATCH_SIZE) break;
-        if (!activeNewFocusPool.includes(w.id)) {
-            activeNewFocusPool.push(w.id);
+        const wKey = (w.word || '').trim().toLowerCase();
+        if (!activeNewFocusPool.includes(wKey)) {
+            activeNewFocusPool.push(wKey);
         }
     }
 
-    const learningPool = filteredList.filter(w =>
-        activeNewFocusPool.includes(w.id) || w.state === 'learning' || w.state === 'relearning'
-    );
+    const learningPool = filteredList.filter(w => {
+        const wKey = (w.word || '').trim().toLowerCase();
+        return activeNewFocusPool.includes(wKey) || w.state === 'learning' || w.state === 'relearning';
+    });
 
     if (learningPool.length > 0) {
-        const candidates = excludeLast(learningPool);
+        // 防卡死：若只剩 1 張處於 10 分鐘冷卻期的卡片，混入其他已學卡片讓使用者可繼續自由加練
+        const effectivePool = (learningPool.length === 1 && (learningPool[0].nextReview || 0) > now && filteredList.length > 1)
+            ? filteredList
+            : learningPool;
+
+        const candidates = excludeLast(effectivePool);
         const weighted = candidates.map(word => {
             let weight = word.state === 'new' ? 100 : 80;
-            // 越接近 10 分鐘確認時間的卡片權重越高
             if (word.nextReview && word.nextReview <= now + FSRS_CONFIG.LEARNING_STEP_MS) {
                 const remainRatio = Math.max(0, (word.nextReview - now) / FSRS_CONFIG.LEARNING_STEP_MS);
                 weight += (1 - remainRatio) * 60;
             }
-            if (recentHistoryIds.includes(word.id)) {
+            const wKey = (word.word || '').trim().toLowerCase();
+            if (recentHistoryIds.includes(wKey)) {
                 weight *= 0.15;
             }
             return { word, weight: Math.max(weight, 0.1) };
         });
 
         const picked = weightedRandomPick(weighted);
-        recordHistoryId(picked.id);
+        recordHistoryKey((picked.word || '').trim().toLowerCase());
         return picked;
     }
 
     // =========================================================================
-    // 🥉 Tier 3：自由加練模式（所有今日到期與新字皆已完成，依脆弱度加權無限練習）
+    // 🥉 Tier 3：自動自由加練模式
     // =========================================================================
-    const candidates = excludeLast(filteredList);
-    const weighted = candidates.map(word => {
-        const r = calculateRetrievability(word, now);
-        const s = Math.max(0.5, word.stability || 1);
-        const lapsesBoost = 1 + (word.lapses || 0) * 0.5;
-        const difficultyBoost = 0.6 + (word.difficulty || 5) / 10;
-
-        // 距離下次複習越近（R 越低）且穩定度越低（剛升級不久）的單字優先被抽中加練
-        const vulnerability = ((1.05 - r) * 80 + (15 / s)) * lapsesBoost * difficultyBoost;
-        let weight = Math.max(vulnerability, 0.5);
-
-        if (recentHistoryIds.includes(word.id)) {
-            weight *= 0.15;
-        }
-        return { word, weight };
-    });
-
-    const picked = weightedRandomPick(weighted);
-    recordHistoryId(picked.id);
-    return picked;
+    return pickFromFreePracticePool(filteredList);
 }
 
-function recordHistoryId(id) {
-    if (!id) return;
-    recentHistoryIds.push(id);
+function recordHistoryKey(key) {
+    if (!key) return;
+    recentHistoryIds.push(key);
     if (recentHistoryIds.length > 5) {
         recentHistoryIds.shift();
+    }
+}
+
+/**
+ * ✨ 切換「自由加練模式」
+ */
+function toggleFreePracticeMode(forceState) {
+    window.isManualFreePractice = typeof forceState === 'boolean'
+        ? forceState
+        : !window.isManualFreePractice;
+
+    if (typeof refreshFSRSUIBadges === 'function') refreshFSRSUIBadges();
+    if (typeof updateStudyQueueUI === 'function') updateStudyQueueUI();
+
+    if (typeof currentTab !== 'undefined' && currentTab === 'flashcard' && typeof nextCard === 'function') {
+        nextCard(true);
+    }
+
+    if (typeof showToast === 'function') {
+        showToast(
+            window.isManualFreePractice
+                ? '已開啟「自由加練模式」：可無限練習所有已選單字'
+                : '已切回「FSRS 智慧排程模式」',
+            'info'
+        );
+    }
+}
+
+/**
+ * 🚀 從主頁直接進入自由加練模式
+ */
+function startFreePracticeMode() {
+    window.isManualFreePractice = true;
+    if (typeof startFocusMode === 'function') {
+        startFocusMode('flashcard');
+    }
+    if (typeof showToast === 'function') {
+        showToast('已進入自由加練模式！', 'info');
     }
 }
 

@@ -20,11 +20,10 @@ function compareCardProgress(a, b) {
   const bStab = typeof b.stability === 'number' ? b.stability : 0;
   if (Math.abs(aStab - bStab) > 0.001) return aStab - bStab;
 
-  const aReps = (a.reps || 0) + (a.streak || 0);
-  const bReps = (b.reps || 0) + (b.streak || 0);
+  const aReps = (a.reps || 0) + (a.knowStreak || a.streak || 0);
+  const bReps = (b.reps || 0) + (b.knowStreak || b.streak || 0);
   if (aReps !== bReps) return aReps - bReps;
 
-  // 進度完全相同時，優先保留欄位較完整（有釋義/例句/音標）的卡片
   const completeness = (c) =>
     (c.meaning ? 1 : 0) +
     (c.sentence ? 1 : 0) +
@@ -68,7 +67,7 @@ function deduplicateWordsByHighestProgress(cards) {
 }
 
 /**
- * 🔄 跨字庫進度同步（當某張單字升級/更新排程時，同步更新其他字庫中的同名單字）
+ * 🔄 跨字庫進度同步（同步更新其他字庫中的同名單字）
  */
 function syncDuplicateWordsProgress(sourceCard, decks = wordList) {
   if (!sourceCard || !Array.isArray(decks)) return 0;
@@ -86,11 +85,10 @@ function syncDuplicateWordsProgress(sourceCard, decks = wordList) {
       target.difficulty = sourceCard.difficulty;
       target.reps = sourceCard.reps;
       target.lapses = sourceCard.lapses;
+      target.knowStreak = sourceCard.knowStreak || 0;
       target.lastReview = sourceCard.lastReview;
       target.nextReview = sourceCard.nextReview;
-      if (typeof sourceCard.streak === 'number') {
-        target.streak = sourceCard.streak;
-      }
+      target.updatedAt = sourceCard.updatedAt || Date.now();
       syncedCount++;
     }
   }
@@ -110,12 +108,11 @@ const StorageEngine = {
 
   /**
    * 🗑️ 同字庫重複單字自動清理（保留進度最高者，補齊缺漏欄位，並刪除多餘項）
-   * @returns {boolean} 是否有刪除重複單字
    */
   deduplicateSameDeckWords(decks) {
     if (!Array.isArray(decks) || decks.length === 0) return false;
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
-    const seen = new Map(); // key: `${cat}::${normWord}` -> index in deduped
+    const seen = new Map();
     const deduped = [];
     let removed = false;
 
@@ -166,10 +163,6 @@ const StorageEngine = {
     return removed;
   },
 
-  /**
-   * 🔄 為整份字庫補齊 FSRS 記憶排程欄位（相容舊版資料與匯入備份）
-   * @returns {boolean} 是否有舊卡片剛完成欄位遷移
-   */
   migrateAllCardsFSRS(decks) {
     if (!Array.isArray(decks)) return false;
     let hasMigrated = false;
@@ -197,9 +190,6 @@ const StorageEngine = {
     return hasMigrated;
   },
 
-  /**
-   * 🧹 淨化單字物件（補齊 FSRS 欄位並移除 undefined，避免 Firestore 寫入失敗）
-   */
   sanitizeDecksForStorage(decks) {
     if (!Array.isArray(decks)) return [];
     return decks.map(card => {
@@ -217,9 +207,6 @@ const StorageEngine = {
     });
   },
 
-  /**
-   * 抓取當前裝置的所有偏好設定（含 API 金鑰模式與新手導覽狀態）
-   */
   getLocalSettings() {
     return {
       nativeLang: localStorage.getItem('lzhcard_native_lang') || 'zh-TW',
@@ -234,9 +221,6 @@ const StorageEngine = {
     };
   },
 
-  /**
-   * 將雲端載入的設定同步寫回本機，並強制更新選單 UI 狀態
-   */
   applyRemoteSettings(settings) {
     if (!settings) return;
     if (settings.nativeLang) localStorage.setItem('lzhcard_native_lang', settings.nativeLang);
@@ -262,9 +246,6 @@ const StorageEngine = {
     if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
   },
 
-  /**
-   * 載入雲端/本機資料與設定
-   */
   async loadData() {
     const uid = this.getCurrentUid();
     
@@ -346,9 +327,6 @@ const StorageEngine = {
     return wordList;
   },
 
-  /**
-   * 立即執行 pending 中的雲端同步（切換分頁或關閉視窗時呼叫）
-   */
   async flushCloudSave() {
     if (this._cloudSaveTimer) {
       clearTimeout(this._cloudSaveTimer);
@@ -368,26 +346,20 @@ const StorageEngine = {
           settings: currentSettings,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        console.log("已成功同步字庫、FSRS 排程、API Key 與系統設定至 Cloud Firestore");
       } catch (e) {
         console.error("雲端同步失敗:", e);
       }
     }
   },
 
-  /**
-   * 儲存字庫、API Key 與系統設定至本機與雲端（雲端寫入採 1.5 秒防抖合併）
-   */
   async saveData(decks) {
     if (Array.isArray(decks)) {
       this.deduplicateSameDeckWords(decks);
     }
     const sanitizedDecks = this.sanitizeDecksForStorage(decks);
 
-    // 1. 立即寫入本機 LocalStorage，確保進度不遺失
     localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(sanitizedDecks));
 
-    // 2. 防抖寫入雲端 Firestore（連續刷卡時合併為停手後 1.5 秒一次上傳）
     if (this._cloudSaveTimer) {
       clearTimeout(this._cloudSaveTimer);
     }
