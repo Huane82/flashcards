@@ -1346,14 +1346,16 @@ async function handleBatchAiFillLibraryWords() {
 
         if (progressContainer) progressContainer.classList.remove('hidden');
 
+        let actualUpdated = targetBatch.length;
         if (typeof runBatchAiAutoFill === 'function') {
-            await runBatchAiAutoFill(targetBatch, (current, total) => {
+            const countRes = await runBatchAiAutoFill(targetBatch, (current, total) => {
                 const pct = Math.round((current / total) * 100);
                 if (progressText) progressText.innerText = safeT('progressBatchAi', { current, total }, `AI 自動補充中... (${current}/${total})`);
                 if (progressBar) progressBar.style.width = `${pct}%`;
                 if (progressPercent) progressPercent.innerText = `${pct}%`;
                 if (typeof renderWordList === 'function') renderWordList();
             }, forceOverwrite);
+            if (typeof countRes === 'number') actualUpdated = countRes;
 
             const now = Date.now();
             targetBatch.forEach(item => { item.updatedAt = now; });
@@ -1370,7 +1372,7 @@ async function handleBatchAiFillLibraryWords() {
             if (progressContainer) progressContainer.classList.add('hidden');
         }, 2500);
 
-        if (typeof showToast === 'function') showToast(safeT('toastBatchFillSuccess', { count: targetBatch.length }, `成功補齊 ${targetBatch.length} 筆單字！`), 'success');
+        if (typeof showToast === 'function') showToast(safeT('toastBatchFillSuccess', { count: actualUpdated }, `成功補齊 ${actualUpdated} / ${targetBatch.length} 筆單字！`), 'success');
     } catch (err) {
         console.error("[AI Batch Fill Exception]:", err);
         if (typeof showToast === 'function') {
@@ -1378,6 +1380,7 @@ async function handleBatchAiFillLibraryWords() {
         }
     }
 }
+
 
 /**
  * 💾 匯出完整 JSON 備份（完整保留所有單字內容、FSRS 記憶曲線與自由練習進度）
