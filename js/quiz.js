@@ -1,5 +1,5 @@
 /**
- * LZHCard - 隨堂測驗模組 (FSRS 排程雙向連動版)
+ * LZHCard - 隨堂測驗模組 (FSRS 排程雙向連動 + 分數持久化版)
  */
 
 let currentQuizWord = null;
@@ -10,6 +10,42 @@ let quizScoreTotal = 0;
 let lastQuizWordKey = null;
 let isQuizAnswerLocked = false;
 let quizAutoNextTimer = null;
+
+// 初始化從本機讀取上次測驗累計分數
+(function initQuizScoreFromLocal() {
+    try {
+        const raw = localStorage.getItem('lzhcard_quiz_score');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.correct === 'number' && typeof parsed.total === 'number') {
+                quizScoreCorrect = parsed.correct;
+                quizScoreTotal = parsed.total;
+            }
+        }
+    } catch (e) {}
+})();
+
+function syncQuizScoreFromStorage(scoreObj) {
+    if (!scoreObj || typeof scoreObj.correct !== 'number' || typeof scoreObj.total !== 'number') return;
+    quizScoreCorrect = scoreObj.correct;
+    quizScoreTotal = scoreObj.total;
+    const scoreElem = document.getElementById('quizScore');
+    if (scoreElem) {
+        scoreElem.innerText = `${quizScoreCorrect}/${quizScoreTotal}`;
+    }
+}
+window.syncQuizScoreFromStorage = syncQuizScoreFromStorage;
+
+function persistQuizScore() {
+    const payload = {
+        correct: quizScoreCorrect,
+        total: quizScoreTotal,
+        updatedAt: Date.now()
+    };
+    try {
+        localStorage.setItem('lzhcard_quiz_score', JSON.stringify(payload));
+    } catch (e) {}
+}
 
 /**
  * 🌐 切換測驗語言 (英文 / 中文 / 日文)
@@ -133,6 +169,11 @@ function nextQuizQuestion() {
         quizAutoNextTimer = null;
     }
     isQuizAnswerLocked = false;
+
+    const scoreElem = document.getElementById('quizScore');
+    if (scoreElem) {
+        scoreElem.innerText = `${quizScoreCorrect}/${quizScoreTotal}`;
+    }
 
     const inputElem = document.getElementById('quizInput');
     const feedbackElem = document.getElementById('quizFeedback');
@@ -271,7 +312,7 @@ function formatNextReviewLabel(nextReviewTs) {
 }
 
 /**
- * 📝 提交答案與對錯判定（同步寫入 FSRS 記憶排程）
+ * 📝 提交答案與對錯判定（同步寫入 FSRS 記憶排程與雲端分數）
  */
 function handleQuizSubmit(e) {
     if (e) e.preventDefault();
@@ -308,6 +349,11 @@ function handleQuizSubmit(e) {
         });
     }
 
+    if (isCorrect) {
+        quizScoreCorrect += 1;
+    }
+
+    persistQuizScore();
     if (typeof saveStorage === 'function') saveStorage();
     if (typeof updateUI === 'function') updateUI();
 
@@ -317,8 +363,6 @@ function handleQuizSubmit(e) {
     const nextDueText = formatNextReviewLabel(currentQuizWord.nextReview);
 
     if (isCorrect) {
-        quizScoreCorrect += 1;
-
         feedbackElem.className = "p-4 rounded-xl text-sm font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 block";
         feedbackElem.innerHTML = `
             <div class="flex items-center justify-between gap-2 flex-wrap">

@@ -284,13 +284,17 @@
                 break;
         }
 
-        // 同步跨字庫重複單字的自由練習臨時進度
+        const now = Date.now();
+        card.updatedAt = now;
+
+        // 同步跨字庫重複單字的自由練習臨時進度與時間戳
         if (typeof wordList !== 'undefined' && Array.isArray(wordList) && card.word) {
             const targetKey = card.word.trim().toLowerCase();
             wordList.forEach(w => {
                 if (w !== card && (w.word || '').trim().toLowerCase() === targetKey) {
                     w.freeLevel = card.freeLevel;
                     w.freeStreak = card.freeStreak;
+                    w.updatedAt = now;
                 }
             });
         }
@@ -319,6 +323,7 @@
     function resetFreePracticeLevels(targetCategories = ['ALL']) {
         if (typeof wordList === 'undefined' || !Array.isArray(wordList)) return 0;
         const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+        const now = Date.now();
         let count = 0;
 
         wordList.forEach(w => {
@@ -326,6 +331,7 @@
             if (targetCategories.includes('ALL') || targetCategories.includes(cat)) {
                 w.freeLevel = 1;
                 w.freeStreak = 0;
+                w.updatedAt = now;
                 count++;
             }
         });

@@ -111,7 +111,10 @@ function syncDuplicateWordsProgress(sourceCard, decks = wordList) {
 const StorageEngine = {
   LOCAL_DECKS_KEY: 'flashcards_decks',
   LOCAL_APIKEY_KEY: 'flashcard_gemini_key_v1',
+  LOCAL_DIRTY_KEY: 'lzhcard_dirty_sync',
+  LOCAL_QUIZ_SCORE_KEY: 'lzhcard_quiz_score',
   _cloudSaveTimer: null,
+  _inFlightLoad: null,
 
   getCurrentUid() {
     return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)
@@ -226,6 +229,105 @@ const StorageEngine = {
     });
   },
 
+  /**
+   * 🔀 合併雲端與本機單字進度（以 updatedAt 較新者為準，避免尚未上傳的作答被舊雲端覆蓋）
+   */
+  mergeRemoteAndLocalDecks(remoteDecks, localDecks, isLocalDirty) {
+    if (!Array.isArray(localDecks) || localDecks.length === 0) {
+      return { decks: Array.isArray(remoteDecks) ? remoteDecks : [], needsCloudSync: false };
+    }
+    if (!Array.isArray(remoteDecks) || remoteDecks.length === 0) {
+      return { decks: localDecks, needsCloudSync: true };
+    }
+
+    const defaultCatName = getStorageDefaultCatName();
+    const localById = new Map();
+    const localByKey = new Map();
+
+    localDecks.forEach(c => {
+      if (!c || typeof c !== 'object') return;
+      if (c.id) localById.set(c.id, c);
+      const norm = (c.word || '').trim().toLowerCase();
+      if (norm) {
+        const cat = (c.category || defaultCatName).trim();
+        localByKey.set(`${cat}::${norm}`, c);
+      }
+    });
+
+    let needsCloudSync = Boolean(isLocalDirty);
+    const seenIds = new Set();
+    const seenKeys = new Set();
+
+    const merged = remoteDecks.map(remoteCard => {
+      if (!remoteCard || typeof remoteCard !== 'object') return remoteCard;
+      const norm = (remoteCard.word || '').trim().toLowerCase();
+      const cat = (remoteCard.category || defaultCatName).trim();
+      const compositeKey = norm ? `${cat}::${norm}` : null;
+
+      if (remoteCard.id) seenIds.add(remoteCard.id);
+      if (compositeKey) seenKeys.add(compositeKey);
+
+      const localCard = (remoteCard.id && localById.get(remoteCard.id))
+        || (compositeKey && localByKey.get(compositeKey));
+
+      if (localCard) {
+        const localTs = typeof localCard.updatedAt === 'number' ? localCard.updatedAt : 0;
+        const remoteTs = typeof remoteCard.updatedAt === 'number' ? remoteCard.updatedAt : 0;
+
+        if (localTs > remoteTs) {
+          needsCloudSync = true;
+          return { ...remoteCard, ...localCard };
+        }
+      }
+
+      return remoteCard;
+    });
+
+    // 若本機有尚未成功同步至雲端的新增單字，一併保留並補傳
+    if (isLocalDirty) {
+      localDecks.forEach(localCard => {
+        if (!localCard || typeof localCard !== 'object') return;
+        const norm = (localCard.word || '').trim().toLowerCase();
+        const cat = (localCard.category || defaultCatName).trim();
+        const compositeKey = norm ? `${cat}::${norm}` : null;
+
+        const alreadyExists = (localCard.id && seenIds.has(localCard.id))
+          || (compositeKey && seenKeys.has(compositeKey));
+
+        if (!alreadyExists) {
+          merged.push(localCard);
+          needsCloudSync = true;
+        }
+      });
+    }
+
+    return { decks: merged, needsCloudSync };
+  },
+
+  getLocalQuizScore() {
+    try {
+      const raw = localStorage.getItem(this.LOCAL_QUIZ_SCORE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.correct === 'number' && typeof parsed.total === 'number') {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return { correct: 0, total: 0, updatedAt: 0 };
+  },
+
+  applyQuizScoreState(scoreObj) {
+    if (!scoreObj || typeof scoreObj.correct !== 'number' || typeof scoreObj.total !== 'number') return;
+    localStorage.setItem(this.LOCAL_QUIZ_SCORE_KEY, JSON.stringify(scoreObj));
+    if (typeof window.syncQuizScoreFromStorage === 'function') {
+      window.syncQuizScoreFromStorage(scoreObj);
+    } else {
+      const scoreElem = document.getElementById('quizScore');
+      if (scoreElem) scoreElem.innerText = `${scoreObj.correct}/${scoreObj.total}`;
+    }
+  },
+
   getLocalSettings() {
     return {
       nativeLang: localStorage.getItem('lzhcard_native_lang') || 'zh-TW',
@@ -267,83 +369,129 @@ const StorageEngine = {
 
   async loadData() {
     const uid = this.getCurrentUid();
+    const loadKey = uid || 'guest';
 
-    if (uid && typeof db !== 'undefined') {
+    // 避免同一身份重複並發載入造成競態覆蓋
+    if (this._inFlightLoad && this._inFlightLoad.key === loadKey) {
+      return this._inFlightLoad.promise;
+    }
+
+    const runLoad = async () => {
+      let localDecks = [];
       try {
-        const docRef = db.collection('users').doc(uid);
-        const doc = await docRef.get();
-
-        if (doc.exists) {
-          const data = doc.data();
-
-          if (data.decks && Array.isArray(data.decks)) {
-            wordList = data.decks;
-          } else if (data.wordList && Array.isArray(data.wordList)) {
-            wordList = data.wordList;
-          }
-
-          const migrated = this.migrateAllCardsFSRS(wordList);
-          const deduped = this.deduplicateSameDeckWords(wordList);
-          localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-          if (migrated || deduped) {
-            this.saveData(wordList);
-          }
-
-          if (data.apiKey) {
-            localStorage.setItem(this.LOCAL_APIKEY_KEY, data.apiKey);
-            if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
-          }
-
-          if (data.settings) {
-            this.applyRemoteSettings(data.settings);
-          }
-
-          if (typeof checkAndOpenOnboardingModal === 'function') {
-            checkAndOpenOnboardingModal();
-          }
-
-          return wordList;
-        } else {
-          const localDecks = localStorage.getItem(this.LOCAL_DECKS_KEY);
-          const localApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
-          const initialDecks = localDecks ? JSON.parse(localDecks) : [];
-          this.migrateAllCardsFSRS(initialDecks);
-          this.deduplicateSameDeckWords(initialDecks);
-          const sanitizedDecks = this.sanitizeDecksForStorage(initialDecks);
-          const currentSettings = this.getLocalSettings();
-
-          await docRef.set({
-            decks: sanitizedDecks,
-            apiKey: localApiKey,
-            settings: currentSettings,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-
-          wordList = sanitizedDecks;
-          localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-
-          if (typeof checkAndOpenOnboardingModal === 'function') {
-            checkAndOpenOnboardingModal();
-          }
-
-          return wordList;
-        }
+        const rawLocal = localStorage.getItem(this.LOCAL_DECKS_KEY);
+        if (rawLocal) localDecks = JSON.parse(rawLocal);
       } catch (e) {
-        console.warn("Firestore 讀取失敗，降級使用 LocalStorage:", e);
-        if (typeof checkAndOpenOnboardingModal === 'function') {
-          checkAndOpenOnboardingModal();
+        localDecks = [];
+      }
+      const isLocalDirty = localStorage.getItem(this.LOCAL_DIRTY_KEY) === 'true';
+
+      if (uid && typeof db !== 'undefined') {
+        try {
+          const docRef = db.collection('users').doc(uid);
+          const doc = await docRef.get();
+
+          if (doc.exists) {
+            const data = doc.data();
+            let remoteDecks = [];
+
+            if (data.decks && Array.isArray(data.decks)) {
+              remoteDecks = data.decks;
+            } else if (data.wordList && Array.isArray(data.wordList)) {
+              remoteDecks = data.wordList;
+            }
+
+            const { decks: mergedDecks, needsCloudSync } = this.mergeRemoteAndLocalDecks(
+              remoteDecks,
+              localDecks,
+              isLocalDirty
+            );
+
+            wordList = mergedDecks;
+            const migrated = this.migrateAllCardsFSRS(wordList);
+            const deduped = this.deduplicateSameDeckWords(wordList);
+            localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+
+            // 合併隨堂測驗累計分數
+            const localQuiz = this.getLocalQuizScore();
+            const remoteQuiz = data.quizScore || { correct: 0, total: 0, updatedAt: 0 };
+            const bestQuiz = (localQuiz.updatedAt || 0) > (remoteQuiz.updatedAt || 0) ? localQuiz : remoteQuiz;
+            this.applyQuizScoreState(bestQuiz);
+
+            if (migrated || deduped || needsCloudSync || (localQuiz.updatedAt || 0) > (remoteQuiz.updatedAt || 0)) {
+              await this.flushCloudSave();
+            } else {
+              localStorage.removeItem(this.LOCAL_DIRTY_KEY);
+            }
+
+            if (data.apiKey) {
+              localStorage.setItem(this.LOCAL_APIKEY_KEY, data.apiKey);
+              if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
+            }
+
+            if (data.settings) {
+              this.applyRemoteSettings(data.settings);
+            }
+
+            if (typeof checkAndOpenOnboardingModal === 'function') {
+              checkAndOpenOnboardingModal();
+            }
+
+            return wordList;
+          } else {
+            const localApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
+            const initialDecks = Array.isArray(localDecks) ? localDecks : [];
+            this.migrateAllCardsFSRS(initialDecks);
+            this.deduplicateSameDeckWords(initialDecks);
+            const sanitizedDecks = this.sanitizeDecksForStorage(initialDecks);
+            const currentSettings = this.getLocalSettings();
+            const localQuiz = this.getLocalQuizScore();
+
+            await docRef.set({
+              decks: sanitizedDecks,
+              apiKey: localApiKey,
+              settings: currentSettings,
+              quizScore: localQuiz,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            wordList = sanitizedDecks;
+            localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+            localStorage.removeItem(this.LOCAL_DIRTY_KEY);
+            this.applyQuizScoreState(localQuiz);
+
+            if (typeof checkAndOpenOnboardingModal === 'function') {
+              checkAndOpenOnboardingModal();
+            }
+
+            return wordList;
+          }
+        } catch (e) {
+          console.warn("Firestore 讀取失敗，降級使用 LocalStorage:", e);
+          if (typeof checkAndOpenOnboardingModal === 'function') {
+            checkAndOpenOnboardingModal();
+          }
         }
       }
-    }
 
-    const localData = localStorage.getItem(this.LOCAL_DECKS_KEY);
-    wordList = localData ? JSON.parse(localData) : [];
-    const migratedLocal = this.migrateAllCardsFSRS(wordList);
-    const dedupedLocal = this.deduplicateSameDeckWords(wordList);
-    if (migratedLocal || dedupedLocal) {
-      localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-    }
-    return wordList;
+      wordList = Array.isArray(localDecks) ? localDecks : [];
+      const migratedLocal = this.migrateAllCardsFSRS(wordList);
+      const dedupedLocal = this.deduplicateSameDeckWords(wordList);
+      if (migratedLocal || dedupedLocal) {
+        localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+      }
+      this.applyQuizScoreState(this.getLocalQuizScore());
+      return wordList;
+    };
+
+    const promise = runLoad().finally(() => {
+      if (this._inFlightLoad && this._inFlightLoad.promise === promise) {
+        this._inFlightLoad = null;
+      }
+    });
+
+    this._inFlightLoad = { key: loadKey, promise };
+    return promise;
   },
 
   async flushCloudSave() {
@@ -356,6 +504,7 @@ const StorageEngine = {
     const currentApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
     const currentSettings = this.getLocalSettings();
     const sanitizedDecks = this.sanitizeDecksForStorage(wordList);
+    const currentQuizScore = this.getLocalQuizScore();
 
     if (uid && typeof db !== 'undefined') {
       try {
@@ -363,8 +512,10 @@ const StorageEngine = {
           decks: sanitizedDecks,
           apiKey: currentApiKey,
           settings: currentSettings,
+          quizScore: currentQuizScore,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
+        localStorage.removeItem(this.LOCAL_DIRTY_KEY);
       } catch (e) {
         console.error("雲端同步失敗:", e);
       }
@@ -378,6 +529,7 @@ const StorageEngine = {
     const sanitizedDecks = this.sanitizeDecksForStorage(decks);
 
     localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(sanitizedDecks));
+    localStorage.setItem(this.LOCAL_DIRTY_KEY, 'true');
 
     if (this._cloudSaveTimer) {
       clearTimeout(this._cloudSaveTimer);
@@ -385,13 +537,21 @@ const StorageEngine = {
 
     this._cloudSaveTimer = setTimeout(() => {
       this.flushCloudSave();
-    }, 1500);
+    }, 400);
   }
 };
 
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && StorageEngine._cloudSaveTimer) {
+    if (document.visibilityState === 'hidden' && (StorageEngine._cloudSaveTimer || localStorage.getItem(StorageEngine.LOCAL_DIRTY_KEY) === 'true')) {
+      StorageEngine.flushCloudSave();
+    }
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (StorageEngine._cloudSaveTimer || localStorage.getItem(StorageEngine.LOCAL_DIRTY_KEY) === 'true') {
       StorageEngine.flushCloudSave();
     }
   });

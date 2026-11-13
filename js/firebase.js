@@ -75,9 +75,12 @@ async function loginWithEmail(email, password) {
   }
 }
 
-// 3. 登出
+// 3. 登出（登出前先確保所有作答紀錄已同步至 Firestore）
 async function logoutUser() {
   try {
+    if (typeof StorageEngine !== 'undefined' && typeof StorageEngine.flushCloudSave === 'function') {
+      await StorageEngine.flushCloudSave();
+    }
     await auth.signOut();
     console.log("已成功登出");
     if (typeof loadStorage === 'function') {
