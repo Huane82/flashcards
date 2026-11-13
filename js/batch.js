@@ -159,29 +159,6 @@ function autoDeduplicateWordList(options = {}) {
     return removedCount;
 }
 
-// 🔗 掛載自動去重鉤子：每次介面刷新（包含初始載入與雲端同步完成）時自動檢查並清理重複字
-(function attachAutoDeduplicateHook() {
-    const bindHook = () => {
-        if (typeof window.updateUI === 'function' && !window.updateUI._hasDedupeHook) {
-            const origUpdateUI = window.updateUI;
-            const wrappedUpdateUI = function (...args) {
-                if (!isAutoDeduplicating) {
-                    autoDeduplicateWordList({ silent: false });
-                }
-                return origUpdateUI.apply(this, args);
-            };
-            wrappedUpdateUI._hasDedupeHook = true;
-            window.updateUI = wrappedUpdateUI;
-        }
-    };
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bindHook);
-    } else {
-        bindHook();
-    }
-})();
-
 /**
  * 🌐 依據目前設定的目標語言與選擇字庫動態切換範例提示與預設字庫選單
  */

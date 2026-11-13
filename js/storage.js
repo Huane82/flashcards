@@ -3,6 +3,7 @@ let wordList = [];
 const StorageEngine = {
   LOCAL_DECKS_KEY: 'flashcards_decks',
   LOCAL_APIKEY_KEY: 'flashcard_gemini_key_v1',
+  _cloudSaveTimer: null,
 
   getCurrentUid() {
     return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) 
@@ -136,30 +137,37 @@ const StorageEngine = {
   },
 
   /**
-   * 儲存字庫、API Key 與系統設定至本機與雲端
+   * 儲存字庫、API Key 與系統設定至本機與雲端（雲端寫入採 1.5 秒防抖合併）
    */
   async saveData(decks) {
-    // 1. 寫入本機 LocalStorage
+    // 1. 立即寫入本機 LocalStorage，確保進度不遺失
     localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(decks));
 
-    // 2. 寫入雲端 Firestore
-    const uid = this.getCurrentUid();
-    const currentApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
-    const currentSettings = this.getLocalSettings();
-
-    if (uid && typeof db !== 'undefined') {
-      try {
-        await db.collection('users').doc(uid).set({
-          decks: decks,
-          apiKey: currentApiKey,
-          settings: currentSettings,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        console.log("已成功同步字庫、API Key 與系統設定至 Cloud Firestore");
-      } catch (e) {
-        console.error("雲端同步失敗:", e);
-      }
+    // 2. 防抖寫入雲端 Firestore（連續刷卡時合併為停手後 1.5 秒一次上傳）
+    if (this._cloudSaveTimer) {
+      clearTimeout(this._cloudSaveTimer);
     }
+
+    this._cloudSaveTimer = setTimeout(async () => {
+      this._cloudSaveTimer = null;
+      const uid = this.getCurrentUid();
+      const currentApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
+      const currentSettings = this.getLocalSettings();
+
+      if (uid && typeof db !== 'undefined') {
+        try {
+          await db.collection('users').doc(uid).set({
+            decks: decks,
+            apiKey: currentApiKey,
+            settings: currentSettings,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          console.log("已成功同步字庫、API Key 與系統設定至 Cloud Firestore");
+        } catch (e) {
+          console.error("雲端同步失敗:", e);
+        }
+      }
+    }, 1500);
   }
 };
 

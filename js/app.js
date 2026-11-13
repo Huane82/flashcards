@@ -18,6 +18,8 @@ let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
 let isCardActionLocked = false; // 🌟 防止短時間重複觸發的鎖定旗標
+let wordListRenderLimit = 100; // 🚀 單字列表每次渲染上限（避免一次塞入數千個 DOM）
+window._cachedFilteredWords = [];
 
 const MAX_AI_BATCH_LIMIT = 200;
 
@@ -230,6 +232,17 @@ function updateCategorySelects() {
     const unitDeck = (typeof t === 'function') ? t('unitDeck') : '個字庫';
     const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
 
+    // 🚀 單次遍歷統計各字庫單字數（取代原本多次 wordList.filter）
+    const catCountMap = {};
+    if (Array.isArray(wordList)) {
+        for (let i = 0; i < wordList.length; i++) {
+            const c = (wordList[i].category && wordList[i].category.trim() !== '')
+                ? wordList[i].category.trim()
+                : defaultCatName;
+            catCountMap[c] = (catCountMap[c] || 0) + 1;
+        }
+    }
+
     let activeCats = window.selectedCategories || ['ALL'];
 
     // 🧹 自動清除已被刪光或不存在的幽靈字庫紀錄
@@ -268,7 +281,7 @@ function updateCategorySelects() {
         `;
 
         cats.forEach(c => {
-            const count = wordList.filter(w => (w.category || defaultCatName) === c).length;
+            const count = catCountMap[c] || 0;
             const isChecked = isAllChecked || activeCats.includes(c);
             html += `
                 <label class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-slate-700 dark:text-slate-200">
@@ -302,15 +315,12 @@ function updateCategorySelects() {
     const splitSelect = document.getElementById('splitTargetCategorySelect');
     if (splitSelect) {
         splitSelect.innerHTML = cats.map(c => {
-            const count = wordList.filter(w => (w.category || defaultCatName) === c).length;
+            const count = catCountMap[c] || 0;
             return `<option value="${c}">${c} (${count} ${unitText})</option>`;
         }).join('');
     }
-
-    Object.values(CATEGORY_SELECTOR_MAP).forEach(cfg => {
-        refreshCategoryDropdownWithNew(cfg.selectId, cfg.inputId);
-    });
 }
+
 
 
 /**
@@ -372,50 +382,73 @@ window.addEventListener('DOMContentLoaded', async () => {
 function updateUI() {
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
     const activeCats = window.selectedCategories || [];
+    const isAll = activeCats.includes("ALL");
+    const activeSet = isAll ? null : new Set(activeCats);
 
-    const filteredList = wordList.filter(w => {
-        if (activeCats.includes("ALL")) return true;
-        return activeCats.includes(w.category || defaultCatName);
-    });
+    let count = 0;
+    if (Array.isArray(wordList)) {
+        if (isAll) {
+            count = wordList.length;
+        } else {
+            for (let i = 0; i < wordList.length; i++) {
+                if (activeSet.has(wordList[i].category || defaultCatName)) {
+                    count++;
+                }
+            }
+        }
+    }
 
-    const count = filteredList.length;
     const totalWordCountElem = document.getElementById('totalWordCount');
     if (totalWordCountElem) totalWordCountElem.innerText = wordList.length;
 
     const cardCountDisplayElem = document.getElementById('cardCountDisplay');
     if (cardCountDisplayElem) cardCountDisplayElem.innerText = count;
 
-    updateEmptyNoticeState();
+    updateEmptyNoticeState(count);
     updateUserCoinsUI();
 
     if (typeof updateCategorySelects === 'function') updateCategorySelects();
-    renderWordList();
+
+    // 🚀 只有在「單字列表」分頁時才渲染表格 DOM
+    if (currentTab === 'list') {
+        renderWordList(true);
+    }
     if (currentTab === 'stats' && typeof renderStats === 'function') renderStats();
-    if (typeof updateBatchBadgeUI === 'function') updateBatchBadgeUI();
     if (typeof applyLanguageUI === 'function') applyLanguageUI();
 }
 
-function updateEmptyNoticeState() {
-    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
-    const activeCats = window.selectedCategories || [];
-
-    const filteredList = (typeof wordList !== 'undefined' && Array.isArray(wordList)) ? wordList.filter(w => {
-        if (activeCats.includes("ALL")) return true;
-        return activeCats.includes(w.category || defaultCatName);
-    }) : [];
-
-    const count = filteredList.length;
+function updateEmptyNoticeState(precomputedCount) {
     const emptyNotice = document.getElementById('emptyNotice');
+    if (!emptyNotice) return;
 
-    if (emptyNotice) {
-        const showOnTabs = ['home', 'list', 'flashcard', 'quiz'];
-        if (count === 0 && showOnTabs.includes(currentTab)) {
-            emptyNotice.classList.remove('hidden');
+    const showOnTabs = ['home', 'list', 'flashcard', 'quiz'];
+    if (!showOnTabs.includes(currentTab)) {
+        emptyNotice.classList.add('hidden');
+        return;
+    }
+
+    let isEmpty = true;
+    if (typeof precomputedCount === 'number') {
+        isEmpty = precomputedCount === 0;
+    } else if (typeof wordList !== 'undefined' && Array.isArray(wordList) && wordList.length > 0) {
+        const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : "預設字庫";
+        const activeCats = window.selectedCategories || [];
+        if (activeCats.includes("ALL")) {
+            isEmpty = false;
         } else {
-            emptyNotice.classList.add('hidden');
+            const activeSet = new Set(activeCats);
+            // 🚀 找到第一筆符合的單字就立刻停止搜尋，不用掃完整個字庫
+            isEmpty = !wordList.some(w => activeSet.has(w.category || defaultCatName));
         }
     }
+
+    if (isEmpty) {
+        emptyNotice.classList.remove('hidden');
+    } else {
+        emptyNotice.classList.add('hidden');
+    }
 }
+
 
 /**
  * 🃏 抽取或更新字卡 (force = true 代表使用者主動換卡；false 則避免背景同步誤跳過當前卡片)
@@ -750,9 +783,18 @@ function getFilteredWords() {
     return filtered;
 }
 
-function renderWordList() {
+function loadMoreWordList() {
+    wordListRenderLimit += 100;
+    renderWordList(false);
+}
+
+function renderWordList(resetLimit = true) {
     const tbody = document.getElementById('wordTableBody');
     if (!tbody) return;
+
+    if (resetLimit) {
+        wordListRenderLimit = 100;
+    }
 
     const defaultCatName = typeof t === 'function' ? t('defaultCategoryName') : '預設字庫';
     const emptySearchResultText = typeof t === 'function' ? t('emptySearchResult') : '查無符合條件的單字';
@@ -760,6 +802,7 @@ function renderWordList() {
     const deleteTooltipText = typeof t === 'function' ? t('btnBatchDelete') : '刪除';
 
     const filtered = getFilteredWords();
+    window._cachedFilteredWords = filtered;
 
     if (filtered.length === 0) {
         tbody.innerHTML = `
@@ -771,7 +814,10 @@ function renderWordList() {
             </tr>
         `;
     } else {
-        tbody.innerHTML = filtered.map(item => {
+        const visibleItems = filtered.slice(0, wordListRenderLimit);
+        const remainingCount = filtered.length - visibleItems.length;
+
+        let rowsHtml = visibleItems.map(item => {
             const lvInfo = getLevelInfo(item.level || 1);
             const isChecked = selectedWordIds.has(item.id) ? 'checked' : '';
             return `
@@ -803,10 +849,25 @@ function renderWordList() {
                 </tr>
             `;
         }).join('');
+
+        if (remainingCount > 0) {
+            rowsHtml += `
+                <tr>
+                    <td colspan="6" class="py-4 text-center">
+                        <button type="button" onclick="loadMoreWordList()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-bold text-slate-700 dark:text-slate-200 transition">
+                            顯示更多單字（還有 ${remainingCount} 筆）
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        tbody.innerHTML = rowsHtml;
     }
 
     updateBatchBadgeUI();
 }
+
 
 function toggleSelectWord(id, isChecked) {
     if (isChecked) {
