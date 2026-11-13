@@ -112,6 +112,7 @@ const StorageEngine = {
   LOCAL_DECKS_KEY: 'flashcards_decks',
   LOCAL_APIKEY_KEY: 'flashcard_gemini_key_v1',
   LOCAL_DIRTY_KEY: 'lzhcard_dirty_sync',
+  LOCAL_DELETED_KEY: 'lzhcard_deleted_keys',
   LOCAL_QUIZ_SCORE_KEY: 'lzhcard_quiz_score',
   _cloudSaveTimer: null,
   _inFlightLoad: null,
@@ -120,6 +121,33 @@ const StorageEngine = {
     return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)
       ? firebase.auth().currentUser.uid
       : null;
+  },
+
+  buildCardCompositeKey(card, defaultCatName = getStorageDefaultCatName()) {
+    if (!card || typeof card !== 'object') return null;
+    const norm = (card.word || '').trim().toLowerCase();
+    if (!norm) return null;
+    const cat = (card.category || defaultCatName).trim();
+    return `${cat}::${norm}`;
+  },
+
+  getDeletedKeysSet() {
+    try {
+      const raw = localStorage.getItem(this.LOCAL_DELETED_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return new Set(parsed);
+      }
+    } catch (e) {}
+    return new Set();
+  },
+
+  saveDeletedKeysSet(deletedSet) {
+    if (!deletedSet || deletedSet.size === 0) {
+      localStorage.removeItem(this.LOCAL_DELETED_KEY);
+      return;
+    }
+    localStorage.setItem(this.LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedSet)));
   },
 
   /**
@@ -230,39 +258,50 @@ const StorageEngine = {
   },
 
   /**
-   * 🔀 合併雲端與本機單字進度（以 updatedAt 較新者為準，避免尚未上傳的作答被舊雲端覆蓋）
+   * 🔀 合併雲端與本機單字進度（同步套用尚未上傳的刪除紀錄，避免已刪除的單字從雲端復活）
    */
   mergeRemoteAndLocalDecks(remoteDecks, localDecks, isLocalDirty) {
-    if (!Array.isArray(localDecks) || localDecks.length === 0) {
-      return { decks: Array.isArray(remoteDecks) ? remoteDecks : [], needsCloudSync: false };
-    }
-    if (!Array.isArray(remoteDecks) || remoteDecks.length === 0) {
-      return { decks: localDecks, needsCloudSync: true };
+    const defaultCatName = getStorageDefaultCatName();
+    const deletedSet = this.getDeletedKeysSet();
+    const hasPendingDeletions = deletedSet.size > 0;
+
+    // 若本機已執行「清空全部單字」且尚未同步至雲端，直接維持空陣列並補傳
+    if (isLocalDirty && Array.isArray(localDecks) && localDecks.length === 0) {
+      return { decks: [], needsCloudSync: true };
     }
 
-    const defaultCatName = getStorageDefaultCatName();
+    if ((!Array.isArray(localDecks) || localDecks.length === 0) && !hasPendingDeletions) {
+      return { decks: Array.isArray(remoteDecks) ? remoteDecks : [], needsCloudSync: false };
+    }
+
+    if (!Array.isArray(remoteDecks) || remoteDecks.length === 0) {
+      return { decks: Array.isArray(localDecks) ? localDecks : [], needsCloudSync: true };
+    }
+
     const localById = new Map();
     const localByKey = new Map();
 
-    localDecks.forEach(c => {
+    (localDecks || []).forEach(c => {
       if (!c || typeof c !== 'object') return;
       if (c.id) localById.set(c.id, c);
-      const norm = (c.word || '').trim().toLowerCase();
-      if (norm) {
-        const cat = (c.category || defaultCatName).trim();
-        localByKey.set(`${cat}::${norm}`, c);
-      }
+      const compositeKey = this.buildCardCompositeKey(c, defaultCatName);
+      if (compositeKey) localByKey.set(compositeKey, c);
     });
 
-    let needsCloudSync = Boolean(isLocalDirty);
+    let needsCloudSync = Boolean(isLocalDirty || hasPendingDeletions);
     const seenIds = new Set();
     const seenKeys = new Set();
+    const merged = [];
 
-    const merged = remoteDecks.map(remoteCard => {
-      if (!remoteCard || typeof remoteCard !== 'object') return remoteCard;
-      const norm = (remoteCard.word || '').trim().toLowerCase();
-      const cat = (remoteCard.category || defaultCatName).trim();
-      const compositeKey = norm ? `${cat}::${norm}` : null;
+    remoteDecks.forEach(remoteCard => {
+      if (!remoteCard || typeof remoteCard !== 'object') return;
+      const compositeKey = this.buildCardCompositeKey(remoteCard, defaultCatName);
+
+      // 過濾掉本機已刪除但尚未同步完成的單字
+      if ((remoteCard.id && deletedSet.has(remoteCard.id)) || (compositeKey && deletedSet.has(compositeKey))) {
+        needsCloudSync = true;
+        return;
+      }
 
       if (remoteCard.id) seenIds.add(remoteCard.id);
       if (compositeKey) seenKeys.add(compositeKey);
@@ -276,20 +315,19 @@ const StorageEngine = {
 
         if (localTs > remoteTs) {
           needsCloudSync = true;
-          return { ...remoteCard, ...localCard };
+          merged.push({ ...remoteCard, ...localCard });
+          return;
         }
       }
 
-      return remoteCard;
+      merged.push(remoteCard);
     });
 
     // 若本機有尚未成功同步至雲端的新增單字，一併保留並補傳
-    if (isLocalDirty) {
+    if (isLocalDirty && Array.isArray(localDecks)) {
       localDecks.forEach(localCard => {
         if (!localCard || typeof localCard !== 'object') return;
-        const norm = (localCard.word || '').trim().toLowerCase();
-        const cat = (localCard.category || defaultCatName).trim();
-        const compositeKey = norm ? `${cat}::${norm}` : null;
+        const compositeKey = this.buildCardCompositeKey(localCard, defaultCatName);
 
         const alreadyExists = (localCard.id && seenIds.has(localCard.id))
           || (compositeKey && seenKeys.has(compositeKey));
@@ -422,6 +460,7 @@ const StorageEngine = {
               await this.flushCloudSave();
             } else {
               localStorage.removeItem(this.LOCAL_DIRTY_KEY);
+              localStorage.removeItem(this.LOCAL_DELETED_KEY);
             }
 
             if (data.apiKey) {
@@ -458,6 +497,7 @@ const StorageEngine = {
             wordList = sanitizedDecks;
             localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
             localStorage.removeItem(this.LOCAL_DIRTY_KEY);
+            localStorage.removeItem(this.LOCAL_DELETED_KEY);
             this.applyQuizScoreState(localQuiz);
 
             if (typeof checkAndOpenOnboardingModal === 'function') {
@@ -516,28 +556,76 @@ const StorageEngine = {
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         localStorage.removeItem(this.LOCAL_DIRTY_KEY);
+        localStorage.removeItem(this.LOCAL_DELETED_KEY);
       } catch (e) {
         console.error("雲端同步失敗:", e);
       }
     }
   },
 
-  async saveData(decks) {
+  async saveData(decks, immediate = false) {
+    const defaultCatName = getStorageDefaultCatName();
+    let prevLocalDecks = [];
+    try {
+      const rawPrev = localStorage.getItem(this.LOCAL_DECKS_KEY);
+      if (rawPrev) prevLocalDecks = JSON.parse(rawPrev);
+    } catch (e) {
+      prevLocalDecks = [];
+    }
+
     if (Array.isArray(decks)) {
       this.deduplicateSameDeckWords(decks);
     }
     const sanitizedDecks = this.sanitizeDecksForStorage(decks);
 
+    // 比對前後單字清單，記錄本次被刪除的單字鍵值，並在刪除時立即同步雲端
+    const nextIds = new Set();
+    const nextKeys = new Set();
+    sanitizedDecks.forEach(c => {
+      if (!c || typeof c !== 'object') return;
+      if (c.id) nextIds.add(c.id);
+      const compKey = this.buildCardCompositeKey(c, defaultCatName);
+      if (compKey) nextKeys.add(compKey);
+    });
+
+    const deletedSet = this.getDeletedKeysSet();
+    // 若使用者重新新增了先前刪過的單字，將其從刪除名單移除
+    nextIds.forEach(id => deletedSet.delete(id));
+    nextKeys.forEach(key => deletedSet.delete(key));
+
+    let hasNewDeletion = false;
+    if (Array.isArray(prevLocalDecks)) {
+      prevLocalDecks.forEach(prevCard => {
+        if (!prevCard || typeof prevCard !== 'object') return;
+        const compKey = this.buildCardCompositeKey(prevCard, defaultCatName);
+        const stillExists = (prevCard.id && nextIds.has(prevCard.id))
+          || (compKey && nextKeys.has(compKey));
+
+        if (!stillExists) {
+          hasNewDeletion = true;
+          if (prevCard.id) deletedSet.add(prevCard.id);
+          if (compKey) deletedSet.add(compKey);
+        }
+      });
+    }
+
+    this.saveDeletedKeysSet(deletedSet);
     localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(sanitizedDecks));
     localStorage.setItem(this.LOCAL_DIRTY_KEY, 'true');
 
     if (this._cloudSaveTimer) {
       clearTimeout(this._cloudSaveTimer);
+      this._cloudSaveTimer = null;
     }
 
-    this._cloudSaveTimer = setTimeout(() => {
-      this.flushCloudSave();
-    }, 400);
+    // 偵測到刪除單字或指定 immediate 時，0ms 立即上傳雲端，不等待 400ms
+    if (immediate || hasNewDeletion) {
+      await this.flushCloudSave();
+    } else {
+      this._cloudSaveTimer = setTimeout(() => {
+        this.flushCloudSave();
+      }, 400);
+    }
   }
 };
 
@@ -565,6 +653,6 @@ async function loadStorage() {
   if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
 }
 
-async function saveStorage() {
-  await StorageEngine.saveData(wordList);
+async function saveStorage(immediate = false) {
+  await StorageEngine.saveData(wordList, immediate);
 }
