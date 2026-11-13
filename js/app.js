@@ -405,6 +405,7 @@ function handleCategoryCheckboxChange(checkbox) {
     }
 
     selectedWordIds.clear();
+    wordListRenderLimit = 100;
     updateUI();
     nextCard(true);
 }
@@ -457,7 +458,7 @@ function updateUI() {
 
     // 🚀 只有在「單字列表」分頁時才渲染表格 DOM
     if (currentTab === 'list') {
-        renderWordList(true);
+        renderWordList(false);
     }
     if (currentTab === 'stats' && typeof renderStats === 'function') renderStats();
     if (typeof applyLanguageUI === 'function') applyLanguageUI();
@@ -936,7 +937,7 @@ function toggleSelectAllWords(masterCheckbox) {
         }
     });
 
-    renderWordList();
+    renderWordList(false);
 }
 
 function updateBatchBadgeUI() {
