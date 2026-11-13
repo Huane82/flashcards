@@ -240,6 +240,7 @@ const StorageEngine = {
   CHUNK_TARGET_BYTES: 350000, // 每個雲端分片上限約 350 KB（遠低於 Firestore 1MB 限制）
   _cloudSaveTimer: null,
   _retryTimer: null,
+  _retryCount: 0,
   _inFlightLoad: null,
   _isFlushing: false,
   _hasPendingFlush: false,
@@ -605,7 +606,7 @@ const StorageEngine = {
   },
 
   /**
-   * 🔀 合併雲端與本機單字進度（同步套用尚未上傳的刪除紀錄，避免已刪除的單字從雲端復活）
+   * 🔀 合併雲端與本機單字進度（確保尚未同步至雲端的本機單字不會在重新整理後被洗掉）
    */
   async mergeRemoteAndLocalDecks(remoteDecks, localDecks, isLocalDirty) {
     const defaultCatName = getStorageDefaultCatName();
@@ -668,10 +669,15 @@ const StorageEngine = {
       merged.push(remoteCard);
     });
 
-    if (isLocalDirty && Array.isArray(localDecks)) {
+    // 保留所有尚未同步到雲端的本機單字（避免雲端寫入曾失敗時，重整網頁導致本機新匯入的單字消失）
+    if (Array.isArray(localDecks)) {
       localDecks.forEach(localCard => {
         if (!localCard || typeof localCard !== 'object') return;
         const compositeKey = this.buildCardCompositeKey(localCard, defaultCatName);
+
+        if ((localCard.id && deletedSet.has(localCard.id)) || (compositeKey && deletedSet.has(compositeKey))) {
+          return;
+        }
 
         const alreadyExists = (localCard.id && seenIds.has(localCard.id))
           || (compositeKey && seenKeys.has(compositeKey));
@@ -922,16 +928,12 @@ const StorageEngine = {
         const userDocRef = db.collection('users').doc(uid);
         const chunksColRef = userDocRef.collection('deckChunks');
 
-        const basePayload = {
+        const basePayload = deepSanitizeForFirestore({
           apiKey: currentApiKey,
           settings: currentSettings,
-          quizScore: currentQuizScore,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        if (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue) {
-          basePayload.wordList = firebase.firestore.FieldValue.delete();
-        }
+          quizScore: currentQuizScore
+        });
+        basePayload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
 
         const compactBytes = new Blob([JSON.stringify({
           decks: compactDecks,
@@ -1001,26 +1003,32 @@ const StorageEngine = {
         }
 
         if (!this._hasPendingFlush) {
+          this._retryCount = 0;
           localStorage.removeItem(this.LOCAL_DIRTY_KEY);
           await this.saveDeletedKeysSet(new Set());
         }
       } while (this._hasPendingFlush);
     } catch (e) {
-      console.error("雲端同步失敗:", e);
+      console.error("雲端同步失敗:", e && e.code, e && e.message, e);
       const now = Date.now();
-      if (typeof showToast === 'function' && now - this._lastSyncErrorToastAt > 4000) {
+      const isPermErr = e && e.code === 'permission-denied';
+
+      if (typeof showToast === 'function' && now - this._lastSyncErrorToastAt > 5000) {
         this._lastSyncErrorToastAt = now;
-        const isPermErr = e && e.code === 'permission-denied';
         const hint = isPermErr
-          ? '（請在 Firebase Firestore 規則允許讀寫 users/{uid}/deckChunks 子集合）'
+          ? '（Firestore 權限遭拒，目前僅保留於本機瀏覽器）'
           : (e && (e.code || e.message) ? ` (${e.code || e.message})` : '');
         showToast(`⚠️ 雲端同步失敗${hint}`, 'error');
       }
-      if (!this._retryTimer) {
+
+      // 若為權限錯誤（permission-denied），停止無限輪詢重試；僅針對暫時性網路錯誤做有限次數重試
+      if (!isPermErr && this._retryCount < 3 && !this._retryTimer) {
+        this._retryCount++;
+        const delayMs = 5000 * this._retryCount;
         this._retryTimer = setTimeout(() => {
           this._retryTimer = null;
           this.flushCloudSave();
-        }, 3000);
+        }, delayMs);
       }
     } finally {
       this._isFlushing = false;
@@ -1028,6 +1036,10 @@ const StorageEngine = {
   },
 
   async saveData(decks, immediate = false) {
+    // 立即同步標記本機有未同步變更，避免快速重新整理時遺失狀態
+    localStorage.setItem(this.LOCAL_DIRTY_KEY, 'true');
+    this._retryCount = 0;
+
     const defaultCatName = getStorageDefaultCatName();
     const prevLocalDecks = Array.isArray(this._lastKnownDecks)
       ? this._lastKnownDecks
@@ -1043,8 +1055,9 @@ const StorageEngine = {
       wordList.push(...sanitizedDecks);
     }
 
-    // 立即更新記憶體快照，避免連續快速操作時比對誤差
+    // 立即更新記憶體快照，並優先寫入本機 IndexedDB
     this.updateLastKnownDecksSnapshot(sanitizedDecks);
+    await this.setLocalDecks(sanitizedDecks);
 
     const nextIds = new Set();
     const nextKeys = new Set();
@@ -1076,8 +1089,6 @@ const StorageEngine = {
     }
 
     await this.saveDeletedKeysSet(deletedSet);
-    await this.setLocalDecks(sanitizedDecks);
-    localStorage.setItem(this.LOCAL_DIRTY_KEY, 'true');
 
     if (this._cloudSaveTimer) {
       clearTimeout(this._cloudSaveTimer);
