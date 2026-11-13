@@ -17,6 +17,9 @@ let groupInvitesListener = null;
 let chatsListListener = null;
 let announcementsListener = null;
 let presenceStatusListener = null;
+let connectedStateListener = null;
+let onlineCountObserver = null;
+let _isRenderingOnlineCount = false;
 
 let pendingRequestsList = [];
 let pendingGroupInvitesList = [];
@@ -24,6 +27,7 @@ let userChatThreads = [];
 let cloudAnnouncements = [];
 let onlineUsersMap = {}; // 記錄全站線上使用者狀態
 let chatReadByMap = {};   // 記錄當前聊天室各成員最後已讀時間
+let currentChatMessages = []; // 快取當前聊天室訊息，避免已讀狀態變更時重複向 Firebase 下載
 
 // 取得 RTDB 實例
 function getRtdb() {
@@ -126,6 +130,31 @@ function updateUnreadBadgeUI() {
 }
 
 /**
+ * 🟢 寫入目前使用者的線上狀態資料
+ */
+function writeCurrentUserOnlineStatus() {
+    if (isGuestUser()) return;
+    const currentUser = firebase.auth()?.currentUser;
+    const rtdb = getRtdb();
+    if (!rtdb || !currentUser) return;
+
+    const currentUid = currentUser.uid;
+    const userStatusRef = rtdb.ref(`status/${currentUid}`);
+    const resolvedNickname = (window.userData && window.userData.nickname)
+        || currentUser.displayName
+        || (currentUser.email ? currentUser.email.split('@')[0] : '')
+        || (typeof t === 'function' ? t('defaultPlayerName') : '玩家');
+
+    userStatusRef.set({
+        state: 'online',
+        nickname: resolvedNickname,
+        email: currentUser.email || '',
+        hidePrivacy: !!(window.userData && window.userData.privacyHideStatus),
+        last_changed: firebase.database.ServerValue.TIMESTAMP
+    }).catch(() => {});
+}
+
+/**
  * 🟢 1. 在線狀態 Presence 綁定與自動離線偵測
  */
 function initUserPresenceTracker() {
@@ -137,21 +166,19 @@ function initUserPresenceTracker() {
     const userStatusRef = rtdb.ref(`status/${currentUid}`);
     const connectedRef = rtdb.ref('.info/connected');
 
-    connectedRef.on('value', snapshot => {
+    if (connectedStateListener) {
+        connectedRef.off('value', connectedStateListener);
+    }
+
+    connectedStateListener = connectedRef.on('value', snapshot => {
         if (snapshot.val() === false) return;
 
         userStatusRef.onDisconnect().set({
             state: 'offline',
             last_changed: firebase.database.ServerValue.TIMESTAMP
         }).then(() => {
-            userStatusRef.set({
-                state: 'online',
-                nickname: window.userData.nickname || firebase.auth().currentUser.displayName || (typeof t === 'function' ? t('defaultPlayerName') : '玩家'),
-                email: firebase.auth().currentUser.email || '',
-                hidePrivacy: !!(window.userData.privacyHideStatus),
-                last_changed: firebase.database.ServerValue.TIMESTAMP
-            });
-        });
+            writeCurrentUserOnlineStatus();
+        }).catch(() => {});
     });
 }
 
@@ -226,12 +253,27 @@ function initChatRealtimeListeners() {
 }
 
 /**
+ * 🛡️ 保護線上人數標籤不被 i18n 重新渲染時意外覆蓋回 0 人
+ */
+function ensureOnlineCountObserver(onlineCountEl) {
+    if (!onlineCountEl || onlineCountObserver || typeof MutationObserver === 'undefined') return;
+    onlineCountObserver = new MutationObserver(() => {
+        if (!_isRenderingOnlineCount) {
+            renderOnlineStatusUI();
+        }
+    });
+    onlineCountObserver.observe(onlineCountEl, { childList: true, characterData: true, subtree: true });
+}
+
+/**
  * 👁️ 3. 渲染線上人數、線上名單與管理員透視面板 (支援 i18n)
  */
 function renderOnlineStatusUI() {
     const onlineCountEl = document.getElementById('onlineUserCountText');
     const onlineListContainer = document.getElementById('onlineUsersListContainer');
     const adminMonitorContainer = document.getElementById('adminOnlineMonitorList');
+
+    ensureOnlineCountObserver(onlineCountEl);
 
     const isAdmin = window.userData && window.userData.role === 'admin';
     const myPrivacyHide = !isAdmin && !!(window.userData && window.userData.privacyHideStatus);
@@ -241,7 +283,7 @@ function renderOnlineStatusUI() {
 
     Object.keys(onlineUsersMap).forEach(uid => {
         const userStatus = onlineUsersMap[uid];
-        if (userStatus.state === 'online') {
+        if (userStatus && userStatus.state === 'online') {
             allOnlineUsersForAdmin.push({ uid, ...userStatus });
 
             const targetUserIsHidden = !!userStatus.hidePrivacy;
@@ -255,10 +297,21 @@ function renderOnlineStatusUI() {
     });
 
     if (onlineCountEl) {
-        if (myPrivacyHide) {
-            onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-slate-400 rounded-full inline-block"></span> ${typeof t === 'function' ? t('onlineUserHidden') : '線上人數：已隱藏 (隱私模式開啟中)'}`;
-        } else {
-            onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse inline-block"></span> ${typeof t === 'function' ? t('onlineUserCount', { count: visibleOnlineUsers.length }) : `線上人數：${visibleOnlineUsers.length} 人`}`;
+        _isRenderingOnlineCount = true;
+        try {
+            if (myPrivacyHide) {
+                const hiddenText = (typeof t === 'function' && t('onlineUserHidden') !== 'onlineUserHidden')
+                    ? t('onlineUserHidden')
+                    : '線上人數：已隱藏 (隱私模式開啟中)';
+                onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-slate-400 rounded-full inline-block"></span> ${hiddenText}`;
+            } else {
+                const countText = (typeof t === 'function' && t('onlineUserCount', { count: visibleOnlineUsers.length }) !== 'onlineUserCount')
+                    ? t('onlineUserCount', { count: visibleOnlineUsers.length })
+                    : `線上人數：${visibleOnlineUsers.length} 人`;
+                onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse inline-block"></span> ${countText}`;
+            }
+        } finally {
+            _isRenderingOnlineCount = false;
         }
     }
 
@@ -296,6 +349,16 @@ function renderOnlineStatusUI() {
     }
 }
 
+// 手機瀏覽器從背景切回前台時，立即刷新上線狀態與人數
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            writeCurrentUserOnlineStatus();
+            renderOnlineStatusUI();
+        }
+    });
+}
+
 /**
  * ⚙️ 4. 隱私控制：開關顯示線上狀態與已讀
  */
@@ -331,6 +394,8 @@ function openChatDrawer() {
         drawer.classList.remove('hidden');
         if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
         checkAdminPermissions();
+        writeCurrentUserOnlineStatus();
+        renderOnlineStatusUI();
         switchChatTab('chats');
     }
 }
@@ -343,6 +408,7 @@ function closeChatDrawer() {
         activeChatListener = null;
         activeChatReadListener = null;
     }
+    currentChatMessages = [];
     const drawer = document.getElementById('chatDrawer');
     if (drawer) drawer.classList.add('hidden');
 }
@@ -784,9 +850,17 @@ async function renderChatThreads(isAdminInspector = false) {
  * 💬 5. 開啟聊天視窗並記錄自己的最後已讀時間點
  */
 async function openChatWindow(chatId, encodedName = '') {
-    currentActiveChatId = chatId;
-    const currentUid = firebase.auth()?.currentUser?.uid;
     const rtdb = getRtdb();
+    if (activeChatListener && currentActiveChatId && rtdb) {
+        rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
+    }
+    if (activeChatReadListener && currentActiveChatId && rtdb) {
+        rtdb.ref(`chats/${currentActiveChatId}/readBy`).off('value', activeChatReadListener);
+    }
+
+    currentActiveChatId = chatId;
+    currentChatMessages = [];
+    const currentUid = firebase.auth()?.currentUser?.uid;
 
     localStorage.setItem(`lzhcard_last_read_chat_${chatId}`, Date.now().toString());
     updateUnreadBadgeUI();
@@ -808,22 +882,15 @@ async function openChatWindow(chatId, encodedName = '') {
         rtdb.ref(`chats/${chatId}/readBy/${currentUid}`).set(Date.now());
     }
 
-    if (activeChatListener) rtdb.ref(`chats/${currentActiveChatId}/messages`).off('value', activeChatListener);
-    if (activeChatReadListener) rtdb.ref(`chats/${currentActiveChatId}/readBy`).off('value', activeChatReadListener);
-
     activeChatListener = rtdb.ref(`chats/${chatId}/messages`).on('value', snapshot => {
         const data = snapshot.val() || {};
-        const messages = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-        renderMessagesList(messages);
+        currentChatMessages = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        renderMessagesList(currentChatMessages);
     });
 
     activeChatReadListener = rtdb.ref(`chats/${chatId}/readBy`).on('value', snapshot => {
         chatReadByMap = snapshot.val() || {};
-        rtdb.ref(`chats/${chatId}/messages`).once('value', snapshot => {
-            const data = snapshot.val() || {};
-            const messages = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-            renderMessagesList(messages);
-        });
+        renderMessagesList(currentChatMessages);
     });
 }
 
@@ -835,6 +902,7 @@ function backToChatThreads() {
         activeChatListener = null;
         activeChatReadListener = null;
     }
+    currentChatMessages = [];
     document.getElementById('activeChatWindow')?.classList.add('hidden');
     document.getElementById('chatsView')?.classList.remove('hidden');
     
