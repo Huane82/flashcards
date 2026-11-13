@@ -1,5 +1,5 @@
 /**
- * LZHCard - 主程式交互控制器 (FSRS 與自由練習雙軌 + 還原/重置 + i18n 完整版)
+ * LZHCard - 主程式交互控制器 (FSRS 與自由練習雙軌 + 還原/重置 + i18n + 精準字數同步版)
  */
 
 /**
@@ -51,6 +51,37 @@ let currentLoaderProgress = 15;
 // ↩️ 誤按還原堆疊（最多保留最近 10 步評分快照）
 let ratingUndoStack = [];
 const MAX_UNDO_STEPS = 10;
+
+/**
+ * 🆔 確保 wordList 中每一筆單字都擁有唯一且非空的 id（修正匯入/下載字庫全選計數錯誤）
+ */
+function ensureAllWordsHaveUniqueIds() {
+    if (!Array.isArray(wordList)) return false;
+    const seenIds = new Set();
+    let changed = false;
+
+    for (let i = 0; i < wordList.length; i++) {
+        const item = wordList[i];
+        if (!item || typeof item !== 'object') continue;
+        const rawId = item.id !== undefined && item.id !== null ? String(item.id).trim() : '';
+        if (!rawId || seenIds.has(rawId)) {
+            item.id = 'w_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 5);
+            changed = true;
+        }
+        seenIds.add(item.id);
+    }
+
+    // 同步清理已不存在於 wordList 的勾選 ID
+    if (selectedWordIds.size > 0) {
+        for (const id of Array.from(selectedWordIds)) {
+            if (!seenIds.has(id)) {
+                selectedWordIds.delete(id);
+            }
+        }
+    }
+
+    return changed;
+}
 
 function updateUndoButtonUI() {
     const btn = document.getElementById('undoCardBtn') || document.getElementById('undoRatingBtn');
@@ -150,9 +181,8 @@ function getAllCategories() {
     if (!wordList || !Array.isArray(wordList)) return [defaultCatName];
     const categories = new Set();
     wordList.forEach(w => {
-        if (w.category && w.category.trim() !== '') {
-            categories.add(w.category.trim());
-        }
+        const cat = (w && w.category && w.category.trim() !== '') ? w.category.trim() : defaultCatName;
+        categories.add(cat);
     });
     if (categories.size === 0) categories.add(defaultCatName);
     return Array.from(categories);
@@ -183,7 +213,7 @@ function refreshCategoryDropdownWithNew(selectId, inputId) {
 
     let optionsHtml = cats.map(c => {
         const count = (typeof wordList !== 'undefined' && Array.isArray(wordList))
-            ? wordList.filter(w => (w.category || defaultCatName) === c).length
+            ? wordList.filter(w => ((w.category && w.category.trim() !== '') ? w.category.trim() : defaultCatName) === c).length
             : 0;
         return `<option value="${escapeHtml(c)}">${escapeHtml(c)} (${count} ${unitText})</option>`;
     }).join('');
@@ -287,6 +317,7 @@ function updateCategorySelects() {
     const unitDeck = tr('unitDeck', '個字庫');
     const unitText = tr('unitWord', '字');
 
+    const totalWordsCount = Array.isArray(wordList) ? wordList.length : 0;
     const catCountMap = {};
     if (Array.isArray(wordList)) {
         for (let i = 0; i < wordList.length; i++) {
@@ -297,7 +328,7 @@ function updateCategorySelects() {
         }
     }
 
-    let activeCats = window.selectedCategories || ['ALL'];
+    let activeCats = Array.isArray(window.selectedCategories) ? [...window.selectedCategories] : ['ALL'];
 
     const hadAll = activeCats.includes('ALL');
     const prevSubCats = activeCats.filter(c => c !== 'ALL');
@@ -323,12 +354,19 @@ function updateCategorySelects() {
     const btnText = document.getElementById('categoryDropdownBtnText');
 
     const isAllChecked = activeCats.includes('ALL') || (cats.length > 0 && cats.every(c => activeCats.includes(c)));
+    const selectedSubCatsCount = isAllChecked ? cats.length : validSubCats.length;
+
+    const escapeHtml = (str) => String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 
     if (menu) {
         let html = `
             <label class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer font-bold text-slate-800 dark:text-slate-100">
                 <input type="checkbox" value="ALL" ${isAllChecked ? 'checked' : ''} onchange="handleCategoryCheckboxChange(this)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
-                <span>${catAllText} (${wordList.length} ${unitText})</span>
+                <span>${escapeHtml(catAllText)} (${totalWordsCount} ${escapeHtml(unitText)})</span>
             </label>
             <div class="border-t border-slate-100 dark:border-slate-700 my-1"></div>
         `;
@@ -338,8 +376,8 @@ function updateCategorySelects() {
             const isChecked = isAllChecked || activeCats.includes(c);
             html += `
                 <label class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-slate-700 dark:text-slate-200">
-                    <input type="checkbox" value="${c}" ${isChecked ? 'checked' : ''} onchange="handleCategoryCheckboxChange(this)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
-                    <span class="truncate">${c} (${count} ${unitText})</span>
+                    <input type="checkbox" value="${escapeHtml(c)}" ${isChecked ? 'checked' : ''} onchange="handleCategoryCheckboxChange(this)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                    <span class="truncate">${escapeHtml(c)} (${count} ${escapeHtml(unitText)})</span>
                 </label>
             `;
         });
@@ -348,28 +386,30 @@ function updateCategorySelects() {
 
     if (btnText) {
         if (isAllChecked) {
-            btnText.innerText = catAllText;
-        } else if (activeCats.length === 0) {
-            btnText.innerText = noCatText;
-        } else if (activeCats.length === 1) {
-            btnText.innerText = activeCats[0];
+            btnText.innerText = `${catAllText} (${totalWordsCount})`;
+        } else if (selectedSubCatsCount === 0) {
+            btnText.innerText = `${noCatText} (0)`;
+        } else if (selectedSubCatsCount === 1) {
+            const singleCat = validSubCats[0];
+            btnText.innerText = `${singleCat} (${catCountMap[singleCat] || 0})`;
         } else {
-            btnText.innerText = `${selectedPrefix} ${activeCats.length} ${unitDeck}`;
+            const selectedWordsTotal = validSubCats.reduce((sum, c) => sum + (catCountMap[c] || 0), 0);
+            btnText.innerText = `${selectedPrefix} ${selectedSubCatsCount} ${unitDeck} (${selectedWordsTotal})`;
         }
     }
 
     const exportSelect = document.getElementById('exportCategorySelect');
     if (exportSelect) {
         const exportAllText = tr('optExportAll', '包含全部字庫');
-        exportSelect.innerHTML = `<option value="ALL">${exportAllText}</option>` + 
-            cats.map(c => `<option value="${c}">${c}</option>`).join('');
+        exportSelect.innerHTML = `<option value="ALL">${escapeHtml(exportAllText)} (${totalWordsCount})</option>` + 
+            cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} (${catCountMap[c] || 0})</option>`).join('');
     }
 
     const splitSelect = document.getElementById('splitTargetCategorySelect');
     if (splitSelect) {
         splitSelect.innerHTML = cats.map(c => {
             const count = catCountMap[c] || 0;
-            return `<option value="${c}">${c} (${count} ${unitText})</option>`;
+            return `<option value="${escapeHtml(c)}">${escapeHtml(c)} (${count} ${escapeHtml(unitText)})</option>`;
         }).join('');
     }
 }
@@ -377,9 +417,10 @@ function updateCategorySelects() {
 function handleCategoryCheckboxChange(checkbox) {
     const val = checkbox.value;
     const cats = getAllCategories();
-    let activeCats = [...(window.selectedCategories || [])];
+    let activeCats = Array.isArray(window.selectedCategories) ? [...window.selectedCategories] : [];
 
-    let currentSubCats = activeCats.filter(c => c !== 'ALL');
+    const wasAll = activeCats.includes('ALL');
+    let currentSubCats = wasAll ? [...cats] : activeCats.filter(c => c !== 'ALL' && cats.includes(c));
 
     if (val === 'ALL') {
         if (checkbox.checked) {
@@ -476,20 +517,23 @@ function updateStudyQueueUI() {
 }
 
 function updateUI() {
+    ensureAllWordsHaveUniqueIds();
+
     const defaultCatName = tr('defaultCategoryName', '預設字庫');
     const activeCats = window.selectedCategories || [];
     const isAll = activeCats.includes("ALL");
     const activeSet = isAll ? null : new Set(activeCats);
 
     let count = 0;
-    if (typeof getDeduplicatedActiveWords === 'function') {
-        count = getDeduplicatedActiveWords().length;
-    } else if (Array.isArray(wordList)) {
+    if (Array.isArray(wordList)) {
         if (isAll) {
             count = wordList.length;
         } else {
             for (let i = 0; i < wordList.length; i++) {
-                if (activeSet.has(wordList[i].category || defaultCatName)) {
+                const itemCat = (wordList[i].category && wordList[i].category.trim() !== '')
+                    ? wordList[i].category.trim()
+                    : defaultCatName;
+                if (activeSet.has(itemCat)) {
                     count++;
                 }
             }
@@ -497,7 +541,7 @@ function updateUI() {
     }
 
     const totalWordCountElem = document.getElementById('totalWordCount');
-    if (totalWordCountElem) totalWordCountElem.innerText = wordList.length;
+    if (totalWordCountElem) totalWordCountElem.innerText = Array.isArray(wordList) ? wordList.length : 0;
 
     const cardCountDisplayElem = document.getElementById('cardCountDisplay');
     if (cardCountDisplayElem) cardCountDisplayElem.innerText = count;
@@ -512,6 +556,8 @@ function updateUI() {
 
     if (currentTab === 'list') {
         renderWordList(false);
+    } else {
+        updateBatchBadgeUI();
     }
     if (currentTab === 'stats' && typeof renderStats === 'function') renderStats();
 }
@@ -536,7 +582,10 @@ function updateEmptyNoticeState(precomputedCount) {
             isEmpty = false;
         } else {
             const activeSet = new Set(activeCats);
-            isEmpty = !wordList.some(w => activeSet.has(w.category || defaultCatName));
+            isEmpty = !wordList.some(w => {
+                const itemCat = (w.category && w.category.trim() !== '') ? w.category.trim() : defaultCatName;
+                return activeSet.has(itemCat);
+            });
         }
     }
 
@@ -559,7 +608,8 @@ function isFreePracticeActive() {
         : wordList.filter(w => {
             const activeCats = window.selectedCategories || ['ALL'];
             const defaultCatName = tr('defaultCategoryName', '預設字庫');
-            return activeCats.includes('ALL') || activeCats.includes(w.category || defaultCatName);
+            const itemCat = (w.category && w.category.trim() !== '') ? w.category.trim() : defaultCatName;
+            return activeCats.includes('ALL') || activeCats.includes(itemCat);
         });
 
     if (activePool.length === 0) return false;
@@ -584,7 +634,8 @@ function nextCard(force = false) {
         const targetWord = (currentCard.word || '').trim().toLowerCase();
         const matching = wordList.filter(w => {
             const matchWord = (w.word || '').trim().toLowerCase() === targetWord;
-            const matchCat = activeCats.includes("ALL") || activeCats.includes(w.category || defaultCatName);
+            const itemCat = (w.category && w.category.trim() !== '') ? w.category.trim() : defaultCatName;
+            const matchCat = activeCats.includes("ALL") || activeCats.includes(itemCat);
             return matchWord && matchCat;
         });
 
@@ -1194,6 +1245,7 @@ function ensureFreeLevelSortOptions() {
     const sortSelect = document.getElementById('sortSelect');
     if (!sortSelect) return;
 
+    const prevSortVal = sortSelect.value;
     let group = document.getElementById('sortGroupFreeLevel');
     if (!group) {
         group = document.createElement('optgroup');
@@ -1211,6 +1263,7 @@ function ensureFreeLevelSortOptions() {
         <option value="only_free_level_4">${tr('optOnlyFreeLv4', '僅顯示：臨時 Lv.4')}</option>
         <option value="only_free_level_5">${tr('optOnlyFreeLv5', '僅顯示：臨時 Lv.5')}</option>
     `;
+    if (prevSortVal) sortSelect.value = prevSortVal;
 }
 
 /**
@@ -1254,7 +1307,7 @@ function getFilteredWords() {
             (item.category && item.category.toLowerCase().includes(search)) ||
             (item.pos && item.pos.toLowerCase().includes(search));
             
-        const itemCat = item.category || defaultCatName;
+        const itemCat = (item.category && item.category.trim() !== '') ? item.category.trim() : defaultCatName;
         let matchesCategory = activeCats.includes("ALL") || activeCats.includes(itemCat);
 
         if (sortBy === 'only_missing_meaning' && !isMissing(item, 'meaning')) return false;
@@ -1352,6 +1405,7 @@ function loadMoreWordList() {
 }
 
 function renderWordList(resetLimit = true) {
+    ensureAllWordsHaveUniqueIds();
     ensureFreeLevelSortOptions();
     ensureBatchFreeResetButton();
 
@@ -1401,7 +1455,7 @@ function renderWordList(resetLimit = true) {
 
             const isChecked = selectedWordIds.has(item.id) ? 'checked' : '';
             const safeId = escapeHtml(item.id);
-            const catText = escapeHtml(item.category || defaultCatName);
+            const catText = escapeHtml((item.category && item.category.trim() !== '') ? item.category.trim() : defaultCatName);
             const stabilityDays = typeof item.stability === 'number' ? Math.round(item.stability * 10) / 10 : 0;
             const lapsesCount = item.lapses || 0;
             const lvTitle = tr('wordDualStabilityTooltip', 'FSRS 穩定度: {days} 天 | 遺忘: {lapses} 次 | 自由練習: {freeLv}', {
@@ -1466,7 +1520,7 @@ function renderWordList(resetLimit = true) {
         tbody.innerHTML = rowsHtml;
     }
 
-    updateBatchBadgeUI();
+    updateBatchBadgeUI(filtered);
 }
 
 function toggleSelectWord(id, isChecked) {
@@ -1479,34 +1533,49 @@ function toggleSelectWord(id, isChecked) {
 }
 
 function toggleSelectAllWords(masterCheckbox) {
+    ensureAllWordsHaveUniqueIds();
     const isChecked = masterCheckbox.checked;
     const filtered = getFilteredWords();
 
-    filtered.forEach(item => {
-        if (isChecked) {
-            selectedWordIds.add(item.id);
-        } else {
-            selectedWordIds.delete(item.id);
+    if (isChecked) {
+        filtered.forEach(item => {
+            if (item && item.id) selectedWordIds.add(item.id);
+        });
+    } else {
+        const filteredIdSet = new Set(filtered.map(item => item.id));
+        for (const id of Array.from(selectedWordIds)) {
+            if (filteredIdSet.has(id)) {
+                selectedWordIds.delete(id);
+            }
         }
-    });
+    }
 
     renderWordList(false);
 }
 
-function updateBatchBadgeUI() {
+function updateBatchBadgeUI(precomputedFiltered = null) {
+    ensureAllWordsHaveUniqueIds();
     const badge = document.getElementById('selectedCountBadge');
     const masterCheckbox = document.getElementById('selectAllCheckbox');
-    const filtered = getFilteredWords();
+    const filtered = Array.isArray(precomputedFiltered) ? precomputedFiltered : getFilteredWords();
+
+    let selectedInFilteredCount = 0;
+    for (let i = 0; i < filtered.length; i++) {
+        if (selectedWordIds.has(filtered[i].id)) {
+            selectedInFilteredCount++;
+        }
+    }
 
     if (masterCheckbox) {
-        const isAllSelected = filtered.length > 0 && filtered.every(item => selectedWordIds.has(item.id));
+        const isAllSelected = filtered.length > 0 && selectedInFilteredCount === filtered.length;
         masterCheckbox.checked = isAllSelected;
+        masterCheckbox.indeterminate = selectedInFilteredCount > 0 && selectedInFilteredCount < filtered.length;
     }
 
     if (!badge) return;
     if (selectedWordIds.size > 0) {
         const unitItem = tr('unitItem', '筆');
-        badge.innerText = `${selectedWordIds.size} ${unitItem}`;
+        badge.innerText = `${selectedWordIds.size} / ${filtered.length} ${unitItem}`;
         badge.classList.remove('hidden');
     } else {
         badge.classList.add('hidden');
@@ -1565,7 +1634,7 @@ function editCard(id) {
     if (!item) return;
 
     const defaultCatName = tr('defaultCategoryName', '預設字庫');
-    const targetCat = item.category || defaultCatName;
+    const targetCat = (item.category && item.category.trim() !== '') ? item.category.trim() : defaultCatName;
 
     ensureFreeLevelFormField();
 
@@ -1596,7 +1665,7 @@ function deleteCard(id) {
     if (confirm(tr('confirmDeleteSingle', '確定要刪除此單字？'))) {
         wordList = wordList.filter(w => w.id !== id);
         selectedWordIds.delete(id);
-        saveStorage();
+        saveStorage(true);
         updateCategorySelects();
         updateUI();
         if (currentCard && currentCard.id === id) nextCard(true);
@@ -1609,7 +1678,7 @@ function handleClearAllWords() {
         wordList = [];
         selectedWordIds.clear();
         ratingUndoStack = [];
-        saveStorage();
+        saveStorage(true);
         updateCategorySelects();
         updateUI();
         nextCard(true);
@@ -1697,7 +1766,7 @@ function handleSaveCardForm(e) {
     } else {
         const normWord = cleanObj.word.trim().toLowerCase();
         const sameDeckIdx = wordList.findIndex(w =>
-            (w.category || defaultCategoryName).trim() === category.trim() &&
+            ((w.category && w.category.trim() !== '') ? w.category.trim() : defaultCategoryName) === category.trim() &&
             (w.word || '').trim().toLowerCase() === normWord
         );
 
