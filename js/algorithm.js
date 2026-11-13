@@ -590,3 +590,11 @@ function startFreePracticeMode() {
 function getNextCardNoRepeat() {
     return getNextCardSpacedRepetition();
 }
+
+/**
+ * 🔄 清空 FSRS 短期焦點池與抽卡歷史紀錄
+ */
+function resetFSRSMemoryPools() {
+    activeNewFocusPool = [];
+    recentHistoryIds = [];
+}

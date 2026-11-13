@@ -58,13 +58,19 @@
 
         if (rawFiltered.length === 0) return null;
 
-        // 2️⃣ 依單字名稱去重
+        // 2️⃣ 依單字名稱去重（若同字多筆則保留臨時等級較高者）
         const uniqueMap = new Map();
         rawFiltered.forEach(w => {
             if (!w || !w.word) return;
             const key = w.word.trim().toLowerCase();
             if (!uniqueMap.has(key)) {
                 uniqueMap.set(key, w);
+            } else {
+                const existing = uniqueMap.get(key);
+                if ((w.freeLevel || 1) > (existing.freeLevel || 1) ||
+                    ((w.freeLevel || 1) === (existing.freeLevel || 1) && (w.freeStreak || 0) > (existing.freeStreak || 0))) {
+                    uniqueMap.set(key, w);
+                }
             }
         });
         const filteredList = Array.from(uniqueMap.values());
@@ -276,6 +282,17 @@
                 card.freeLevel = Math.min(5, card.freeLevel + 2);
                 card.freeStreak = 0;
                 break;
+        }
+
+        // 同步跨字庫重複單字的自由練習臨時進度
+        if (typeof wordList !== 'undefined' && Array.isArray(wordList) && card.word) {
+            const targetKey = card.word.trim().toLowerCase();
+            wordList.forEach(w => {
+                if (w !== card && (w.word || '').trim().toLowerCase() === targetKey) {
+                    w.freeLevel = card.freeLevel;
+                    w.freeStreak = card.freeStreak;
+                }
+            });
         }
     }
 

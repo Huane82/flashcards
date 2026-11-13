@@ -1,6 +1,17 @@
 let wordList = [];
 
 /**
+ * 🌐 取得預設字庫名稱（相容 i18n）
+ */
+function getStorageDefaultCatName() {
+  if (typeof t === 'function') {
+    const val = t('defaultCategoryName');
+    if (val && val !== 'defaultCategoryName') return val;
+  }
+  return '預設字庫';
+}
+
+/**
  * 🏆 比較兩張單字卡的學習進度（回傳 > 0 代表 a 進度高於 b）
  */
 function compareCardProgress(a, b) {
@@ -67,7 +78,7 @@ function deduplicateWordsByHighestProgress(cards) {
 }
 
 /**
- * 🔄 跨字庫進度同步（同步更新其他字庫中的同名單字）
+ * 🔄 跨字庫進度同步（同步更新其他字庫中的同名單字，含 FSRS 與自由加練進度）
  */
 function syncDuplicateWordsProgress(sourceCard, decks = wordList) {
   if (!sourceCard || !Array.isArray(decks)) return 0;
@@ -88,6 +99,8 @@ function syncDuplicateWordsProgress(sourceCard, decks = wordList) {
       target.knowStreak = sourceCard.knowStreak || 0;
       target.lastReview = sourceCard.lastReview;
       target.nextReview = sourceCard.nextReview;
+      target.freeLevel = typeof sourceCard.freeLevel === 'number' ? sourceCard.freeLevel : 1;
+      target.freeStreak = typeof sourceCard.freeStreak === 'number' ? sourceCard.freeStreak : 0;
       target.updatedAt = sourceCard.updatedAt || Date.now();
       syncedCount++;
     }
@@ -101,8 +114,8 @@ const StorageEngine = {
   _cloudSaveTimer: null,
 
   getCurrentUid() {
-    return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) 
-      ? firebase.auth().currentUser.uid 
+    return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)
+      ? firebase.auth().currentUser.uid
       : null;
   },
 
@@ -111,7 +124,7 @@ const StorageEngine = {
    */
   deduplicateSameDeckWords(decks) {
     if (!Array.isArray(decks) || decks.length === 0) return false;
-    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+    const defaultCatName = getStorageDefaultCatName();
     const seen = new Map();
     const deduped = [];
     let removed = false;
@@ -182,6 +195,9 @@ const StorageEngine = {
         migrateCardFSRS(card);
       }
 
+      if (typeof card.freeLevel !== 'number') card.freeLevel = 1;
+      if (typeof card.freeStreak !== 'number') card.freeStreak = 0;
+
       if (neededMigration) {
         hasMigrated = true;
       }
@@ -197,6 +213,9 @@ const StorageEngine = {
       if (typeof migrateCardFSRS === 'function') {
         migrateCardFSRS(card);
       }
+      if (typeof card.freeLevel !== 'number') card.freeLevel = 1;
+      if (typeof card.freeStreak !== 'number') card.freeStreak = 0;
+
       const clean = {};
       Object.keys(card).forEach(k => {
         if (card[k] !== undefined) {
@@ -248,7 +267,7 @@ const StorageEngine = {
 
   async loadData() {
     const uid = this.getCurrentUid();
-    
+
     if (uid && typeof db !== 'undefined') {
       try {
         const docRef = db.collection('users').doc(uid);
@@ -316,7 +335,7 @@ const StorageEngine = {
         }
       }
     }
-    
+
     const localData = localStorage.getItem(this.LOCAL_DECKS_KEY);
     wordList = localData ? JSON.parse(localData) : [];
     const migratedLocal = this.migrateAllCardsFSRS(wordList);

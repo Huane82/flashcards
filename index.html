@@ -15,7 +15,7 @@
     
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LZHCard 單字卡大師 (v8.26.11.11)</title>
+    <title>LZHCard 單字卡大師 (v9.26.11.12)</title>
     
     <!-- 電腦分頁圖示 (Favicon) 設定 -->
     <link rel="icon" type="image/png" href="images/logo.png">
@@ -43,7 +43,7 @@
     <div id="appLoadingOverlay" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 transition-opacity duration-300 px-6">
         <div class="w-12 h-12 border-4 border-brand-200 dark:border-slate-700 border-t-brand-600 dark:border-t-brand-400 rounded-full animate-spin mb-4"></div>
         <p class="text-base font-extrabold text-slate-800 dark:text-slate-100 tracking-wide">LZHCard</p>
-        <p id="appLoaderStatusText" class="text-xs text-slate-400 dark:text-slate-500 mt-1">資料同步與初始化中，請稍候...</p>
+        <p id="appLoaderStatusText" data-i18n="appLoaderStatus" class="text-xs text-slate-400 dark:text-slate-500 mt-1">資料同步與初始化中，請稍候...</p>
 
         <!-- 進度條 -->
         <div class="w-full max-w-xs mt-4 space-y-1.5">
@@ -55,8 +55,6 @@
             </div>
         </div>
     </div>
-
-
 
     <!-- 🔒 未登入 / 條款同意歡迎 Modal (z-[60] 蓋過所有元件) -->
     <div id="welcomeModal" class="hidden fixed inset-0 z-[60] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -118,7 +116,7 @@
 
                 <!-- 🔒 訪客功能限制警示標籤 -->
                 <p class="text-[11px] text-amber-600 dark:text-amber-400 text-center font-bold pt-1">
-                    <i class="fa-solid fa-lock mr-1"></i>注意：訪客模式將封鎖「聊天室」與「商店下載/發布」功能
+                    <i class="fa-solid fa-lock mr-1"></i><span data-i18n="welcomeGuestWarning">注意：訪客模式將封鎖「聊天室」與「商店下載/發布」功能</span>
                 </p>
             </div>
 
@@ -282,7 +280,7 @@
                 <div class="min-w-0">
                     <h1 class="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white leading-tight truncate">LZHCard</h1>
                     <div class="flex items-center space-x-1.5 min-w-0">
-                        <span class="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300 border border-brand-100 dark:border-brand-800 flex-shrink-0">v8.26.11.11</span>
+                        <span class="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-300 border border-brand-100 dark:border-brand-800 flex-shrink-0">v9.26.11.13</span>
                         <span class="text-[11px] text-slate-400 truncate hidden xs:inline" data-i18n="appSubtitle">小考背單字神器</span>
                     </div>
                 </div>
@@ -341,7 +339,7 @@
                             <div class="w-12 h-12 rounded-xl bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-300 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">
                                 <i class="fa-solid fa-clone"></i>
                             </div>
-                            <span id="homeFsrsDueBadge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+                            <span id="homeFsrsDueBadge" data-i18n="fsrsScheduleReady" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
                                 FSRS 排程就緒
                             </span>
                         </div>
@@ -357,7 +355,7 @@
                         </div>
                         <button type="button" onclick="event.stopPropagation(); startFreePracticeMode();" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold transition flex items-center space-x-1">
                             <i class="fa-solid fa-dumbbell"></i>
-                            <span>自由加練</span>
+                            <span data-i18n="btnFreePractice">自由加練</span>
                         </button>
                     </div>
                     <i class="fa-solid fa-layer-group absolute -right-4 -bottom-4 text-8xl text-slate-100 dark:text-slate-700/30 group-hover:text-brand-100/50 dark:group-hover:text-brand-900/20 transition-colors"></i>
@@ -396,10 +394,15 @@
                         <i class="fa-solid fa-bolt"></i>
                         <span data-i18n="btnQuickAdd">快速填入</span>
                     </button>
+                    <!-- ↩️ 還原上一張按鈕 -->
+                    <button type="button" id="undoCardBtn" onclick="if(typeof handleUndoLastCard==='function') handleUndoLastCard();" data-i18n-title="tipUndoCard" title="還原上一張評分" class="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold flex items-center space-x-1 transition border border-amber-200 dark:border-amber-800">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span data-i18n="btnUndoCard">還原</span>
+                    </button>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button type="button" id="fsrsSessionBadge" onclick="toggleFreePracticeMode()" title="點擊切換排程 / 自由加練模式" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-50 hover:bg-brand-100 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition cursor-pointer">
-                        FSRS 排程
+                    <button type="button" id="fsrsSessionBadge" onclick="toggleFreePracticeMode()" data-i18n-title="tipToggleFreePractice" title="點擊切換排程 / 自由加練模式" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-50 hover:bg-brand-100 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition cursor-pointer">
+                        <span data-i18n="fsrsScheduleBadge">FSRS 排程</span>
                     </button>
                     <div><span data-i18n="stockCount">當前庫存:</span> <span id="cardCountDisplay" class="font-bold text-slate-700 dark:text-slate-200">0</span></div>
                 </div>
@@ -415,7 +418,7 @@
                                 <span id="cardLevelFront" class="px-2.5 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800">Lv.1</span>
                                 <span id="cardFsrsMetaFront" class="text-[11px] font-semibold text-slate-400 dark:text-slate-400"></span>
                             </div>
-                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀" class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center justify-center transition shrink-0">
+                            <button type="button" onclick="event.stopPropagation(); speakWord();" data-i18n-title="tipSpeakWord" title="朗讀" class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 flex items-center justify-center transition shrink-0">
                                 <i class="fa-solid fa-volume-high"></i>
                             </button>
                         </div>
@@ -436,7 +439,7 @@
                                 <span id="cardLevelBack" class="px-2.5 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200">Lv.1</span>
                                 <span id="cardFsrsMetaBack" class="text-[11px] font-semibold text-slate-400"></span>
                             </div>
-                            <button type="button" onclick="event.stopPropagation(); speakWord();" title="朗讀" class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition shrink-0">
+                            <button type="button" onclick="event.stopPropagation(); speakWord();" data-i18n-title="tipSpeakWord" title="朗讀" class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition shrink-0">
                                 <i class="fa-solid fa-volume-high"></i>
                             </button>
                         </div>
@@ -460,7 +463,7 @@
                         <i class="fa-solid fa-xmark"></i>
                         <span data-i18n="btnDontKnow">不熟悉</span>
                     </span>
-                    <span id="fsrsPreview1" class="text-[10px] font-normal text-rose-100 mt-0.5">10 分鐘後</span>
+                    <span id="fsrsPreview1" data-i18n="fsrsInterval10m" class="text-[10px] font-normal text-rose-100 mt-0.5">10 分鐘後</span>
                 </button>
 
                 <button type="button" onclick="handleHard(event)" class="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold shadow-md transition flex flex-col items-center justify-center cursor-pointer">
@@ -468,7 +471,7 @@
                         <i class="fa-solid fa-circle-question"></i>
                         <span data-i18n="btnHard">模糊</span>
                     </span>
-                    <span id="fsrsPreview2" class="text-[10px] font-normal text-amber-100 mt-0.5">10 分鐘後</span>
+                    <span id="fsrsPreview2" data-i18n="fsrsInterval10m" class="text-[10px] font-normal text-amber-100 mt-0.5">10 分鐘後</span>
                 </button>
 
                 <button type="button" onclick="handleKnow(event)" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold shadow-md transition flex flex-col items-center justify-center cursor-pointer">
@@ -477,7 +480,7 @@
                         <span data-i18n="btnKnow">已掌握</span>
                         <span id="knowStreakText" class="hidden">0/2</span>
                     </span>
-                    <span id="fsrsPreview3" class="text-[10px] font-normal text-emerald-100 mt-0.5">10 分鐘後</span>
+                    <span id="fsrsPreview3" data-i18n="fsrsInterval10m" class="text-[10px] font-normal text-emerald-100 mt-0.5">10 分鐘後</span>
                 </button>
 
                 <button type="button" onclick="handleEasy(event)" class="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-bold shadow-md transition flex flex-col items-center justify-center cursor-pointer">
@@ -485,7 +488,7 @@
                         <i class="fa-solid fa-bolt"></i>
                         <span data-i18n="btnEasy">秒答</span>
                     </span>
-                    <span id="fsrsPreview4" class="text-[10px] font-normal text-sky-100 mt-0.5">4 天後</span>
+                    <span id="fsrsPreview4" data-i18n="fsrsInterval4d" class="text-[10px] font-normal text-sky-100 mt-0.5">4 天後</span>
                 </button>
             </div>
         </section>
@@ -574,7 +577,7 @@
                     
                     <div class="flex items-center space-x-2">
                         <select id="sortSelect" onchange="renderWordList()" class="min-w-0 flex-1 sm:flex-initial px-2.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 outline-none cursor-pointer">
-                            <optgroup label="↕️ 常用排序">
+                            <optgroup label="↕️ 常用排序" data-i18n-label="optGroupSortCommon">
                                 <option value="default" data-i18n="sortDefault">預設排序</option>
                                 <option value="alpha-asc" data-i18n="sortAlphaAsc">字母 (A ➔ Z)</option>
                                 <option value="alpha-desc" data-i18n="sortAlphaDesc">字母 (Z ➔ A)</option>
@@ -582,17 +585,24 @@
                                 <option value="level-asc" data-i18n="sortLevelAsc">等級 (Lv.1 ➔ 5)</option>
                                 <option value="level-desc" data-i18n="sortLevelDesc">等級 (Lv.5 ➔ 1)</option>
                             </optgroup>
-                            <optgroup label="⚠️ 按缺失資料排序 (優先顯示)">
-                                <option value="missing_meaning_first">缺少釋義優先</option>
-                                <option value="missing_sentence_first">缺少例句優先</option>
-                                <option value="missing_pos_first">缺少詞性優先</option>
-                                <option value="missing_phonetic_first">缺少音標優先</option>
+                            <optgroup label="⚠️ 按缺失資料排序 (優先顯示)" data-i18n-label="optGroupSortMissing">
+                                <option value="missing_meaning_first" data-i18n="sortMissingMeaning">缺少釋義優先</option>
+                                <option value="missing_sentence_first" data-i18n="sortMissingSentence">缺少例句優先</option>
+                                <option value="missing_pos_first" data-i18n="sortMissingPos">缺少詞性優先</option>
+                                <option value="missing_phonetic_first" data-i18n="sortMissingPhonetic">缺少音標優先</option>
                             </optgroup>
-                            <optgroup label="🔍 僅篩選資料缺失單字">
-                                <option value="only_missing_meaning">僅顯示「缺少釋義」</option>
-                                <option value="only_missing_sentence">僅顯示「缺少例句」</option>
-                                <option value="only_missing_pos">僅顯示「缺少詞性」</option>
-                                <option value="only_missing_phonetic">僅顯示「缺少音標」</option>
+                            <optgroup label="🔍 僅篩選資料缺失單字" data-i18n-label="optGroupFilterMissing">
+                                <option value="only_missing_meaning" data-i18n="optOnlyMissingMeaning">僅顯示「缺少釋義」</option>
+                                <option value="only_missing_sentence" data-i18n="optOnlyMissingSentence">僅顯示「缺少例句」</option>
+                                <option value="only_missing_pos" data-i18n="optOnlyMissingPos">僅顯示「缺少詞性」</option>
+                                <option value="only_missing_phonetic" data-i18n="optOnlyMissingPhonetic">僅顯示「缺少音標」</option>
+                            </optgroup>
+                            <optgroup label="🎯 僅篩選記憶等級 (Lv.1 ~ 5)" data-i18n-label="optGroupFilterLevel">
+                                <option value="only_level_1" data-i18n="optOnlyLevel1">僅顯示 Lv.1</option>
+                                <option value="only_level_2" data-i18n="optOnlyLevel2">僅顯示 Lv.2</option>
+                                <option value="only_level_3" data-i18n="optOnlyLevel3">僅顯示 Lv.3</option>
+                                <option value="only_level_4" data-i18n="optOnlyLevel4">僅顯示 Lv.4</option>
+                                <option value="only_level_5" data-i18n="optOnlyLevel5">僅顯示 Lv.5</option>
                             </optgroup>
                         </select>
 
@@ -606,16 +616,17 @@
                 </div>
 
                 <!-- 批量操作列 -->
-                <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700 text-xs">
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs">
                     <div class="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
                         <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAllWords(this)" class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
                         <label for="selectAllCheckbox" class="font-bold cursor-pointer" data-i18n="lblSelectAll">全選</label>
                         <span id="selectedCountBadge" class="hidden px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 font-bold text-[11px]">0 筆</span>
                     </div>
-                    <!-- 🏷️ 重命名字庫按鈕 (支援多語系) -->
-                    <div class="flex items-center space-x-1.5">
+                    <!-- 🏷️ 批次管理按鈕列 (含重命名 / 移動 / 還原進度 / AI 補齊 / 刪除) -->
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
                         <button type="button" onclick="handleRenameCategory()" class="px-2.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold rounded-lg transition" data-i18n="btnRenameDeck">重命名字庫</button>
                         <button type="button" onclick="handleBatchChangeCategory()" class="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold rounded-lg transition" data-i18n="btnBatchMove">移動字庫</button>
+                        <button type="button" onclick="if(typeof handleBatchResetProgress==='function') handleBatchResetProgress();" class="px-2.5 py-1.5 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-bold rounded-lg transition" data-i18n="btnBatchReset">還原進度</button>
                         <button type="button" onclick="handleBatchAiFillLibraryWords()" class="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition shadow-xs" data-i18n="btnBatchAi">✨ AI 補齊</button>
                         <button type="button" onclick="handleBatchDeleteWords()" class="px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-lg transition" data-i18n="btnBatchDelete">刪除</button>
                     </div>
@@ -655,7 +666,6 @@
                 </div>
             </div>
         </section>
-
 
         <!-- 📊 學習統計與成果區域 -->
         <section id="sec-stats" class="hidden space-y-6 pb-20 max-w-4xl mx-auto">
@@ -927,20 +937,20 @@
                 <input type="hidden" id="editCardId">
 
                 <div>
-                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormCategory">歸屬字庫/分類名稱</label>
- <select id="formCategorySelect" onchange="handleCategorySelectWithNew('form')" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none text-sm font-semibold cursor-pointer">
- </select>
- <input type="text" id="formCategory" data-i18n-placeholder="phFormCategory" placeholder="請輸入新字庫名稱..." class="hidden w-full px-3.5 py-2 rounded-lg border border-brand-400 dark:border-brand-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none text-sm font-semibold">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormCategory">歸屬字庫/分類名稱</label>
+                    <select id="formCategorySelect" onchange="handleCategorySelectWithNew('form')" class="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none text-sm font-semibold cursor-pointer">
+                    </select>
+                    <input type="text" id="formCategory" data-i18n-placeholder="phFormCategory" placeholder="請輸入新字庫名稱..." class="hidden w-full px-3.5 py-2 rounded-lg border border-brand-400 dark:border-brand-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none text-sm font-semibold">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblFormLevel">記憶穩定度等級 (Level 1~5)</label>
                     <select id="formLevel" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-brand-500 font-semibold transition">
-                        <option value="1">Lv.1 - 新單字 / 短期重學</option>
-                        <option value="2">Lv.2 - 初步印象 (穩定 1~3 天)</option>
-                        <option value="3">Lv.3 - 中等鞏固 (穩定 3~8 天)</option>
-                        <option value="4">Lv.4 - 高度熟練 (穩定 8~21 天)</option>
-                        <option value="5">Lv.5 - 長期記憶 (穩定 21 天+)</option>
+                        <option value="1" data-i18n="optLevel1">Lv.1 - 新單字 / 短期重學</option>
+                        <option value="2" data-i18n="optLevel2">Lv.2 - 初步印象 (穩定 1~3 天)</option>
+                        <option value="3" data-i18n="optLevel3">Lv.3 - 中等鞏固 (穩定 3~8 天)</option>
+                        <option value="4" data-i18n="optLevel4">Lv.4 - 高度熟練 (穩定 8~21 天)</option>
+                        <option value="5" data-i18n="optLevel5">Lv.5 - 長期記憶 (穩定 21 天+)</option>
                     </select>
                 </div>
 
@@ -1020,7 +1030,7 @@
                 </div>
 
                 <div>
-                   <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblBatchCategory">匯入至此字庫名稱：</label>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblBatchCategory">匯入至此字庫名稱：</label>
                     <select id="batchTargetCategorySelect" onchange="handleCategorySelectWithNew('batch')" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none font-semibold cursor-pointer">
                     </select>
                     <input type="text" id="batchTargetCategory" data-i18n-placeholder="phBatchCategory" placeholder="請輸入新字庫名稱..." class="hidden w-full px-3 py-2 text-xs rounded-lg border border-brand-400 dark:border-brand-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none font-semibold">
@@ -1136,7 +1146,7 @@
         </div>
     </div>
 
-        <!-- 彈窗 4: 字庫 JSON 備份與還原 Modal -->
+    <!-- 彈窗 4: 字庫 JSON 備份與還原 Modal -->
     <div id="backupModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-100 dark:border-slate-700">
             <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
@@ -1153,7 +1163,7 @@
                 <div class="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2.5">
                     <h4 class="text-xs font-bold" data-i18n="lblExport">選擇匯出的字庫 (Export)</h4>
                     <select id="exportCategorySelect" class="w-full px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none">
-                        <option value="ALL">包含全部字庫</option>
+                        <option value="ALL" data-i18n="optExportAll">包含全部字庫</option>
                     </select>
                     <button type="button" onclick="exportJSON()" class="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition">
                         <i class="fa-solid fa-download mr-1"></i><span data-i18n="btnDownloadBackup">下載 JSON 備份檔</span>
@@ -1227,7 +1237,7 @@
 
             <!-- 指定/選擇儲存字庫欄位 -->
             <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">儲存至字庫：</label>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" data-i18n="lblQuickAddCategory">儲存至字庫：</label>
                 <select id="quickAddCategorySelect" onchange="handleCategorySelectWithNew('quickAdd')" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold cursor-pointer">
                 </select>
                 <input type="text" id="quickAddCategoryInput" data-i18n-placeholder="phFormCategory" placeholder="請輸入新字庫名稱..." class="hidden w-full px-3 py-2 text-xs rounded-lg border border-brand-400 dark:border-brand-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 outline-none font-semibold">
@@ -1275,7 +1285,7 @@
 
                 <div class="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-center text-xs">
                     <span class="font-bold text-slate-500" data-i18n="lblPubAuthor">發布者暱稱 (已鎖定帳號)：</span>
-                    <span id="pubAuthorDisplay" class="font-extrabold text-brand-600 dark:text-brand-400">載入中...</span>
+                    <span id="pubAuthorDisplay" data-i18n="loadingText" class="font-extrabold text-brand-600 dark:text-brand-400">載入中...</span>
                 </div>
 
                 <div>
@@ -1352,7 +1362,7 @@
                 <div class="p-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center justify-between mb-2">
                         <!-- 線上人數統計標籤 -->
-                        <span id="onlineUserCountText" class="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <span id="onlineUserCountText" data-i18n="onlineUserCountInit" class="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                             <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                             線上人數：0 人
                         </span>
@@ -1365,7 +1375,7 @@
 
                     <!-- 👑 管理員專用透視監控面板 (預設隱藏) -->
                     <div id="adminOnlineMonitorPanel" class="hidden mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                        <div class="text-[10px] font-bold text-rose-500 dark:text-rose-400 mb-1">👑 管理員全站線上監控面板</div>
+                        <div class="text-[10px] font-bold text-rose-500 dark:text-rose-400 mb-1" data-i18n="adminOnlineMonitorTitle">👑 管理員全站線上監控面板</div>
                         <div id="adminOnlineMonitorList" class="max-h-32 overflow-y-auto space-y-1"></div>
                     </div>
                 </div>
@@ -1473,21 +1483,21 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     
     <!-- 正確腳本載入順序 (algorithm.js 優先於 storage.js 以確保 FSRS 遷移可用) -->
-        <script src="js/firebase.js"></script>
-        <script src="js/algorithm.js"></script>
-        <script src="js/algorithm_2.js"></script> 
-        <script src="js/storage.js"></script>
-        <script src="js/i18n.js"></script>
-        <script src="js/ai.js"></script>
-        <script src="js/quiz.js"></script>
-        <script src="js/chat.js"></script>
-        <script src="js/store.js"></script>
-        <script src="js/stats.js"></script>
-        <script src="js/batch.js"></script>
-        <script src="js/settings.js"></script>
-        <script src="js/app.js"></script>
-        <script src="js/onboarding.js"></script>
-        <script src="js/ui-sync.js"></script>
+    <script src="js/firebase.js"></script>
+    <script src="js/algorithm.js"></script>
+    <script src="js/algorithm_2.js"></script> 
+    <script src="js/storage.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/quiz.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/stats.js"></script>
+    <script src="js/batch.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/onboarding.js"></script>
+    <script src="js/ui-sync.js"></script>
 
 </body>
 </html>

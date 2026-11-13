@@ -9,6 +9,7 @@ let quizScoreCorrect = 0;
 let quizScoreTotal = 0;
 let lastQuizWordKey = null;
 let isQuizAnswerLocked = false;
+let quizAutoNextTimer = null;
 
 /**
  * 🌐 切換測驗語言 (英文 / 中文 / 日文)
@@ -50,9 +51,6 @@ function setQuizMode(mode) {
     nextQuizQuestion();
 }
 
-/**
- * 🎯 針對具備例句的候選池執行 FSRS 三層優先級抽題
- */
 /**
  * 🎯 針對具備例句的候選池執行 FSRS 三層優先級抽題（重複字取進度最高者）
  */
@@ -130,6 +128,10 @@ function pickNextQuizCandidate(candidates) {
  * 🎲 產生下一題隨堂測驗題目
  */
 function nextQuizQuestion() {
+    if (quizAutoNextTimer) {
+        clearTimeout(quizAutoNextTimer);
+        quizAutoNextTimer = null;
+    }
     isQuizAnswerLocked = false;
 
     const inputElem = document.getElementById('quizInput');
@@ -352,7 +354,11 @@ function handleQuizSubmit(e) {
         scoreElem.innerText = `${quizScoreCorrect}/${quizScoreTotal}`;
     }
 
-    setTimeout(() => {
+    if (quizAutoNextTimer) {
+        clearTimeout(quizAutoNextTimer);
+    }
+    quizAutoNextTimer = setTimeout(() => {
+        quizAutoNextTimer = null;
         nextQuizQuestion();
     }, 1800);
 }
