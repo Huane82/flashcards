@@ -17,6 +17,9 @@ const I18N_DICTIONARY = {
         noCategorySelected: "未選取字庫",
         selectedPrefix: "已選",
         unitDeck: "個字庫",
+        optCreateNewDeck: '➕ 創建新字庫...',
+        toastEnterNewDeckName: '請輸入新字庫名稱！',
+
 
         // 主頁 View
         homeTitle: "選擇學習模式",
@@ -488,6 +491,9 @@ const I18N_DICTIONARY = {
         noCategorySelected: "No Deck Selected",
         selectedPrefix: "Selected",
         unitDeck: "Decks",
+        optCreateNewDeck: '➕ Create new deck...',
+        toastEnterNewDeckName: 'Please enter a new deck name!',
+
 
         homeTitle: "Select Study Mode",
         homeDesc: "Focus on words and boost your memory effectively",
@@ -943,6 +949,9 @@ const I18N_DICTIONARY = {
         noCategorySelected: "未選択の単語帳",
         selectedPrefix: "選択中:",
         unitDeck: "個の単語帳",
+        optCreateNewDeck: '➕ 新しい単語帳を作成...',
+        toastEnterNewDeckName: '新しい単語帳の名前を入力してください！',
+
 
         homeTitle: "学習モードを選択",
         homeDesc: "効率的に記憶力を高めましょう",
