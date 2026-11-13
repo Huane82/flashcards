@@ -18,8 +18,6 @@ let chatsListListener = null;
 let announcementsListener = null;
 let presenceStatusListener = null;
 let connectedStateListener = null;
-let onlineCountObserver = null;
-let _isRenderingOnlineCount = false;
 
 let pendingRequestsList = [];
 let pendingGroupInvitesList = [];
@@ -253,27 +251,12 @@ function initChatRealtimeListeners() {
 }
 
 /**
- * 🛡️ 保護線上人數標籤不被 i18n 重新渲染時意外覆蓋回 0 人
- */
-function ensureOnlineCountObserver(onlineCountEl) {
-    if (!onlineCountEl || onlineCountObserver || typeof MutationObserver === 'undefined') return;
-    onlineCountObserver = new MutationObserver(() => {
-        if (!_isRenderingOnlineCount) {
-            renderOnlineStatusUI();
-        }
-    });
-    onlineCountObserver.observe(onlineCountEl, { childList: true, characterData: true, subtree: true });
-}
-
-/**
  * 👁️ 3. 渲染線上人數、線上名單與管理員透視面板 (支援 i18n)
  */
 function renderOnlineStatusUI() {
     const onlineCountEl = document.getElementById('onlineUserCountText');
     const onlineListContainer = document.getElementById('onlineUsersListContainer');
     const adminMonitorContainer = document.getElementById('adminOnlineMonitorList');
-
-    ensureOnlineCountObserver(onlineCountEl);
 
     const isAdmin = window.userData && window.userData.role === 'admin';
     const myPrivacyHide = !isAdmin && !!(window.userData && window.userData.privacyHideStatus);
@@ -297,21 +280,17 @@ function renderOnlineStatusUI() {
     });
 
     if (onlineCountEl) {
-        _isRenderingOnlineCount = true;
-        try {
-            if (myPrivacyHide) {
-                const hiddenText = (typeof t === 'function' && t('onlineUserHidden') !== 'onlineUserHidden')
-                    ? t('onlineUserHidden')
-                    : '線上人數：已隱藏 (隱私模式開啟中)';
-                onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-slate-400 rounded-full inline-block"></span> ${hiddenText}`;
-            } else {
-                const countText = (typeof t === 'function' && t('onlineUserCount', { count: visibleOnlineUsers.length }) !== 'onlineUserCount')
-                    ? t('onlineUserCount', { count: visibleOnlineUsers.length })
-                    : `線上人數：${visibleOnlineUsers.length} 人`;
-                onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse inline-block"></span> ${countText}`;
-            }
-        } finally {
-            _isRenderingOnlineCount = false;
+        onlineCountEl.removeAttribute('data-i18n');
+        if (myPrivacyHide) {
+            const hiddenText = (typeof t === 'function' && t('onlineUserHidden') !== 'onlineUserHidden')
+                ? t('onlineUserHidden')
+                : '線上人數：已隱藏 (隱私模式開啟中)';
+            onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-slate-400 rounded-full inline-block"></span> ${hiddenText}`;
+        } else {
+            const countText = (typeof t === 'function' && t('onlineUserCount', { count: visibleOnlineUsers.length }) !== 'onlineUserCount')
+                ? t('onlineUserCount', { count: visibleOnlineUsers.length })
+                : `線上人數：${visibleOnlineUsers.length} 人`;
+            onlineCountEl.innerHTML = `<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse inline-block"></span> ${countText}`;
         }
     }
 
