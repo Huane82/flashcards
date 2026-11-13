@@ -231,6 +231,28 @@ function updateCategorySelects() {
     const unitText = nativeLang === 'en' ? 'words' : (nativeLang === 'ja' ? '語' : '字');
 
     let activeCats = window.selectedCategories || ['ALL'];
+
+    // 🧹 自動清除已被刪光或不存在的幽靈字庫紀錄
+    const hadAll = activeCats.includes('ALL');
+    const prevSubCats = activeCats.filter(c => c !== 'ALL');
+    const validSubCats = prevSubCats.filter(c => cats.includes(c));
+
+    if (hadAll) {
+        if (validSubCats.length !== prevSubCats.length) {
+            activeCats = ['ALL', ...cats];
+            window.selectedCategories = activeCats;
+            if (typeof saveSelectedCategoriesToCloud === 'function') {
+                saveSelectedCategoriesToCloud(activeCats);
+            }
+        }
+    } else if (validSubCats.length !== prevSubCats.length) {
+        activeCats = validSubCats.length > 0 ? validSubCats : ['ALL'];
+        window.selectedCategories = activeCats;
+        if (typeof saveSelectedCategoriesToCloud === 'function') {
+            saveSelectedCategoriesToCloud(activeCats);
+        }
+    }
+
     const menu = document.getElementById('categoryDropdownMenu');
     const btnText = document.getElementById('categoryDropdownBtnText');
 
@@ -289,6 +311,7 @@ function updateCategorySelects() {
         refreshCategoryDropdownWithNew(cfg.selectId, cfg.inputId);
     });
 }
+
 
 /**
  * 🎯 勾選/取消字庫事件
