@@ -3,9 +3,9 @@
  */
 
 /**
- * 🔍 取得當前勾選字庫的單字清單（用於統計計算，並自動補齊 FSRS 欄位）
+ * 🔍 取得當前勾選字庫的原始單字清單（含跨字庫未去重，用於單字庫個別統計）
  */
-function getStatsFilteredWords() {
+function getStatsRawFilteredWords() {
     const activeCats = window.selectedCategories || ['ALL'];
     const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
     if (!wordList || !Array.isArray(wordList)) return [];
@@ -19,6 +19,17 @@ function getStatsFilteredWords() {
     }
 
     return filtered;
+}
+
+/**
+ * 🔍 取得跨字庫去重後的單字清單（重複字只算一次，以進度最高者為主）
+ */
+function getStatsFilteredWords() {
+    const raw = getStatsRawFilteredWords();
+    if (typeof deduplicateWordsByHighestProgress === 'function') {
+        return deduplicateWordsByHighestProgress(raw);
+    }
+    return raw;
 }
 
 /**
@@ -68,17 +79,21 @@ function renderStats() {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 
+    // 全局去重後的單字清單（重複字只計算一次，以進度高者為主）
     const currentWordList = getStatsFilteredWords();
+    // 各字庫個別清單（用於計算每個字庫內部的單字數與進度）
+    const rawWordList = getStatsRawFilteredWords();
+
     const totalWords = currentWordList.length;
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
 
-    // 1. 統計總體記憶等級分佈 (Lv.1~5) 與各字庫細節
+    // 1. 統計總體記憶等級分佈 (Lv.1~5)
     const levelCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const catStats = {};
 
     // 2. 統計 FSRS 未來 7 天複習量預測與平均記憶保留率
-    const forecastCounts = [0, 0, 0, 0, 0, 0, 0]; // index 0 = 今天到期, 1 = 明天, ... 6 = +6天
+    const forecastCounts = [0, 0, 0, 0, 0, 0, 0];
     let dueTodayCount = 0;
     let newUnlearnedCount = 0;
     let totalRetrievability = 0;
@@ -87,24 +102,15 @@ function renderStats() {
     // 3. 收集去重後的頑固難字（lapses > 0）
     const leechMap = new Map();
 
-    // 計算今天午夜 23:59:59 時間點，精準切分自然日
     const endOfToday = new Date(now);
     endOfToday.setHours(23, 59, 59, 999);
     const endOfTodayTs = endOfToday.getTime();
 
+    // 計算全局去重後的總體數據
     currentWordList.forEach(w => {
         const lv = Math.min(5, Math.max(1, w.level || 1));
-        const cat = w.category || defaultCatName;
-
         levelCounts[lv]++;
 
-        if (!catStats[cat]) {
-            catStats[cat] = { total: 0, levels: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
-        }
-        catStats[cat].total++;
-        catStats[cat].levels[lv]++;
-
-        // FSRS 排程統計
         if (w.state === 'new') {
             newUnlearnedCount++;
         } else {
@@ -125,7 +131,6 @@ function renderStats() {
             }
         }
 
-        // 記錄有遺忘紀錄的頑固單字（依小寫去重保留最高遺忘次數）
         if ((w.lapses || 0) > 0 && w.word) {
             const key = w.word.trim().toLowerCase();
             const existing = leechMap.get(key);
@@ -133,6 +138,17 @@ function renderStats() {
                 leechMap.set(key, w);
             }
         }
+    });
+
+    // 計算各字庫個別數據
+    rawWordList.forEach(w => {
+        const lv = Math.min(5, Math.max(1, w.level || 1));
+        const cat = w.category || defaultCatName;
+        if (!catStats[cat]) {
+            catStats[cat] = { total: 0, levels: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+        }
+        catStats[cat].total++;
+        catStats[cat].levels[lv]++;
     });
 
     const masteredCount = levelCounts[4] + levelCounts[5];
@@ -147,7 +163,7 @@ function renderStats() {
     // 卡片 A: 總單字量與掌握率
     // -------------------------------------------------------------
     if (showTotal) {
-        const totalWordsLabel = typeof t === 'function' ? t('statsTotalWords') : '總單字量';
+        const totalWordsLabel = typeof t === 'function' ? t('statsTotalWords') : '總單字量 (不重複)';
         const masteredRateLabel = typeof t === 'function' ? t('statsMasteredRate') : '熟練率 (Lv.4~5)';
 
         html += `
@@ -281,6 +297,7 @@ function renderStats() {
         const catBreakdownLabel = typeof t === 'function' ? t('statsCatBreakdown') : '各字庫學習進度';
         const accuracyRateLabel = typeof t === 'function' ? t('accuracyRate') : '熟練率';
         const catKeys = Object.keys(catStats);
+        const rawTotal = rawWordList.length;
 
         html += `
             <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
@@ -290,7 +307,7 @@ function renderStats() {
 
         catKeys.forEach(cat => {
             const data = catStats[cat];
-            const catPct = totalWords > 0 ? Math.round((data.total / totalWords) * 100) : 0;
+            const catPct = rawTotal > 0 ? Math.round((data.total / rawTotal) * 100) : 0;
             const catMastered = data.levels[4] + data.levels[5];
             const catMasterRate = data.total > 0 ? Math.round((catMastered / data.total) * 100) : 0;
 

@@ -1,5 +1,102 @@
 let wordList = [];
 
+/**
+ * 🏆 比較兩張單字卡的學習進度（回傳 > 0 代表 a 進度高於 b）
+ */
+function compareCardProgress(a, b) {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+
+  const aLearned = (a.state && a.state !== 'new') ? 1 : 0;
+  const bLearned = (b.state && b.state !== 'new') ? 1 : 0;
+  if (aLearned !== bLearned) return aLearned - bLearned;
+
+  const aLv = a.level || 1;
+  const bLv = b.level || 1;
+  if (aLv !== bLv) return aLv - bLv;
+
+  const aStab = typeof a.stability === 'number' ? a.stability : 0;
+  const bStab = typeof b.stability === 'number' ? b.stability : 0;
+  if (Math.abs(aStab - bStab) > 0.001) return aStab - bStab;
+
+  const aReps = (a.reps || 0) + (a.streak || 0);
+  const bReps = (b.reps || 0) + (b.streak || 0);
+  if (aReps !== bReps) return aReps - bReps;
+
+  // 進度完全相同時，優先保留欄位較完整（有釋義/例句/音標）的卡片
+  const completeness = (c) =>
+    (c.meaning ? 1 : 0) +
+    (c.sentence ? 1 : 0) +
+    (c.phonetic ? 1 : 0) +
+    (c.pos ? 1 : 0) +
+    (c.translation ? 1 : 0);
+
+  return completeness(a) - completeness(b);
+}
+
+/**
+ * 🔍 跨字庫去重（依單字小寫去重，只保留進度最高的那一張）
+ */
+function deduplicateWordsByHighestProgress(cards) {
+  if (!Array.isArray(cards)) return [];
+  const result = [];
+  const indexByWord = new Map();
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    if (!card || typeof card !== 'object') continue;
+
+    const norm = (card.word || '').trim().toLowerCase();
+    if (!norm) {
+      result.push(card);
+      continue;
+    }
+
+    if (!indexByWord.has(norm)) {
+      indexByWord.set(norm, result.length);
+      result.push(card);
+    } else {
+      const existingIdx = indexByWord.get(norm);
+      if (compareCardProgress(card, result[existingIdx]) > 0) {
+        result[existingIdx] = card;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 🔄 跨字庫進度同步（當某張單字升級/更新排程時，同步更新其他字庫中的同名單字）
+ */
+function syncDuplicateWordsProgress(sourceCard, decks = wordList) {
+  if (!sourceCard || !Array.isArray(decks)) return 0;
+  const norm = (sourceCard.word || '').trim().toLowerCase();
+  if (!norm) return 0;
+
+  let syncedCount = 0;
+  for (let i = 0; i < decks.length; i++) {
+    const target = decks[i];
+    if (!target || target === sourceCard) continue;
+    if ((target.word || '').trim().toLowerCase() === norm) {
+      target.level = sourceCard.level;
+      target.state = sourceCard.state;
+      target.stability = sourceCard.stability;
+      target.difficulty = sourceCard.difficulty;
+      target.reps = sourceCard.reps;
+      target.lapses = sourceCard.lapses;
+      target.lastReview = sourceCard.lastReview;
+      target.nextReview = sourceCard.nextReview;
+      if (typeof sourceCard.streak === 'number') {
+        target.streak = sourceCard.streak;
+      }
+      syncedCount++;
+    }
+  }
+  return syncedCount;
+}
+
 const StorageEngine = {
   LOCAL_DECKS_KEY: 'flashcards_decks',
   LOCAL_APIKEY_KEY: 'flashcard_gemini_key_v1',
@@ -9,6 +106,64 @@ const StorageEngine = {
     return (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) 
       ? firebase.auth().currentUser.uid 
       : null;
+  },
+
+  /**
+   * 🗑️ 同字庫重複單字自動清理（保留進度最高者，補齊缺漏欄位，並刪除多餘項）
+   * @returns {boolean} 是否有刪除重複單字
+   */
+  deduplicateSameDeckWords(decks) {
+    if (!Array.isArray(decks) || decks.length === 0) return false;
+    const defaultCatName = (typeof t === 'function') ? t('defaultCategoryName') : '預設字庫';
+    const seen = new Map(); // key: `${cat}::${normWord}` -> index in deduped
+    const deduped = [];
+    let removed = false;
+
+    const mergeMissingFields = (winner, loser) => {
+      const fields = ['pos', 'phonetic', 'meaning', 'sentence', 'translation'];
+      fields.forEach(f => {
+        if ((!winner[f] || !String(winner[f]).trim()) && loser[f] && String(loser[f]).trim()) {
+          winner[f] = loser[f];
+        }
+      });
+    };
+
+    for (let i = 0; i < decks.length; i++) {
+      const card = decks[i];
+      if (!card || typeof card !== 'object') continue;
+
+      const normWord = (card.word || '').trim().toLowerCase();
+      if (!normWord) {
+        deduped.push(card);
+        continue;
+      }
+
+      const cat = (card.category || defaultCatName).trim();
+      const key = `${cat}::${normWord}`;
+
+      if (!seen.has(key)) {
+        seen.set(key, deduped.length);
+        deduped.push(card);
+      } else {
+        removed = true;
+        const existingIdx = seen.get(key);
+        const existing = deduped[existingIdx];
+
+        if (compareCardProgress(card, existing) > 0) {
+          mergeMissingFields(card, existing);
+          deduped[existingIdx] = card;
+        } else {
+          mergeMissingFields(existing, card);
+        }
+      }
+    }
+
+    if (removed) {
+      decks.length = 0;
+      decks.push(...deduped);
+    }
+
+    return removed;
   },
 
   /**
@@ -92,18 +247,15 @@ const StorageEngine = {
     if (settings.phoneticPos) localStorage.setItem('lzhcard_phonetic_pos', settings.phoneticPos);
     if (settings.theme) localStorage.setItem('theme_preference', settings.theme);
 
-    // 同步雲端的 API 金鑰模式
     if (settings.apiMode === 'personal' || settings.apiMode === 'shared') {
       localStorage.setItem('lzhcard_api_mode', settings.apiMode);
     }
 
-    // 同步新手設定完成狀態（若雲端已完成，確保關閉新手設定彈窗）
     if (settings.onboardingCompleted === true) {
       localStorage.setItem('lzhcard_onboarding_completed', 'true');
       if (typeof closeModal === 'function') closeModal('onboardingSetupModal');
     }
 
-    // 🌟 把從雲端同步下來的最新設定更新至畫面的選單中
     if (typeof syncSettingsUI === 'function') syncSettingsUI();
     if (typeof applyLanguageUI === 'function') applyLanguageUI();
     if (typeof applyTheme === 'function') applyTheme(settings.theme || 'system');
@@ -124,7 +276,6 @@ const StorageEngine = {
         if (doc.exists) {
           const data = doc.data();
 
-          // 1. 同步雲端字庫並自動執行 FSRS 欄位遷移
           if (data.decks && Array.isArray(data.decks)) {
             wordList = data.decks;
           } else if (data.wordList && Array.isArray(data.wordList)) {
@@ -132,34 +283,32 @@ const StorageEngine = {
           }
 
           const migrated = this.migrateAllCardsFSRS(wordList);
+          const deduped = this.deduplicateSameDeckWords(wordList);
           localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-          if (migrated) {
+          if (migrated || deduped) {
             this.saveData(wordList);
           }
 
-          // 2. 同步雲端 API Key
           if (data.apiKey) {
             localStorage.setItem(this.LOCAL_APIKEY_KEY, data.apiKey);
             if (typeof updateApiKeyStatusUI === 'function') updateApiKeyStatusUI();
           }
 
-          // 3. 🌟 同步雲端個人設定（含 apiMode 與 onboardingCompleted）
           if (data.settings) {
             this.applyRemoteSettings(data.settings);
           }
 
-          // 4. 雲端設定同步完成後，再決定是否開啟新手導覽
           if (typeof checkAndOpenOnboardingModal === 'function') {
             checkAndOpenOnboardingModal();
           }
 
           return wordList;
         } else {
-          // 若雲端無資料，將本機字庫、API Key 及系統設定完整上傳初始化
           const localDecks = localStorage.getItem(this.LOCAL_DECKS_KEY);
           const localApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
           const initialDecks = localDecks ? JSON.parse(localDecks) : [];
           this.migrateAllCardsFSRS(initialDecks);
+          this.deduplicateSameDeckWords(initialDecks);
           const sanitizedDecks = this.sanitizeDecksForStorage(initialDecks);
           const currentSettings = this.getLocalSettings();
 
@@ -173,7 +322,6 @@ const StorageEngine = {
           wordList = sanitizedDecks;
           localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
 
-          // 新帳號初始化完成後開啟新手導覽
           if (typeof checkAndOpenOnboardingModal === 'function') {
             checkAndOpenOnboardingModal();
           }
@@ -188,11 +336,11 @@ const StorageEngine = {
       }
     }
     
-    // 未登入狀態：從本機 LocalStorage 讀取並補齊 FSRS 欄位
     const localData = localStorage.getItem(this.LOCAL_DECKS_KEY);
     wordList = localData ? JSON.parse(localData) : [];
     const migratedLocal = this.migrateAllCardsFSRS(wordList);
-    if (migratedLocal) {
+    const dedupedLocal = this.deduplicateSameDeckWords(wordList);
+    if (migratedLocal || dedupedLocal) {
       localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
     }
     return wordList;
@@ -231,6 +379,9 @@ const StorageEngine = {
    * 儲存字庫、API Key 與系統設定至本機與雲端（雲端寫入採 1.5 秒防抖合併）
    */
   async saveData(decks) {
+    if (Array.isArray(decks)) {
+      this.deduplicateSameDeckWords(decks);
+    }
     const sanitizedDecks = this.sanitizeDecksForStorage(decks);
 
     // 1. 立即寫入本機 LocalStorage，確保進度不遺失
