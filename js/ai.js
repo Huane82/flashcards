@@ -246,7 +246,7 @@ function safeParseJSON(rawText) {
 }
 
 /**
- * 🛡️ 增強版欄位完整性與語言錯植檢查（含「無母語釋意 / 無釋義」等佔位字過濾）
+ * 🛡️ 增強版欄位完整性與語言錯植檢查（自動偵測「釋義／翻譯／例句與目前設定語言不符」）
  */
 function isFieldIncomplete(val, fieldType = '') {
     if (!val) return true;
@@ -265,8 +265,30 @@ function isFieldIncomplete(val, fieldType = '') {
     }
 
     const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
-    if (targetLang === 'en' && (fieldType === 'sentence' || fieldType === 'translation')) {
-        if (/[\u3040-\u30ff]/.test(str)) {
+    const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
+
+    // 1. 檢查目標語言例句是否錯植成其他語系
+    if (fieldType === 'sentence') {
+        if (targetLang === 'en' && /[\u3040-\u30ff\u4e00-\u9fff]/.test(str)) {
+            return true;
+        }
+        if (targetLang === 'ja' && !/[\u3040-\u30ff\u4e00-\u9fff]/.test(str) && /[a-zA-Z]/.test(str)) {
+            return true;
+        }
+        if ((targetLang === 'zh-TW' || targetLang === 'zh') && !/[\u4e00-\u9fff]/.test(str) && /[a-zA-Z]/.test(str)) {
+            return true;
+        }
+    }
+
+    // 2. 檢查母語釋義與例句翻譯是否錯植（例如母語設為繁體中文，卻抓到純英文釋義）
+    if (fieldType === 'meaning' || fieldType === 'translation') {
+        if ((nativeLang === 'zh-TW' || nativeLang === 'zh') && !/[\u4e00-\u9fff]/.test(str) && /[a-zA-Z]/.test(str)) {
+            return true;
+        }
+        if (nativeLang === 'ja' && !/[\u3040-\u30ff\u4e00-\u9fff]/.test(str) && /[a-zA-Z]/.test(str)) {
+            return true;
+        }
+        if (nativeLang === 'en' && /[\u3040-\u30ff\u4e00-\u9fff]/.test(str)) {
             return true;
         }
     }
@@ -336,7 +358,10 @@ function sanitizeWordAndPos(rawWord, rawPos, rawMeaning) {
 async function autoFillWithAI(word) {
     const cleaned = sanitizeWordAndPos(word, '', '');
     const cleanWord = cleaned.word;
-    const { targetName, nativeName } = getLanguageConfig();
+    const { targetLang, targetName, nativeName } = getLanguageConfig();
+    const phoneticRule = targetLang === 'ja'
+        ? 'Hiragana reading (平假名讀音, e.g. たべる; if already kana, repeat the hiragana reading)'
+        : 'IPA or pronunciation guide for the corrected word';
 
     const prompt = `You are a professional lexicographer.
 Input Term: "${cleanWord}"
@@ -344,10 +369,10 @@ Target Language: ${targetName}
 User Native Language: ${nativeName}
 
 MANDATORY INSTRUCTIONS:
-1. "word": Automatically fix any common spelling typos in "${cleanWord}" (e.g. "enviroment" -> "environment", "recieve" -> "receive"). If the spelling is already valid (including valid phrases, idioms, or proper nouns), keep it unchanged.
-2. "phonetic": IPA or pronunciation guide for the corrected word (MUST NOT BE EMPTY).
+1. "word": Automatically fix any common spelling typos in "${cleanWord}" (e.g. "enviroment" -> "environment", "recieve" -> "receive"). If the spelling is already valid (including valid phrases, idioms, Japanese words, or proper nouns), keep it unchanged.
+2. "phonetic": ${phoneticRule} (MUST NOT BE EMPTY).
 3. "pos": Parts of speech translated in ${nativeName} (MUST NOT BE EMPTY).
-4. "meaning": Precise definition in ${nativeName} (MUST NOT BE EMPTY).
+4. "meaning": Precise definition strictly in ${nativeName} (MUST NOT BE EMPTY).
 5. "sentence": A natural example sentence written strictly in ${targetName} using the corrected word (MUST NOT BE EMPTY).
 6. "translation": Example sentence translation strictly written in ${nativeName} (MUST NOT BE EMPTY).
 
@@ -392,7 +417,11 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
     const total = targetItems.length;
     if (total === 0) return;
 
-    const { targetName, nativeName } = getLanguageConfig();
+    const { targetLang, targetName, nativeName } = getLanguageConfig();
+    const phoneticRule = targetLang === 'ja'
+        ? 'MUST provide Hiragana reading (平假名讀音, e.g. たべる) for the Japanese term (DO NOT LEAVE EMPTY).'
+        : 'MUST provide IPA pronunciation guide for the corrected word (DO NOT LEAVE EMPTY).';
+
     const batchSize = 20; // 🌟 設定為每批 20 字
     let completedCount = 0;
     let successUpdatedCount = 0;
@@ -416,12 +445,12 @@ User Native Language: ${nativeName}
 
 CRITICAL RULES (STRICT COMPLIANCE REQUIRED):
 1. "index": MUST keep the exact integer "index" from the input item so each result maps back 1-to-1.
-2. "word": Automatically correct any common spelling typos in the input term (e.g., "enviroment" -> "environment", "recieve" -> "receive", "seperate" -> "separate"). If the term is already spelled correctly (including valid phrases, idioms, or proper nouns), keep it as-is.
-3. "phonetic": MUST provide IPA pronunciation guide for the corrected word (DO NOT LEAVE EMPTY).
-4. "pos": MUST provide part of speech in ${nativeName} (e.g. n., v., adj.).
-5. "meaning": MUST provide clear definition in ${nativeName}.
+2. "word": Automatically correct any common spelling typos in the input term (e.g., "enviroment" -> "environment", "recieve" -> "receive", "seperate" -> "separate"). If the term is already spelled correctly (including valid phrases, idioms, Japanese words, or proper nouns), keep it as-is.
+3. "phonetic": ${phoneticRule}
+4. "pos": MUST provide part of speech strictly in ${nativeName}.
+5. "meaning": MUST provide clear definition strictly in ${nativeName}.
 6. "sentence": MUST provide a complete example sentence strictly in ${targetName} (DO NOT LEAVE EMPTY).
-7. "translation": MUST provide translation of sentence in ${nativeName} (DO NOT LEAVE EMPTY).
+7. "translation": MUST provide translation of sentence strictly in ${nativeName} (DO NOT LEAVE EMPTY).
 
 Return ONLY a pure JSON array matching input order:
 [
@@ -429,7 +458,7 @@ Return ONLY a pure JSON array matching input order:
     "index": 0,
     "word": "corrected spelling of term",
     "pos": "POS in ${nativeName}",
-    "phonetic": "phonetic IPA",
+    "phonetic": "pronunciation or hiragana reading",
     "meaning": "definition in ${nativeName}",
     "sentence": "example sentence in ${targetName}",
     "translation": "translation in ${nativeName}"
@@ -548,11 +577,11 @@ User Native Language: ${nativeName}
 CRITICAL RULES:
 1. "index": MUST keep exact integer index.
 2. "word": Automatically fix common spelling typos if any; otherwise keep unchanged.
-3. "phonetic": MUST provide IPA pronunciation guide.
-4. "pos": MUST provide POS in ${nativeName}.
-5. "meaning": MUST provide definition in ${nativeName}.
-6. "sentence": MUST provide example sentence in ${targetName}.
-7. "translation": MUST provide translation in ${nativeName}.
+3. "phonetic": ${phoneticRule}
+4. "pos": MUST provide POS strictly in ${nativeName}.
+5. "meaning": MUST provide definition strictly in ${nativeName}.
+6. "sentence": MUST provide example sentence strictly in ${targetName}.
+7. "translation": MUST provide translation strictly in ${nativeName}.
 
 Return ONLY a pure JSON array:
 [
@@ -560,7 +589,7 @@ Return ONLY a pure JSON array:
     "index": 0,
     "word": "corrected spelling of term",
     "pos": "POS in ${nativeName}",
-    "phonetic": "phonetic IPA",
+    "phonetic": "pronunciation or hiragana reading",
     "meaning": "definition in ${nativeName}",
     "sentence": "example sentence in ${targetName}",
     "translation": "translation in ${nativeName}"

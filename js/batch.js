@@ -32,14 +32,17 @@ function normalizeWordKey(rawWord) {
 }
 
 /**
- * 🧹 判斷欄位是否為有效內容（排除空白與預設佔位文字）
+ * 🧹 判斷欄位是否為有效內容（排除空白、預設佔位文字與非母語殘留釋義）
  */
-function isValidFieldValue(val) {
+function isValidFieldValue(val, fieldType = '') {
     if (!val || typeof val !== 'string') return false;
     const trimmed = val.trim();
     if (!trimmed) return false;
     const placeholders = [
         '無釋義',
+        '（無母語釋義）',
+        '(No definition)',
+        '（意味未入力）',
         '未設定釋義',
         'AI 自動解析中...',
         'AI 解析中...',
@@ -48,7 +51,12 @@ function isValidFieldValue(val) {
         'EMPTY',
         '-'
     ];
-    return !placeholders.includes(trimmed);
+    if (placeholders.includes(trimmed)) return false;
+
+    if (fieldType && typeof isFieldIncomplete === 'function') {
+        return !isFieldIncomplete(trimmed, fieldType);
+    }
+    return true;
 }
 
 /**
@@ -68,8 +76,8 @@ function mergeDuplicateWordRecord(baseItem, otherItem, preferOtherFields = false
     const pickField = (field) => {
         const valA = baseItem[field];
         const valB = otherItem[field];
-        const validA = isValidFieldValue(valA);
-        const validB = isValidFieldValue(valB);
+        const validA = isValidFieldValue(valA, field);
+        const validB = isValidFieldValue(valB, field);
 
         if (preferOtherFields) {
             if (validB) return String(valB).trim();
@@ -345,6 +353,7 @@ function parseSimpleCsvRows(csvText) {
 
 /**
  * 🇯🇵 載入 JLPT 日檢單字庫 (N5 ～ N1)
+ * 註：開源 JLPT 字庫僅含英文釋義，當使用者母語非英文時，自動留空釋義並標示為「待補齊」，方便一鍵用 AI 生成母語釋義。
  */
 async function handleLoadJlptPreset(nLevel, ev) {
     const levelTag = `N${nLevel}`;
@@ -352,10 +361,10 @@ async function handleLoadJlptPreset(nLevel, ev) {
     if (!confirm(confirmMsg)) return;
 
     const JLPT_SOURCES = [
-        { type: 'json', url: `https://jlpt-vocab-api.vercel.app/api/words/all?level=${nLevel}` },
-        { type: 'csv', url: `https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@main/src/n${nLevel}.csv` },
-        { type: 'csv', url: `https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/n${nLevel}.csv` },
-        { type: 'csv', url: `https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@master/src/n${nLevel}.csv` }
+        { type: 'json', url: `[https://jlpt-vocab-api.vercel.app/api/words/all?level=$](https://jlpt-vocab-api.vercel.app/api/words/all?level=$){nLevel}` },
+        { type: 'csv', url: `[https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@main/src/n$](https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@main/src/n$){nLevel}.csv` },
+        { type: 'csv', url: `[https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/n$](https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/n$){nLevel}.csv` },
+        { type: 'csv', url: `[https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@master/src/n$](https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@master/src/n$){nLevel}.csv` }
     ];
 
     const btn = ev ? (ev.currentTarget || ev.target) : null;
@@ -416,6 +425,7 @@ async function handleLoadJlptPreset(nLevel, ev) {
             if (targetCategoryInput) targetCategoryInput.value = catName;
         }
 
+        const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
         const seenSet = new Set();
         window.parsedBatchList = [];
 
@@ -423,9 +433,12 @@ async function handleLoadJlptPreset(nLevel, ev) {
             const rawW = String(item.word || item.expression || item.kanji || item.term || item.furigana || item.reading || '').trim().replace(/\s+/g, ' ');
             const rawPhonetic = String(item.furigana || item.reading || item.kana || item.phonetic || '').trim();
             const rawPos = String(item.pos || item.partOfSpeech || item.type || '').trim();
-            let rawM = findChineseMeaningFromObject(item);
-            if (!rawM) {
+
+            let rawM = '';
+            if (nativeLang === 'en') {
                 rawM = String(item.meaning || item.definition || item.translation || item.en || '').trim();
+            } else if (nativeLang === 'zh-TW' || nativeLang === 'zh') {
+                rawM = findChineseMeaningFromObject(item);
             }
 
             if (!rawW) return;
@@ -436,7 +449,7 @@ async function handleLoadJlptPreset(nLevel, ev) {
             window.parsedBatchList.push({
                 word: rawW,
                 pos: rawPos,
-                phonetic: rawPhonetic && rawPhonetic !== rawW ? rawPhonetic : rawPhonetic,
+                phonetic: rawPhonetic,
                 meaning: rawM,
                 sentence: String(item.sentence || item.example || '').trim(),
                 translation: String(item.translation || item.exampleZh || '').trim()
@@ -470,10 +483,10 @@ async function handleLoadPreset(levelNum, ev) {
     if (!confirm(confirmMsg)) return;
 
     const CDN_SOURCES = [
-        "https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json",
-        "https://raw.githubusercontent.com/EngTW/English-for-Programmers/master/lists/Taiwan-high-school-6K-108-edition/words_full.json",
-        "https://cdn.jsdelivr.net/gh/zenkarsha/words7000@main/words.json",
-        "https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json"
+        "[https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json](https://cdn.jsdelivr.net/gh/EngTW/English-for-Programmers@master/lists/Taiwan-high-school-6K-108-edition/words_full.json)",
+        "[https://raw.githubusercontent.com/EngTW/English-for-Programmers/master/lists/Taiwan-high-school-6K-108-edition/words_full.json](https://raw.githubusercontent.com/EngTW/English-for-Programmers/master/lists/Taiwan-high-school-6K-108-edition/words_full.json)",
+        "[https://cdn.jsdelivr.net/gh/zenkarsha/words7000@main/words.json](https://cdn.jsdelivr.net/gh/zenkarsha/words7000@main/words.json)",
+        "[https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json](https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json)"
     ];
 
     const btn = ev ? (ev.currentTarget || ev.target) : (typeof event !== 'undefined' && event ? (event.currentTarget || event.target) : null);
@@ -526,6 +539,7 @@ async function handleLoadPreset(levelNum, ev) {
             if (targetCategoryInput) targetCategoryInput.value = catName;
         }
 
+        const nativeLang = localStorage.getItem('lzhcard_native_lang') || 'zh-TW';
         const seenSet = new Set();
         window.parsedBatchList = [];
 
@@ -533,9 +547,12 @@ async function handleLoadPreset(levelNum, ev) {
             const rawW = item.word || item.term || item.english || item.w || '';
             const rawP = item.pos || item.partOfSpeech || item.type || item.p || '';
             
-            let rawM = findChineseMeaningFromObject(item);
-            if (!rawM) {
-                rawM = item.meaning || item.definition || item.zh || item.ch || item.chinese || item.trans || item.m || '';
+            let rawM = '';
+            if (nativeLang === 'zh-TW' || nativeLang === 'zh') {
+                rawM = findChineseMeaningFromObject(item);
+                if (!rawM) {
+                    rawM = item.meaning || item.definition || item.zh || item.ch || item.chinese || item.trans || item.m || '';
+                }
             }
 
             const cleanObj = (typeof sanitizeWordAndPos === 'function') 
@@ -695,7 +712,13 @@ function renderBatchPreview() {
 
     if (previewBody) {
         previewBody.innerHTML = window.parsedBatchList.map((item, idx) => {
-            const isComplete = item.word && item.meaning && item.pos;
+            const meaningValid = typeof isFieldIncomplete === 'function'
+                ? !isFieldIncomplete(item.meaning, 'meaning')
+                : Boolean(item.meaning);
+            const posValid = typeof isFieldIncomplete === 'function'
+                ? !isFieldIncomplete(item.pos, 'pos')
+                : Boolean(item.pos);
+            const isComplete = item.word && meaningValid && posValid;
             const statusBadge = isComplete ? 
                 `<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">${textComplete}</span>` :
                 `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">${textPending}</span>`;
@@ -730,6 +753,27 @@ function removeBatchItem(index) {
 }
 
 async function handleRunBatchAiAutoFill() {
+    if (!window.parsedBatchList || window.parsedBatchList.length === 0) return;
+
+    const incompleteItems = window.parsedBatchList.filter(item => {
+        return (typeof isFieldIncomplete === 'function') ? (
+            isFieldIncomplete(item.meaning, 'meaning') ||
+            isFieldIncomplete(item.pos, 'pos') ||
+            isFieldIncomplete(item.sentence, 'sentence') ||
+            isFieldIncomplete(item.translation, 'translation') ||
+            isFieldIncomplete(item.phonetic, 'phonetic')
+        ) : (!item.meaning || !item.pos || !item.sentence);
+    });
+
+    let forceOverwrite = false;
+    if (incompleteItems.length === 0) {
+        const confirmOverwrite = confirm(
+            `預覽列表中的 ${window.parsedBatchList.length} 筆單字皆已有資料，是否要依目前設定的目標語言與母語「強制覆蓋」重新解析？`
+        );
+        if (!confirmOverwrite) return;
+        forceOverwrite = true;
+    }
+
     const btn = document.getElementById('batchAiFillBtn');
     const progressContainer = document.getElementById('batchProgressContainer');
     const progressBar = document.getElementById('batchProgressBar');
@@ -739,23 +783,29 @@ async function handleRunBatchAiAutoFill() {
     if (btn) btn.disabled = true;
     if (progressContainer) progressContainer.classList.remove('hidden');
 
-    if (typeof runBatchAiAutoFill === 'function') {
-        await runBatchAiAutoFill(window.parsedBatchList, (current, total) => {
-            const pct = Math.round((current / total) * 100);
-            if (progressText) progressText.innerText = safeT('progressBatchAi', { current, total }, `AI 補齊中... (${current}/${total})`);
-            if (progressBar) progressBar.style.width = `${pct}%`;
-            if (progressPercent) progressPercent.innerText = `${pct}%`;
-            renderBatchPreview();
-        });
+    try {
+        if (typeof runBatchAiAutoFill === 'function') {
+            await runBatchAiAutoFill(window.parsedBatchList, (current, total) => {
+                const pct = Math.round((current / total) * 100);
+                if (progressText) progressText.innerText = safeT('progressBatchAi', { current, total }, `AI 補齊中... (${current}/${total})`);
+                if (progressBar) progressBar.style.width = `${pct}%`;
+                if (progressPercent) progressPercent.innerText = `${pct}%`;
+                renderBatchPreview();
+            }, forceOverwrite);
+        }
+
+        renderBatchPreview();
+
+        if (progressBar) progressBar.style.width = `100%`;
+        if (progressPercent) progressPercent.innerText = `100%`;
+        if (progressText) progressText.innerText = safeT('progressAiComplete', null, 'AI 自動補齊完成！');
+        if (typeof showToast === 'function') showToast(safeT('toastAiBatchSuccess', null, 'AI 批次補充成功！'), 'success');
+    } catch (err) {
+        console.error('[Batch Modal AI Fill Error]:', err);
+        if (typeof showToast === 'function') showToast(`AI 補齊失敗：${err.message}`, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
     }
-
-    renderBatchPreview();
-
-    if (progressBar) progressBar.style.width = `100%`;
-    if (progressPercent) progressPercent.innerText = `100%`;
-    if (progressText) progressText.innerText = safeT('progressAiComplete', null, 'AI 自動補齊完成！');
-    if (btn) btn.disabled = false;
-    if (typeof showToast === 'function') showToast(safeT('toastAiBatchSuccess', null, 'AI 批次補充成功！'), 'success');
 }
 
 function resetBatchModal() {
@@ -819,11 +869,11 @@ function handleConfirmBatchImport() {
                 id: 'w_' + now + '_' + Math.random().toString(36).substr(2, 6),
                 category: targetCategory,
                 word: itemWord,
-                pos: String(item.pos || (inherited && isValidFieldValue(inherited.pos) ? inherited.pos : '')).trim(),
-                phonetic: String(item.phonetic || (inherited && isValidFieldValue(inherited.phonetic) ? inherited.phonetic : '')).trim(),
-                meaning: String(item.meaning || (inherited && isValidFieldValue(inherited.meaning) ? inherited.meaning : safeT('noMeaning', null, '無釋義'))).trim(),
-                sentence: String(item.sentence || (inherited && isValidFieldValue(inherited.sentence) ? inherited.sentence : '')).trim(),
-                translation: String(item.translation || (inherited && isValidFieldValue(inherited.translation) ? inherited.translation : '')).trim(),
+                pos: String(item.pos || (inherited && isValidFieldValue(inherited.pos, 'pos') ? inherited.pos : '')).trim(),
+                phonetic: String(item.phonetic || (inherited && isValidFieldValue(inherited.phonetic, 'phonetic') ? inherited.phonetic : '')).trim(),
+                meaning: String(item.meaning || (inherited && isValidFieldValue(inherited.meaning, 'meaning') ? inherited.meaning : safeT('noMeaning', null, '無釋義'))).trim(),
+                sentence: String(item.sentence || (inherited && isValidFieldValue(inherited.sentence, 'sentence') ? inherited.sentence : '')).trim(),
+                translation: String(item.translation || (inherited && isValidFieldValue(inherited.translation, 'translation') ? inherited.translation : '')).trim(),
                 level: inherited ? (inherited.level || 1) : 1,
                 knowStreak: inherited ? (inherited.knowStreak || 0) : 0,
                 state: inherited ? (inherited.state || 'new') : 'new',
@@ -953,11 +1003,11 @@ async function handleQuickAddWords() {
             id: 'w_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
             category: targetCategory,
             word: cleanWord,
-            pos: existingInOtherCat && isValidFieldValue(existingInOtherCat.pos) ? existingInOtherCat.pos : (cleanObj.pos || ''),
-            phonetic: existingInOtherCat && isValidFieldValue(existingInOtherCat.phonetic) ? existingInOtherCat.phonetic : '',
-            meaning: existingInOtherCat && isValidFieldValue(existingInOtherCat.meaning) ? existingInOtherCat.meaning : defaultMeaningText,
-            sentence: existingInOtherCat && isValidFieldValue(existingInOtherCat.sentence) ? existingInOtherCat.sentence : '',
-            translation: existingInOtherCat && isValidFieldValue(existingInOtherCat.translation) ? existingInOtherCat.translation : '',
+            pos: existingInOtherCat && isValidFieldValue(existingInOtherCat.pos, 'pos') ? existingInOtherCat.pos : (cleanObj.pos || ''),
+            phonetic: existingInOtherCat && isValidFieldValue(existingInOtherCat.phonetic, 'phonetic') ? existingInOtherCat.phonetic : '',
+            meaning: existingInOtherCat && isValidFieldValue(existingInOtherCat.meaning, 'meaning') ? existingInOtherCat.meaning : defaultMeaningText,
+            sentence: existingInOtherCat && isValidFieldValue(existingInOtherCat.sentence, 'sentence') ? existingInOtherCat.sentence : '',
+            translation: existingInOtherCat && isValidFieldValue(existingInOtherCat.translation, 'translation') ? existingInOtherCat.translation : '',
             level: existingInOtherCat ? (existingInOtherCat.level || 1) : 1,
             knowStreak: existingInOtherCat ? (existingInOtherCat.knowStreak || 0) : 0,
             state: existingInOtherCat ? (existingInOtherCat.state || 'new') : 'new',
@@ -1006,7 +1056,7 @@ async function handleQuickAddWords() {
         showToast(msg, 'success');
     }
 
-    const cardsNeedingAi = addedList.filter(c => !isValidFieldValue(c.meaning) || !isValidFieldValue(c.sentence));
+    const cardsNeedingAi = addedList.filter(c => !isValidFieldValue(c.meaning, 'meaning') || !isValidFieldValue(c.sentence, 'sentence'));
 
     if (cardsNeedingAi.length > 0 && typeof runBatchAiAutoFill === 'function') {
         try {
@@ -1215,25 +1265,42 @@ async function handleBatchAiFillLibraryWords() {
 
         const incompleteWords = targetWords.filter(item => {
             return (typeof isFieldIncomplete === 'function') ? (
-                isFieldIncomplete(item.meaning) || 
-                isFieldIncomplete(item.pos) || 
-                isFieldIncomplete(item.sentence) || 
-                isFieldIncomplete(item.translation) ||
-                isFieldIncomplete(item.phonetic)
+                isFieldIncomplete(item.meaning, 'meaning') || 
+                isFieldIncomplete(item.pos, 'pos') || 
+                isFieldIncomplete(item.sentence, 'sentence') || 
+                isFieldIncomplete(item.translation, 'translation') ||
+                isFieldIncomplete(item.phonetic, 'phonetic')
             ) : (!item.meaning || !item.pos || !item.sentence);
         });
+
+        // 檢查是否已有部分舊資料（例如已有假名或舊釋義，但缺少例句等），有則一律提供「強制覆蓋」選項
+        const hasAnyExistingData = targetWords.some(item =>
+            Boolean((item.meaning && item.meaning.trim()) || (item.pos && item.pos.trim()) || (item.phonetic && item.phonetic.trim()) || (item.sentence && item.sentence.trim()))
+        );
 
         let forceOverwrite = false;
         let targetBatch = [];
 
-        if (incompleteWords.length < targetWords.length && incompleteWords.length > 0) {
+        if (incompleteWords.length === 0) {
+            const confirmOverwriteMsg = safeT(
+                'confirmBatchAiOverwriteAll',
+                { total: targetWords.length },
+                `所選取的 ${targetWords.length} 筆單字資料皆已完整！\n\n` +
+                `是否要開啟「語言修正模式」（依據當前學習語系與母語重新解析並【強制覆蓋】舊資料）？\n\n` +
+                `【確定】➜ 強制覆蓋\n` +
+                `【取消】➜ 放棄退出`
+            );
+            if (!confirm(confirmOverwriteMsg)) return;
+            forceOverwrite = true;
+            targetBatch = targetWords;
+        } else if (hasAnyExistingData) {
             const promptChoiceMsg = safeT(
                 'promptBatchAiModeChoice',
                 { total: targetWords.length, incomplete: incompleteWords.length },
-                `選取的 ${targetWords.length} 筆單字中，有 ${incompleteWords.length} 筆缺漏欄位。\n\n` +
+                `選取的 ${targetWords.length} 筆單字中，有 ${incompleteWords.length} 筆缺漏或非母語欄位。\n\n` +
                 `請輸入數字選擇處理方式：\n` +
-                `1 ➜ 僅補齊缺漏欄位 (${incompleteWords.length} 筆)\n` +
-                `2 ➜ 開啟「語言修正模式」(強制覆蓋解析全選 ${targetWords.length} 筆)\n\n` +
+                `1 ➜ 僅補齊缺漏／非母語欄位 (${incompleteWords.length} 筆)\n` +
+                `2 ➜ 開啟「強制覆蓋模式」(依目前目標語言與母語重新解析全選 ${targetWords.length} 筆)\n\n` +
                 `點擊【取消】將關閉並退出。`
             );
             const choice = prompt(promptChoiceMsg, "1");
@@ -1250,18 +1317,6 @@ async function handleBatchAiFillLibraryWords() {
             } else {
                 return;
             }
-        } else if (incompleteWords.length === 0) {
-            const confirmOverwriteMsg = safeT(
-                'confirmBatchAiOverwriteAll',
-                { total: targetWords.length },
-                `所選取的 ${targetWords.length} 筆單字資料皆已完整！\n\n` +
-                `是否要開啟「語言修正模式」（依據當前學習語系重新解析並【強制覆蓋】舊資料）？\n\n` +
-                `【確定】➜ 強制覆蓋\n` +
-                `【取消】➜ 放棄退出`
-            );
-            if (!confirm(confirmOverwriteMsg)) return;
-            forceOverwrite = true;
-            targetBatch = targetWords;
         } else {
             targetBatch = incompleteWords;
             const confirmMsg = safeT('confirmBatchAiFill', { count: targetBatch.length }, `確定要使用 AI 自動補齊缺漏的 ${targetBatch.length} 筆單字嗎？`);
