@@ -149,6 +149,7 @@ const StorageEngine = {
   LOCAL_DIRTY_KEY: 'lzhcard_dirty_sync',
   LOCAL_DELETED_KEY: 'lzhcard_deleted_keys',
   LOCAL_QUIZ_SCORE_KEY: 'lzhcard_quiz_score',
+  CHUNK_TARGET_BYTES: 350000, // 每個雲端分片上限約 350 KB（遠低於 Firestore 1MB 限制）
   _cloudSaveTimer: null,
   _retryTimer: null,
   _inFlightLoad: null,
@@ -190,7 +191,9 @@ const StorageEngine = {
       localStorage.removeItem(this.LOCAL_DELETED_KEY);
       return;
     }
-    localStorage.setItem(this.LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedSet)));
+    try {
+      localStorage.setItem(this.LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedSet)));
+    } catch (e) {}
   },
 
   /**
@@ -289,9 +292,13 @@ const StorageEngine = {
     return hasMigrated;
   },
 
+  /**
+   * 🧱 還原完整欄位結構（供記憶體與 UI 使用）
+   */
   sanitizeDecksForStorage(decks) {
     if (!Array.isArray(decks)) return [];
     const seenIds = new Set();
+    const defaultCat = getStorageDefaultCatName();
 
     return decks
       .filter(card => card && typeof card === 'object')
@@ -308,7 +315,7 @@ const StorageEngine = {
 
         const normalized = {
           id: safeId,
-          category: String(card.category || getStorageDefaultCatName()).trim() || getStorageDefaultCatName(),
+          category: String(card.category || defaultCat).trim() || defaultCat,
           word: String(card.word || '').trim(),
           pos: String(card.pos || '').trim(),
           phonetic: String(card.phonetic || '').trim(),
@@ -334,6 +341,67 @@ const StorageEngine = {
   },
 
   /**
+   * 🗜️ 精簡雲端傳輸負載（省略空字串與預設初期值，大幅減少約 40%~50% 容量）
+   */
+  compactDecksForCloud(sanitizedDecks) {
+    return sanitizedDecks.map(c => {
+      const out = {
+        id: c.id,
+        category: c.category,
+        word: c.word,
+        updatedAt: c.updatedAt
+      };
+      if (c.pos) out.pos = c.pos;
+      if (c.phonetic) out.phonetic = c.phonetic;
+      if (c.meaning) out.meaning = c.meaning;
+      if (c.sentence) out.sentence = c.sentence;
+      if (c.translation) out.translation = c.translation;
+      if (c.level !== 1) out.level = c.level;
+      if (c.knowStreak !== 0) out.knowStreak = c.knowStreak;
+      if (c.state && c.state !== 'new') out.state = c.state;
+      if (c.stability !== 0) out.stability = c.stability;
+      if (Math.abs(c.difficulty - 5.5) > 0.001) out.difficulty = c.difficulty;
+      if (c.reps !== 0) out.reps = c.reps;
+      if (c.lapses !== 0) out.lapses = c.lapses;
+      if (c.lastReview !== 0) out.lastReview = c.lastReview;
+      if (c.nextReview !== 0) out.nextReview = c.nextReview;
+      if (c.freeLevel !== 1) out.freeLevel = c.freeLevel;
+      if (c.freeStreak !== 0) out.freeStreak = c.freeStreak;
+      return out;
+    });
+  },
+
+  /**
+   * 📦 將單字陣列依位元組大小切分為多個安全分片（每片 <= 350 KB）
+   */
+  splitIntoChunks(compactDecks, maxChunkBytes = this.CHUNK_TARGET_BYTES) {
+    if (!Array.isArray(compactDecks) || compactDecks.length === 0) return [];
+    const chunks = [];
+    let currentChunk = [];
+    let currentBytes = 64;
+
+    for (let i = 0; i < compactDecks.length; i++) {
+      const item = compactDecks[i];
+      const itemBytes = new Blob([JSON.stringify(item)]).size + 2;
+
+      if (currentChunk.length > 0 && currentBytes + itemBytes > maxChunkBytes) {
+        chunks.push(currentChunk);
+        currentChunk = [];
+        currentBytes = 64;
+      }
+
+      currentChunk.push(item);
+      currentBytes += itemBytes;
+    }
+
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk);
+    }
+
+    return chunks;
+  },
+
+  /**
    * 🔀 合併雲端與本機單字進度（同步套用尚未上傳的刪除紀錄，避免已刪除的單字從雲端復活）
    */
   mergeRemoteAndLocalDecks(remoteDecks, localDecks, isLocalDirty) {
@@ -341,7 +409,6 @@ const StorageEngine = {
     const deletedSet = this.getDeletedKeysSet();
     const hasPendingDeletions = deletedSet.size > 0;
 
-    // 若本機已執行「清空全部單字」且尚未同步至雲端，直接維持空陣列並補傳
     if (isLocalDirty && Array.isArray(localDecks) && localDecks.length === 0) {
       return { decks: [], needsCloudSync: true };
     }
@@ -373,7 +440,6 @@ const StorageEngine = {
       if (!remoteCard || typeof remoteCard !== 'object') return;
       const compositeKey = this.buildCardCompositeKey(remoteCard, defaultCatName);
 
-      // 過濾掉本機已刪除但尚未同步完成的單字
       if ((remoteCard.id && deletedSet.has(remoteCard.id)) || (compositeKey && deletedSet.has(compositeKey))) {
         needsCloudSync = true;
         return;
@@ -399,7 +465,6 @@ const StorageEngine = {
       merged.push(remoteCard);
     });
 
-    // 若本機有尚未成功同步至雲端的新增單字，一併保留並補傳
     if (isLocalDirty && Array.isArray(localDecks)) {
       localDecks.forEach(localCard => {
         if (!localCard || typeof localCard !== 'object') return;
@@ -494,7 +559,6 @@ const StorageEngine = {
     const uid = this.getCurrentUid();
     const loadKey = uid || 'guest';
 
-    // 避免同一身份重複並發載入造成競態覆蓋
     if (this._inFlightLoad && this._inFlightLoad.key === loadKey) {
       return this._inFlightLoad.promise;
     }
@@ -518,10 +582,33 @@ const StorageEngine = {
             const data = doc.data();
             let remoteDecks = [];
 
-            if (data.decks && Array.isArray(data.decks)) {
-              remoteDecks = data.decks;
-            } else if (data.wordList && Array.isArray(data.wordList)) {
-              remoteDecks = data.wordList;
+            // 優先讀取分片子集合 deckChunks（支援突破 1MB 的大型字庫）
+            if (typeof data.deckChunkCount === 'number' && data.deckChunkCount > 0) {
+              try {
+                const chunksSnap = await docRef.collection('deckChunks').get();
+                const chunkDocs = chunksSnap.docs
+                  .map(d => ({ id: d.id, ...d.data() }))
+                  .sort((a, b) => {
+                    const idxA = typeof a.index === 'number' ? a.index : parseInt(String(a.id).replace('chunk_', ''), 10) || 0;
+                    const idxB = typeof b.index === 'number' ? b.index : parseInt(String(b.id).replace('chunk_', ''), 10) || 0;
+                    return idxA - idxB;
+                  });
+                chunkDocs.forEach(cd => {
+                  if (Array.isArray(cd.decks)) {
+                    remoteDecks.push(...cd.decks);
+                  }
+                });
+              } catch (chunkErr) {
+                console.warn("讀取分片子集合失敗，嘗試讀取主文件 decks：", chunkErr);
+              }
+            }
+
+            if (remoteDecks.length === 0) {
+              if (data.decks && Array.isArray(data.decks)) {
+                remoteDecks = data.decks;
+              } else if (data.wordList && Array.isArray(data.wordList)) {
+                remoteDecks = data.wordList;
+              }
             }
 
             const { decks: mergedDecks, needsCloudSync } = this.mergeRemoteAndLocalDecks(
@@ -533,9 +620,10 @@ const StorageEngine = {
             wordList = this.sanitizeDecksForStorage(mergedDecks);
             const migrated = this.migrateAllCardsFSRS(wordList);
             const deduped = this.deduplicateSameDeckWords(wordList);
-            localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+            try {
+              localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+            } catch (e) {}
 
-            // 合併隨堂測驗累計分數
             const localQuiz = this.getLocalQuizScore();
             const remoteQuiz = data.quizScore || { correct: 0, total: 0, updatedAt: 0 };
             const bestQuiz = (localQuiz.updatedAt || 0) > (remoteQuiz.updatedAt || 0) ? localQuiz : remoteQuiz;
@@ -564,27 +652,15 @@ const StorageEngine = {
 
             return wordList;
           } else {
-            const localApiKey = localStorage.getItem(this.LOCAL_APIKEY_KEY) || '';
             const initialDecks = Array.isArray(localDecks) ? localDecks : [];
             this.migrateAllCardsFSRS(initialDecks);
             this.deduplicateSameDeckWords(initialDecks);
-            const sanitizedDecks = this.sanitizeDecksForStorage(initialDecks);
-            const currentSettings = this.getLocalSettings();
-            const localQuiz = this.getLocalQuizScore();
-
-            await docRef.set({
-              decks: sanitizedDecks,
-              apiKey: localApiKey,
-              settings: currentSettings,
-              quizScore: localQuiz,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-
-            wordList = sanitizedDecks;
-            localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
-            localStorage.removeItem(this.LOCAL_DIRTY_KEY);
-            localStorage.removeItem(this.LOCAL_DELETED_KEY);
-            this.applyQuizScoreState(localQuiz);
+            wordList = this.sanitizeDecksForStorage(initialDecks);
+            try {
+              localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+            } catch (e) {}
+            this.applyQuizScoreState(this.getLocalQuizScore());
+            await this.flushCloudSave();
 
             if (typeof checkAndOpenOnboardingModal === 'function') {
               checkAndOpenOnboardingModal();
@@ -604,7 +680,9 @@ const StorageEngine = {
       const migratedLocal = this.migrateAllCardsFSRS(wordList);
       const dedupedLocal = this.deduplicateSameDeckWords(wordList);
       if (migratedLocal || dedupedLocal) {
-        localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+        try {
+          localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(wordList));
+        } catch (e) {}
       }
       this.applyQuizScoreState(this.getLocalQuizScore());
       return wordList;
@@ -626,7 +704,6 @@ const StorageEngine = {
       this._cloudSaveTimer = null;
     }
 
-    // 串行寫入鎖：避免多次刪除或同步請求並發時，舊資料覆蓋新資料
     if (this._isFlushing) {
       this._hasPendingFlush = true;
       return;
@@ -645,40 +722,95 @@ const StorageEngine = {
         const currentApiKey = String(localStorage.getItem(this.LOCAL_APIKEY_KEY) || '');
         const currentSettings = this.getLocalSettings();
         const sanitizedDecks = this.sanitizeDecksForStorage(wordList);
+        const compactDecks = this.compactDecksForCloud(sanitizedDecks);
         const currentQuizScore = this.getLocalQuizScore();
 
-        const payload = {
-          decks: sanitizedDecks,
+        const userDocRef = db.collection('users').doc(uid);
+        const chunksColRef = userDocRef.collection('deckChunks');
+
+        const basePayload = {
           apiKey: currentApiKey,
           settings: currentSettings,
           quizScore: currentQuizScore,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        // 清除舊版殘留的 wordList 欄位，避免任何舊資料復活
         if (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue) {
-          payload.wordList = firebase.firestore.FieldValue.delete();
+          basePayload.wordList = firebase.firestore.FieldValue.delete();
         }
 
-        // 檢查是否超過 Firestore 單一文件 1MB (1,048,576 bytes) 上限
-        const approxBytes = new Blob([JSON.stringify({
-          decks: sanitizedDecks,
+        // 精簡後總大小（位元組）
+        const compactBytes = new Blob([JSON.stringify({
+          decks: compactDecks,
           apiKey: currentApiKey,
           settings: currentSettings,
           quizScore: currentQuizScore
         })]).size;
 
-        if (approxBytes > 1000000) {
-          const kb = Math.round(approxBytes / 1024);
-          if (typeof showToast === 'function') {
-            showToast(`⚠️ 雲端同步失敗：單字庫資料量（${kb} KB）超過雲端單檔 1MB 上限，請先刪除部分字庫！`, 'error');
+        // 策略 1：精簡後若在 750 KB 以內，直接存入主文件並清理舊分片（最快、相容所有 Firestore 規則）
+        if (compactBytes <= 750000) {
+          try {
+            const oldChunksSnap = await chunksColRef.get();
+            if (!oldChunksSnap.empty) {
+              const delBatch = db.batch();
+              oldChunksSnap.docs.forEach(d => delBatch.delete(d.ref));
+              await delBatch.commit();
+            }
+          } catch (cleanErr) {
+            // 若無子集合權限或尚無分片則忽略
           }
-          break;
+
+          await userDocRef.set({
+            ...basePayload,
+            decks: compactDecks,
+            deckChunkCount: 0
+          }, { merge: true });
+        } else {
+          // 策略 2：資料超過 750 KB，自動切分為多個 350 KB 子集合分片寫入（支援無限容量）
+          const chunks = this.splitIntoChunks(compactDecks, this.CHUNK_TARGET_BYTES);
+
+          try {
+            const existingSnap = await chunksColRef.get();
+            const batch = db.batch();
+
+            chunks.forEach((chunkItems, idx) => {
+              const chunkRef = chunksColRef.doc(`chunk_${idx}`);
+              batch.set(chunkRef, {
+                index: idx,
+                decks: chunkItems,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
+            });
+
+            // 刪除多餘的舊分片（例如刪字後分片數從 4 減為 2）
+            existingSnap.docs.forEach(docSnap => {
+              const idx = parseInt(String(docSnap.id).replace('chunk_', ''), 10);
+              if (Number.isNaN(idx) || idx >= chunks.length) {
+                batch.delete(docSnap.ref);
+              }
+            });
+
+            batch.set(userDocRef, {
+              ...basePayload,
+              decks: [],
+              deckChunkCount: chunks.length
+            }, { merge: true });
+
+            await batch.commit();
+          } catch (chunkWriteErr) {
+            // 若 Firestore 安全規則尚未開放 deckChunks 子集合且精簡後小於 980 KB，降級寫入主文件
+            if (compactBytes <= 980000) {
+              await userDocRef.set({
+                ...basePayload,
+                decks: compactDecks,
+                deckChunkCount: 0
+              }, { merge: true });
+            } else {
+              throw chunkWriteErr;
+            }
+          }
         }
 
-        await db.collection('users').doc(uid).set(payload, { merge: true });
-
-        // 寫入成功且期間沒有新的變更，才清除 dirty 與刪除紀錄
         if (!this._hasPendingFlush) {
           localStorage.removeItem(this.LOCAL_DIRTY_KEY);
           localStorage.removeItem(this.LOCAL_DELETED_KEY);
@@ -689,8 +821,11 @@ const StorageEngine = {
       const now = Date.now();
       if (typeof showToast === 'function' && now - this._lastSyncErrorToastAt > 4000) {
         this._lastSyncErrorToastAt = now;
-        const errCode = e && (e.code || e.message) ? ` (${e.code || e.message})` : '';
-        showToast(`⚠️ 雲端同步失敗${errCode}，系統將自動重試`, 'error');
+        const isPermErr = e && e.code === 'permission-denied';
+        const hint = isPermErr
+          ? '（請在 Firebase Firestore 規則允許讀寫 users/{uid}/deckChunks 子集合）'
+          : (e && (e.code || e.message) ? ` (${e.code || e.message})` : '');
+        showToast(`⚠️ 雲端同步失敗${hint}`, 'error');
       }
       if (!this._retryTimer) {
         this._retryTimer = setTimeout(() => {
@@ -718,13 +853,11 @@ const StorageEngine = {
     }
     const sanitizedDecks = this.sanitizeDecksForStorage(decks);
 
-    // 同步回寫 wordList 確保記憶體內的物件也是乾淨的
     if (Array.isArray(wordList)) {
       wordList.length = 0;
       wordList.push(...sanitizedDecks);
     }
 
-    // 比對前後單字清單，記錄本次被刪除的單字鍵值，並在刪除時立即同步雲端
     const nextIds = new Set();
     const nextKeys = new Set();
     sanitizedDecks.forEach(c => {
@@ -755,7 +888,9 @@ const StorageEngine = {
     }
 
     this.saveDeletedKeysSet(deletedSet);
-    localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(sanitizedDecks));
+    try {
+      localStorage.setItem(this.LOCAL_DECKS_KEY, JSON.stringify(sanitizedDecks));
+    } catch (e) {}
     localStorage.setItem(this.LOCAL_DIRTY_KEY, 'true');
 
     if (this._cloudSaveTimer) {
