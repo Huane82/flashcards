@@ -14,23 +14,24 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // 👤 使用者資料庫 (金幣、角色與暱稱)
+    // 👤 使用者資料庫 (放行本人建檔與資料同步，僅禁止非管理員將 role 設為 admin)
     match /users/{userId} {
       allow read: if isSignedIn();
 
-      // 允許新帳號建檔與初始化預設金幣，僅禁止自行將 role 設為 admin
       allow create: if isSignedIn() && request.auth.uid == userId 
-        && (!('role' in request.resource.data) || request.resource.data.role == 'user');
+        && (!('role' in request.resource.data) || request.resource.data.role != 'admin');
 
-      // 允許使用者更新自己的資料與金幣，僅禁止自行竄改 role 權限
       allow update: if isSignedIn() && request.auth.uid == userId 
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || isAdmin());
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || 
+          request.resource.data.role != 'admin' || 
+          isAdmin()
+        );
 
-      // 管理員擁有最高寫入權限
-      allow write: if isAdmin();
+      allow delete: if isAdmin();
 
-      // 📦 單字庫大容量分片子集合 (突破單檔 1MB 上限)
-      match /deckChunks/{chunkId} {
+      // 📦 單字庫大容量分片與使用者個人子集合 (突破單檔 1MB 上限)
+      match /{subcollection=**} {
         allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
     }
@@ -52,7 +53,8 @@ service cloud.firestore {
       match /{subcollection=**} {
         allow read: if true;
         allow write: if isSignedIn() && (
-          get(/databases/$(database)/documents/storeDecks/$(deckId)).data.authorId == request.auth.uid || 
+          (exists(/databases/$(database)/documents/storeDecks/$(deckId)) &&
+           get(/databases/$(database)/documents/storeDecks/$(deckId)).data.authorId == request.auth.uid) || 
           isAdmin()
         );
       }
