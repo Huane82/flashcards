@@ -268,6 +268,12 @@ const I18N_DICTIONARY = {
         thBatchMeaning: "母語釋義",
         thBatchStatus: "狀態",
         btnConfirmImport: "確認匯入至字庫",
+        
+        batchPresetTitleJa: "一鍵載入 JLPT 日檢單字庫 (N5 ～ N1 分級)",
+        jlptDeckName: "JLPT {level} 單字庫",
+        confirmLoadJlptPreset: "確定要載入【JLPT {level}】日檢單字庫嗎？",
+        toastJlptLevelNotFound: "找不到 JLPT {level} 的單字資料。",
+
 
         modalKeyTitle: "Gemini API Key 設定",
         modalKeyDesc: "選擇 API 金鑰模式以啟用自動生成單字音標、詞性、母語釋義及例句翻譯功能。",
@@ -812,6 +818,12 @@ const I18N_DICTIONARY = {
         thBatchMeaning: "Definition",
         thBatchStatus: "Status",
         btnConfirmImport: "Confirm Import to Deck",
+        
+        batchPresetTitleJa: "One-click Load JLPT Japanese Vocabulary (N5 - N1)",
+        jlptDeckName: "JLPT {level} Deck",
+        confirmLoadJlptPreset: "Are you sure you want to load JLPT {level} vocabulary?",
+        toastJlptLevelNotFound: "No vocabulary found for JLPT {level}.",
+
 
         modalKeyTitle: "Gemini API Key Settings",
         modalKeyDesc: "Select an API key mode to enable auto-generation of phonetics, POS, definitions, and sentences.",
@@ -1349,6 +1361,12 @@ const I18N_DICTIONARY = {
         thBatchMeaning: "意味",
         thBatchStatus: "ステータス",
         btnConfirmImport: "インポート確定",
+
+        batchPresetTitleJa: "JLPT 日本語能力試験単語帳を一括読み込み (N5〜N1)",
+        jlptDeckName: "JLPT {level} 単語帳",
+        confirmLoadJlptPreset: "【JLPT {level}】の単語帳を読み込みますか？",
+        toastJlptLevelNotFound: "JLPT {level} の単語データが見つかりません。",
+
 
         modalKeyTitle: "Gemini API キー設定",
         modalKeyDesc: "APIキーモードを選択して、発音記号、品詞、意味、例文の自動生成機能を有効にします。",

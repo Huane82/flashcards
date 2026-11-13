@@ -185,12 +185,14 @@ function autoDeduplicateWordList(options = {}) {
 }
 
 /**
- * 🌐 依據目前設定的目標語言與選擇字庫動態切換範例提示與預設字庫選單
+ * 🌐 依據目前設定的目標語言動態切換範例提示、預設字庫按鈕與選擇字庫選單
  */
 function updateBatchPlaceholders() {
     const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
     const batchRawInput = document.getElementById('batchRawInput');
     const quickAddInput = document.getElementById('quickAddInput');
+    const presetTitleEl = document.getElementById('batchPresetTitleText');
+    const presetBtnsEl = document.getElementById('batchPresetButtons');
 
     let batchPlaceholder = "";
     let quickAddPlaceholder = "";
@@ -204,6 +206,17 @@ function updateBatchPlaceholders() {
                            `5. 乾杯 /かんぱい/ 乾杯！`;
 
         quickAddPlaceholder = `例如: 食べる, 猫, 勉強する, 綺麗`;
+
+        if (presetTitleEl) {
+            presetTitleEl.setAttribute('data-i18n', 'batchPresetTitleJa');
+            presetTitleEl.innerText = safeT('batchPresetTitleJa', null, '一鍵載入 JLPT 日檢單字庫 (N5 ～ N1 分級)');
+        }
+        if (presetBtnsEl) {
+            presetBtnsEl.className = 'grid grid-cols-3 sm:grid-cols-5 gap-2 pt-1';
+            presetBtnsEl.innerHTML = [5, 4, 3, 2, 1].map(nLv => `
+                <button type="button" onclick="handleLoadPreset(${nLv}, event)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">N${nLv}</button>
+            `).join('');
+        }
     } else if (targetLang === 'zh-TW' || targetLang === 'zh') {
         batchPlaceholder = `【中文/國語輸入範例】（支援格式：詞彙 + 注音/拼音 + 詞性 + 外語釋義）\n` +
                            `1. 韌性 ㄖㄣˋ ㄒㄧㄥˋ (n.) resilience\n` +
@@ -212,6 +225,17 @@ function updateBatchPlaceholders() {
                            `4. 蘋果 (名詞) apple`;
 
         quickAddPlaceholder = `例如: 韌性, 努力, 學習, 蘋果`;
+
+        if (presetTitleEl) {
+            presetTitleEl.setAttribute('data-i18n', 'batchPresetTitle');
+            presetTitleEl.innerText = safeT('batchPresetTitle', null, '一鍵載入高中 7000 單字庫 (大考中心 / 108 課綱分級)');
+        }
+        if (presetBtnsEl) {
+            presetBtnsEl.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1';
+            presetBtnsEl.innerHTML = [1, 2, 3, 4, 5, 6].map(lv => `
+                <button type="button" onclick="handleLoadPreset(${lv}, event)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level ${lv}</button>
+            `).join('');
+        }
     } else {
         batchPlaceholder = `【英文輸入範例】（支援格式：單字 + 音標 + 詞性 + 中文釋義）\n` +
                            `1. resilient /rɪˈzɪl.jənt/ (adj.) 有彈性的\n` +
@@ -220,6 +244,17 @@ function updateBatchPlaceholders() {
                            `4. candidate : 候選人`;
 
         quickAddPlaceholder = `例如: resilient, fragile, candidate`;
+
+        if (presetTitleEl) {
+            presetTitleEl.setAttribute('data-i18n', 'batchPresetTitle');
+            presetTitleEl.innerText = safeT('batchPresetTitle', null, '一鍵載入高中 7000 單字庫 (大考中心 / 108 課綱分級)');
+        }
+        if (presetBtnsEl) {
+            presetBtnsEl.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1';
+            presetBtnsEl.innerHTML = [1, 2, 3, 4, 5, 6].map(lv => `
+                <button type="button" onclick="handleLoadPreset(${lv}, event)" class="py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-brand-100 dark:hover:bg-slate-700 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-slate-600 text-xs font-bold rounded-lg transition shadow-2xs">Level ${lv}</button>
+            `).join('');
+        }
     }
 
     if (batchRawInput) batchRawInput.placeholder = batchPlaceholder;
@@ -257,7 +292,180 @@ function findChineseMeaningFromObject(item) {
     return '';
 }
 
-async function handleLoadPreset(levelNum) {
+/**
+ * 📄 RFC-4180 CSV 解析器（用於解析開源 JLPT CSV 單字表）
+ */
+function parseSimpleCsvRows(csvText) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < csvText.length; i++) {
+        const ch = csvText[i];
+        const next = csvText[i + 1];
+
+        if (inQuotes) {
+            if (ch === '"' && next === '"') {
+                field += '"';
+                i++;
+            } else if (ch === '"') {
+                inQuotes = false;
+            } else {
+                field += ch;
+            }
+        } else {
+            if (ch === '"') {
+                inQuotes = true;
+            } else if (ch === ',') {
+                row.push(field.trim());
+                field = '';
+            } else if (ch === '\r' && next === '\n') {
+                row.push(field.trim());
+                rows.push(row);
+                row = [];
+                field = '';
+                i++;
+            } else if (ch === '\n' || ch === '\r') {
+                row.push(field.trim());
+                rows.push(row);
+                row = [];
+                field = '';
+            } else {
+                field += ch;
+            }
+        }
+    }
+    if (field.length > 0 || row.length > 0) {
+        row.push(field.trim());
+        rows.push(row);
+    }
+    return rows.filter(r => r.some(cell => cell !== ''));
+}
+
+/**
+ * 🇯🇵 載入 JLPT 日檢單字庫 (N5 ～ N1)
+ */
+async function handleLoadJlptPreset(nLevel, ev) {
+    const levelTag = `N${nLevel}`;
+    const confirmMsg = safeT('confirmLoadJlptPreset', { level: levelTag }, `確定要載入【JLPT ${levelTag}】日檢單字庫嗎？`);
+    if (!confirm(confirmMsg)) return;
+
+    const JLPT_SOURCES = [
+        { type: 'json', url: `https://jlpt-vocab-api.vercel.app/api/words/all?level=${nLevel}` },
+        { type: 'csv', url: `https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@main/src/n${nLevel}.csv` },
+        { type: 'csv', url: `https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/main/src/n${nLevel}.csv` },
+        { type: 'csv', url: `https://cdn.jsdelivr.net/gh/jamsinclair/open-anki-jlpt-decks@master/src/n${nLevel}.csv` }
+    ];
+
+    const btn = ev ? (ev.currentTarget || ev.target) : null;
+    const origText = btn ? btn.innerText : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = safeT('btnDownloading', null, '下載中...');
+    }
+
+    let rawItems = null;
+
+    try {
+        for (const src of JLPT_SOURCES) {
+            try {
+                const res = await fetch(src.url);
+                if (!res.ok) continue;
+
+                if (src.type === 'json') {
+                    const data = await res.json();
+                    const list = Array.isArray(data) ? data : (Array.isArray(data?.words) ? data.words : null);
+                    if (Array.isArray(list) && list.length > 0) {
+                        rawItems = list;
+                        break;
+                    }
+                } else {
+                    const text = await res.text();
+                    const rows = parseSimpleCsvRows(text);
+                    if (rows.length > 1) {
+                        const headers = rows[0].map(h => h.toLowerCase());
+                        const idxExpr = headers.indexOf('expression');
+                        const idxRead = headers.indexOf('reading');
+                        const idxMean = headers.indexOf('meaning');
+
+                        rawItems = rows.slice(1).map(cols => ({
+                            word: cols[idxExpr >= 0 ? idxExpr : 0] || '',
+                            phonetic: cols[idxRead >= 0 ? idxRead : 1] || '',
+                            meaning: cols[idxMean >= 0 ? idxMean : 2] || ''
+                        })).filter(it => it.word || it.phonetic);
+
+                        if (rawItems.length > 0) break;
+                    }
+                }
+            } catch (e) {
+                console.warn(`[JLPT CDN] 連線至 ${src.url} 失敗，嘗試備援...`);
+            }
+        }
+
+        if (!rawItems || rawItems.length === 0) {
+            if (typeof showToast === 'function') showToast(safeT('toastCdnFailed', null, '無法連接至字庫伺服器'), 'error');
+            return;
+        }
+
+        const catName = safeT('jlptDeckName', { level: levelTag }, `JLPT ${levelTag} 單字庫`);
+        if (typeof setCategorySelectorValue === 'function') {
+            setCategorySelectorValue('batch', catName);
+        } else {
+            const targetCategoryInput = document.getElementById('batchTargetCategory');
+            if (targetCategoryInput) targetCategoryInput.value = catName;
+        }
+
+        const seenSet = new Set();
+        window.parsedBatchList = [];
+
+        rawItems.forEach(item => {
+            const rawW = String(item.word || item.expression || item.kanji || item.term || item.furigana || item.reading || '').trim().replace(/\s+/g, ' ');
+            const rawPhonetic = String(item.furigana || item.reading || item.kana || item.phonetic || '').trim();
+            const rawPos = String(item.pos || item.partOfSpeech || item.type || '').trim();
+            let rawM = findChineseMeaningFromObject(item);
+            if (!rawM) {
+                rawM = String(item.meaning || item.definition || item.translation || item.en || '').trim();
+            }
+
+            if (!rawW) return;
+            const dedupKey = `${normalizeWordKey(rawW)}::${normalizeWordKey(rawPhonetic)}`;
+            if (seenSet.has(dedupKey)) return;
+            seenSet.add(dedupKey);
+
+            window.parsedBatchList.push({
+                word: rawW,
+                pos: rawPos,
+                phonetic: rawPhonetic && rawPhonetic !== rawW ? rawPhonetic : rawPhonetic,
+                meaning: rawM,
+                sentence: String(item.sentence || item.example || '').trim(),
+                translation: String(item.translation || item.exampleZh || '').trim()
+            });
+        });
+
+        if (window.parsedBatchList.length === 0) {
+            if (typeof showToast === 'function') showToast(safeT('toastJlptLevelNotFound', { level: levelTag }, `找不到 JLPT ${levelTag} 的單字資料。`), 'warning');
+            return;
+        }
+
+        renderBatchPreview();
+        if (typeof showToast === 'function') {
+            showToast(safeT('toastPresetSuccess', { name: catName, count: window.parsedBatchList.length }, `成功載入「${catName}」共 ${window.parsedBatchList.length} 個單字`), 'success');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    }
+}
+
+async function handleLoadPreset(levelNum, ev) {
+    const targetLang = localStorage.getItem('lzhcard_target_lang') || 'en';
+    if (targetLang === 'ja') {
+        return handleLoadJlptPreset(levelNum, ev);
+    }
+
     const confirmMsg = safeT('confirmLoadPreset', { level: levelNum }, `確定要載入高中 7000 單 L${levelNum} 嗎？`);
     if (!confirm(confirmMsg)) return;
 
@@ -268,7 +476,7 @@ async function handleLoadPreset(levelNum) {
         "https://raw.githubusercontent.com/zenkarsha/words7000/main/words.json"
     ];
 
-    const btn = event ? (event.currentTarget || event.target) : null;
+    const btn = ev ? (ev.currentTarget || ev.target) : (typeof event !== 'undefined' && event ? (event.currentTarget || event.target) : null);
     const origText = btn ? btn.innerText : "";
     if (btn) {
         btn.disabled = true;
@@ -277,85 +485,85 @@ async function handleLoadPreset(levelNum) {
 
     let allWords = null;
 
-    for (const url of CDN_SOURCES) {
-        try {
-            const res = await fetch(url);
-            if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    allWords = data;
-                    break;
+    try {
+        for (const url of CDN_SOURCES) {
+            try {
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        allWords = data;
+                        break;
+                    }
                 }
+            } catch (e) {
+                console.warn(`[CDN] 連線至 ${url} 失敗，嘗試備援...`);
             }
-        } catch (e) {
-            console.warn(`[CDN] 連線至 ${url} 失敗，嘗試備援...`);
-        }
-    }
-
-    if (!allWords) {
-        if (typeof showToast === 'function') showToast(safeT('toastCdnFailed', null, '無法連接至字庫伺服器'), 'error');
-        if (btn) { btn.disabled = false; btn.innerText = origText; }
-        return;
-    }
-
-    const targetWords = allWords.filter(item => {
-        const itemLv = Number(item.level || item.lv || item.L || 0);
-        if (itemLv > 0) return itemLv === levelNum;
-        const idx = allWords.indexOf(item);
-        return Math.floor(idx / 1000) + 1 === levelNum;
-    });
-
-    if (!targetWords || targetWords.length === 0) {
-        if (typeof showToast === 'function') showToast(safeT('toastLevelNotFound', { level: levelNum }, `未找到 Level ${levelNum} 的單字`), 'warning');
-        if (btn) { btn.disabled = false; btn.innerText = origText; }
-        return;
-    }
-
-    const catName = `高中 7000 單 L${levelNum}`;
-    if (typeof setCategorySelectorValue === 'function') {
-        setCategorySelectorValue('batch', catName);
-    } else {
-        const targetCategoryInput = document.getElementById('batchTargetCategory');
-        if (targetCategoryInput) targetCategoryInput.value = catName;
-    }
-
-    const seenSet = new Set();
-    window.parsedBatchList = [];
-
-    targetWords.forEach(item => {
-        const rawW = item.word || item.term || item.english || item.w || '';
-        const rawP = item.pos || item.partOfSpeech || item.type || item.p || '';
-        
-        let rawM = findChineseMeaningFromObject(item);
-        if (!rawM) {
-            rawM = item.meaning || item.definition || item.zh || item.ch || item.chinese || item.trans || item.m || '';
         }
 
-        const cleanObj = (typeof sanitizeWordAndPos === 'function') 
-            ? sanitizeWordAndPos(rawW, rawP, rawM)
-            : { word: rawW, pos: rawP, meaning: rawM };
+        if (!allWords) {
+            if (typeof showToast === 'function') showToast(safeT('toastCdnFailed', null, '無法連接至字庫伺服器'), 'error');
+            return;
+        }
 
-        const normKey = normalizeWordKey(cleanObj.word);
-        if (!normKey || seenSet.has(normKey)) return;
-        seenSet.add(normKey);
-
-        window.parsedBatchList.push({
-            word: cleanObj.word.trim().replace(/\s+/g, ' '),
-            pos: cleanObj.pos,
-            phonetic: item.phonetic || item.pronunciation || '',
-            meaning: cleanObj.meaning,
-            sentence: item.sentence || item.example || '',
-            translation: item.translation || item.exampleZh || ''
+        const targetWords = allWords.filter(item => {
+            const itemLv = Number(item.level || item.lv || item.L || 0);
+            if (itemLv > 0) return itemLv === levelNum;
+            const idx = allWords.indexOf(item);
+            return Math.floor(idx / 1000) + 1 === levelNum;
         });
-    });
 
-    if (btn) {
-        btn.disabled = false;
-        btn.innerText = origText;
+        if (!targetWords || targetWords.length === 0) {
+            if (typeof showToast === 'function') showToast(safeT('toastLevelNotFound', { level: levelNum }, `未找到 Level ${levelNum} 的單字`), 'warning');
+            return;
+        }
+
+        const catName = `高中 7000 單 L${levelNum}`;
+        if (typeof setCategorySelectorValue === 'function') {
+            setCategorySelectorValue('batch', catName);
+        } else {
+            const targetCategoryInput = document.getElementById('batchTargetCategory');
+            if (targetCategoryInput) targetCategoryInput.value = catName;
+        }
+
+        const seenSet = new Set();
+        window.parsedBatchList = [];
+
+        targetWords.forEach(item => {
+            const rawW = item.word || item.term || item.english || item.w || '';
+            const rawP = item.pos || item.partOfSpeech || item.type || item.p || '';
+            
+            let rawM = findChineseMeaningFromObject(item);
+            if (!rawM) {
+                rawM = item.meaning || item.definition || item.zh || item.ch || item.chinese || item.trans || item.m || '';
+            }
+
+            const cleanObj = (typeof sanitizeWordAndPos === 'function') 
+                ? sanitizeWordAndPos(rawW, rawP, rawM)
+                : { word: rawW, pos: rawP, meaning: rawM };
+
+            const normKey = normalizeWordKey(cleanObj.word);
+            if (!normKey || seenSet.has(normKey)) return;
+            seenSet.add(normKey);
+
+            window.parsedBatchList.push({
+                word: cleanObj.word.trim().replace(/\s+/g, ' '),
+                pos: cleanObj.pos,
+                phonetic: item.phonetic || item.pronunciation || '',
+                meaning: cleanObj.meaning,
+                sentence: item.sentence || item.example || '',
+                translation: item.translation || item.exampleZh || ''
+            });
+        });
+
+        renderBatchPreview();
+        if (typeof showToast === 'function') showToast(safeT('toastPresetSuccess', { name: catName, count: window.parsedBatchList.length }, `成功載入「${catName}」共 ${window.parsedBatchList.length} 個單字`), 'success');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
     }
-
-    renderBatchPreview();
-    if (typeof showToast === 'function') showToast(safeT('toastPresetSuccess', { name: catName, count: window.parsedBatchList.length }, `成功載入「${catName}」共 ${window.parsedBatchList.length} 個單字`), 'success');
 }
 
 /**
@@ -479,6 +687,11 @@ function renderBatchPreview() {
     const textPending = safeT('statusPending', null, '待補充');
     const textRemove = safeT('btnRemove', null, '移除');
     const textTitleRemove = safeT('titleRemove', null, '移除此項');
+    const esc = (str) => String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 
     if (previewBody) {
         previewBody.innerHTML = window.parsedBatchList.map((item, idx) => {
@@ -486,12 +699,15 @@ function renderBatchPreview() {
             const statusBadge = isComplete ? 
                 `<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">${textComplete}</span>` :
                 `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">${textPending}</span>`;
+            const phoneticSub = item.phonetic
+                ? `<div class="text-[11px] font-normal text-slate-400">${esc(item.phonetic)}</div>`
+                : '';
 
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-700">
-                    <td class="p-2 border-b dark:border-slate-700 font-bold">${item.word}</td>
-                    <td class="p-2 border-b dark:border-slate-700">${item.pos || '-'}</td>
-                    <td class="p-2 border-b dark:border-slate-700">${item.meaning || '-'}</td>
+                    <td class="p-2 border-b dark:border-slate-700 font-bold">${esc(item.word)}${phoneticSub}</td>
+                    <td class="p-2 border-b dark:border-slate-700">${esc(item.pos) || '-'}</td>
+                    <td class="p-2 border-b dark:border-slate-700">${esc(item.meaning) || '-'}</td>
                     <td class="p-2 border-b dark:border-slate-700">${statusBadge}</td>
                     <td class="p-2 border-b dark:border-slate-700 text-right">
                         <button type="button" onclick="removeBatchItem(${idx})" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-0.5 rounded hover:bg-rose-50 transition" title="${textTitleRemove}">
