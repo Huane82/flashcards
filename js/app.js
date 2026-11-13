@@ -17,7 +17,27 @@ window.selectedCategories = getSavedCategories();
 let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
-let isCardActionLocked = false; // 🌟 防止短時間重複觸發的鎖定旗標
+let isCardActionLocked = false;
+
+/**
+ * 🔄 平滑關閉初始化載入遮罩
+ */
+function hideAppLoader() {
+    if (isAppLoaderHidden) return;
+    isAppLoaderHidden = true;
+    
+    const overlay = document.getElementById('appLoadingOverlay');
+    if (!overlay) return;
+    
+    overlay.classList.add('opacity-0', 'pointer-events-none');
+    setTimeout(() => {
+        overlay.classList.add('hidden');
+    }, 300);
+}
+
+// 🛡️ 安全保險機制：最多 5 秒後自動解除遮罩，避免離線或網路不穩時卡住
+setTimeout(hideAppLoader, 5000);
+
 let wordListRenderLimit = 100; // 🚀 單字列表每次渲染上限（避免一次塞入數千個 DOM）
 window._cachedFilteredWords = [];
 

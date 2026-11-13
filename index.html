@@ -38,6 +38,14 @@
     </script>
 </head>
 <body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans pb-16 sm:pb-0 transition-colors duration-200">
+    
+    <!-- 🔄 全域初始化載入畫面 -->
+<div id="appLoadingOverlay" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 transition-opacity duration-300">
+    <div class="w-12 h-12 border-4 border-brand-200 dark:border-slate-700 border-t-brand-600 dark:border-t-brand-400 rounded-full animate-spin mb-4"></div>
+    <p class="text-base font-extrabold text-slate-800 dark:text-slate-100 tracking-wide">LZHCard</p>
+    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">資料同步與初始化中，請稍候...</p>
+</div>
+
 
     <!-- 🔒 未登入 / 條款同意歡迎 Modal (z-[60] 蓋過所有元件) -->
     <div id="welcomeModal" class="hidden fixed inset-0 z-[60] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">

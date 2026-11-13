@@ -253,11 +253,16 @@ auth.onAuthStateChanged(async (user) => {
     if (loggedInEl) loggedInEl.style.display = 'none';
   }
 
-  if (typeof loadStorage === 'function') await loadStorage();
-  if (typeof updateUI === 'function') updateUI();
-  if (typeof renderStore === 'function') renderStore();
-  if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
-  if (typeof checkAdminPermissions === 'function') checkAdminPermissions();
+  try {
+    if (typeof loadStorage === 'function') await loadStorage();
+    if (typeof updateUI === 'function') updateUI();
+    if (typeof renderStore === 'function') renderStore();
+    if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
+    if (typeof checkAdminPermissions === 'function') checkAdminPermissions();
+  } finally {
+    // ✅ 所有雲端資料、字庫與權限同步完成，自動關閉載入畫面
+    if (typeof hideAppLoader === 'function') hideAppLoader();
+  }
 
   const isTosAccepted = localStorage.getItem('lzhcard_tos_accepted') === 'true';
   const isCompleted = localStorage.getItem('lzhcard_onboarding_completed') === 'true';
