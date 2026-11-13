@@ -16,11 +16,18 @@ service cloud.firestore {
     // 👤 使用者資料庫 (金幣、角色與暱稱)
     match /users/{userId} {
       allow read: if isSignedIn();
-      // 使用者可修改自己的資料，但「絕對無法」自行修改 role (權限) 與 coins (金幣)
-      allow create, update: if isSignedIn() && request.auth.uid == userId 
+      // 使用者可建立與修改自己的資料，但「絕對無法」自行設定或修改 role (權限) 與 coins (金幣)
+      allow create: if isSignedIn() && request.auth.uid == userId 
+        && (!request.resource.data.keys().hasAny(['role', 'coins']));
+      allow update: if isSignedIn() && request.auth.uid == userId 
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'coins']));
       // 管理員擁有最高寫入權限 (發放金幣、調整角色)
       allow write: if isAdmin();
+
+      // 📦 單字庫大容量分片子集合 (突破單檔 1MB 上限)
+      match /deckChunks/{chunkId} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
     }
 
     // 🛍️ 社群字庫商店 (storeDecks)
