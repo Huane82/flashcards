@@ -1,5 +1,5 @@
 /**
- * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine - 高穩定防漏字 + 自動拼寫修正版)
+ * LZHCard - Gemini AI 萬能多語系解析模組 (AI Core Engine - 即時參考同步 + 高穩定防漏字版)
  */
 
 window.cachedWorkingModel = null;
@@ -415,10 +415,19 @@ Return ONLY a valid raw JSON object:
 }
 
 /**
- * 🤖 批次 AI 欄位補充核心邏輯 (每批 10 字防截斷 + 解析失敗自動重試與拆小批 + 100% 補掃追蹤)
+ * 🤖 批次 AI 欄位補充核心邏輯 (即時同步 wordList 最新參考 + 防截斷 + 自動重試與 100% 補掃)
  */
 async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite = false) {
-    const targetItems = forceOverwrite ? targetList : targetList.filter(item => 
+    // 每次存取卡片前都依 id 從最新的 wordList 取得現行參考，防止 saveStorage 深拷貝替換陣列後寫入失效舊物件
+    const resolveLiveItem = (item) => {
+        if (item && item.id && typeof wordList !== 'undefined' && Array.isArray(wordList)) {
+            return wordList.find(w => w.id === item.id) || item;
+        }
+        return item;
+    };
+
+    const initialLiveList = targetList.map(resolveLiveItem);
+    const targetItems = forceOverwrite ? initialLiveList : initialLiveList.filter(item => 
         isFieldIncomplete(item.meaning, 'meaning') || 
         isFieldIncomplete(item.pos, 'pos') || 
         isFieldIncomplete(item.sentence, 'sentence') || 
@@ -434,10 +443,11 @@ async function runBatchAiAutoFill(targetList, progressCallback, forceOverwrite =
         ? 'MUST provide Pure Hiragana reading ONLY (純平假名讀音, e.g. はじめ; NEVER use Romaji or IPA).'
         : 'MUST provide IPA pronunciation guide for the corrected word (DO NOT LEAVE EMPTY).';
 
-    const batchSize = targetLang === 'ja' ? 10 : 20;
+    const batchSize = targetLang === 'ja' ? 20 : 20;
     let completedCount = 0;
     let successUpdatedCount = 0;
-    const updatedSet = new Set();
+    let lastBatchError = '';
+    const updatedKeys = new Set();
 
     const normalizeWord = str => (str || '').toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]/g, '');
 
@@ -473,24 +483,25 @@ Return ONLY a valid JSON array with no markdown or extra text:
         results.forEach((resItem, resIdx) => {
             if (!resItem || typeof resItem !== 'object') return;
 
-            let target = null;
+            let matched = null;
             const parsedIndex = (resItem.index !== undefined && resItem.index !== null && resItem.index !== '')
                 ? Number(resItem.index)
                 : NaN;
 
             if (!Number.isNaN(parsedIndex) && chunk[parsedIndex]) {
-                target = chunk[parsedIndex];
+                matched = chunk[parsedIndex];
             }
 
             const cleanRes = normalizeWord(resItem.word || '');
-            if (!target && cleanRes) {
-                target = chunk.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
+            if (!matched && cleanRes) {
+                matched = chunk.find(p => p && p.word && normalizeWord(p.word) === cleanRes);
             }
-            if (!target && results.length === chunk.length && chunk[resIdx]) {
-                target = chunk[resIdx];
+            if (!matched && results.length === chunk.length && chunk[resIdx]) {
+                matched = chunk[resIdx];
             }
 
-            if (target) {
+            if (matched) {
+                const target = resolveLiveItem(matched);
                 const sanitizedRes = sanitizeWordAndPos(resItem.word || target.word, resItem.pos || '', resItem.meaning || '');
                 const correctedWord = (sanitizedRes.word || String(resItem.word || target.word)).trim();
 
@@ -505,8 +516,9 @@ Return ONLY a valid JSON array with no markdown or extra text:
                 if ((forceOverwrite || isFieldIncomplete(target.translation, 'translation')) && resItem.translation) target.translation = String(resItem.translation).trim();
 
                 target.updatedAt = Date.now();
-                if (!updatedSet.has(target)) {
-                    updatedSet.add(target);
+                const trackKey = target.id || target;
+                if (!updatedKeys.has(trackKey)) {
+                    updatedKeys.add(trackKey);
                     successUpdatedCount++;
                 }
                 chunkMatched++;
@@ -517,8 +529,9 @@ Return ONLY a valid JSON array with no markdown or extra text:
 
     const executeChunkWithRetry = async (chunk, allowSplit = true) => {
         const cleanChunkInputs = chunk.map((item, idx) => {
-            const sanitized = sanitizeWordAndPos(item.word || '', '', '');
-            const cleanTerm = sanitized.word || String(item.word || '').trim();
+            const live = resolveLiveItem(item);
+            const sanitized = sanitizeWordAndPos(live.word || '', '', '');
+            const cleanTerm = sanitized.word || String(live.word || '').trim();
             return { index: idx, word: cleanTerm };
         });
 
@@ -526,7 +539,6 @@ Return ONLY a valid JSON array with no markdown or extra text:
         let parsedArray = null;
         let attempt = 0;
         const maxAttempts = 2;
-        let lastErrorMsg = '';
 
         while (!parsedArray && attempt < maxAttempts) {
             attempt++;
@@ -536,40 +548,40 @@ Return ONLY a valid JSON array with no markdown or extra text:
                 if (Array.isArray(parsed) && parsed.length > 0) {
                     parsedArray = parsed;
                 } else {
-                    lastErrorMsg = 'AI 回傳 JSON 格式異常或為空';
+                    lastBatchError = 'AI 回傳 JSON 格式異常或被截斷';
                     console.warn(`[AI Batch Parse Retry] 第 ${attempt} 次解析未取得有效陣列，原始前 120 字:`, String(rawResponse || '').slice(0, 120));
                 }
             } catch (err) {
-                lastErrorMsg = err.message;
+                lastBatchError = err.message;
                 if (err.message && (err.message.includes('API Key') || err.message.includes('限流'))) {
                     throw err;
                 }
             }
 
             if (!parsedArray && attempt < maxAttempts) {
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 1500));
             }
         }
 
         if (parsedArray) {
             applyResultsToChunk(chunk, parsedArray);
             if (typeof saveStorage === 'function') saveStorage();
-            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof renderWordList === 'function') renderWordList(false);
             return;
         }
 
-        // 若 10 字整批解析仍失敗，自動拆成 5 字一小批再試一次
+        // 若整批解析仍失敗，自動拆成 5 字一小批再試一次
         if (allowSplit && chunk.length > 5) {
-            console.warn(`[AI Batch Split] 10 字批次解析失敗 (${lastErrorMsg})，自動拆分為 5 字小批重試...`);
+            console.warn(`[AI Batch Split] 批次解析失敗 (${lastBatchError})，自動拆分為 5 字小批重試...`);
             const mid = Math.ceil(chunk.length / 2);
             await executeChunkWithRetry(chunk.slice(0, mid), false);
             await executeChunkWithRetry(chunk.slice(mid), false);
             return;
         }
 
-        console.error(`[AI Batch Error] 子批次處理失敗 (${lastErrorMsg}):`, cleanChunkInputs);
+        console.error(`[AI Batch Error] 子批次處理失敗 (${lastBatchError}):`, cleanChunkInputs);
         if (successUpdatedCount === 0 && completedCount === 0) {
-            throw new Error(lastErrorMsg || '連線至 AI 伺服器失敗');
+            throw new Error(lastBatchError || '連線至 AI 伺服器失敗');
         }
     };
 
@@ -583,13 +595,14 @@ Return ONLY a valid JSON array with no markdown or extra text:
         }
 
         if (i + batchSize < total) {
-            await new Promise(resolve => setTimeout(resolve, 250));
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
 
-    // 🔄 自動補掃機制：凡是尚未在 updatedSet 中更新的卡片，或仍有缺漏/非母語欄位的卡片，一律用 5 字小批補跑一次
-    const missedItems = targetItems.filter(item =>
-        !updatedSet.has(item) ||
+    // 🔄 自動補掃機制：凡是尚未更新的卡片，或仍有缺漏/非母語欄位的卡片，一律用 5 字小批補跑一次
+    const currentLiveItems = targetItems.map(resolveLiveItem);
+    const missedItems = currentLiveItems.filter(item =>
+        !updatedKeys.has(item.id || item) ||
         isFieldIncomplete(item.meaning, 'meaning') ||
         isFieldIncomplete(item.pos, 'pos') ||
         isFieldIncomplete(item.sentence, 'sentence') ||
@@ -604,14 +617,20 @@ Return ONLY a valid JSON array with no markdown or extra text:
             const sweepChunk = missedItems.slice(j, j + sweepSize);
             try {
                 await executeChunkWithRetry(sweepChunk, false);
+                await new Promise(resolve => setTimeout(resolve, 800));
             } catch (sweepErr) {
+                lastBatchError = sweepErr.message;
                 console.warn('[AI Batch Sweep Warning]:', sweepErr);
             }
         }
     }
 
     if (successUpdatedCount === 0) {
-        throw new Error("AI 未能成功解析任何單字，請稍後再試");
+        throw new Error(lastBatchError || "AI 未能成功解析任何單字，請稍後再試");
+    }
+
+    if (successUpdatedCount < total && lastBatchError && typeof showToast === 'function') {
+        showToast(`部分單字未完成 (${successUpdatedCount}/${total})，原因：${lastBatchError}`, 'warning');
     }
 
     return successUpdatedCount;
