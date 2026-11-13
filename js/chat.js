@@ -9,7 +9,7 @@ let currentActiveChatId = null;
 let currentActiveChatData = null;
 let chatSearchQuery = '';
 
-// RTDB 監聽器引用
+// RTDB 監聽器與定時器引用
 let activeChatListener = null;
 let activeChatReadListener = null;
 let friendRequestsListener = null;
@@ -18,6 +18,9 @@ let chatsListListener = null;
 let announcementsListener = null;
 let presenceStatusListener = null;
 let connectedStateListener = null;
+let presenceHeartbeatTimer = null;
+let onlineUiRefreshTimer = null;
+let currentTrackedPresenceUid = null;
 
 let pendingRequestsList = [];
 let pendingGroupInvitesList = [];
@@ -26,6 +29,9 @@ let cloudAnnouncements = [];
 let onlineUsersMap = {}; // 記錄全站線上使用者狀態
 let chatReadByMap = {};   // 記錄當前聊天室各成員最後已讀時間
 let currentChatMessages = []; // 快取當前聊天室訊息，避免已讀狀態變更時重複向 Firebase 下載
+
+const PRESENCE_HEARTBEAT_MS = 45000; // 每 45 秒更新一次活躍時間戳
+const PRESENCE_TIMEOUT_MS = 150000;  // 超過 2.5 分鐘無心跳視為已離線（自動清除幽靈在線）
 
 // 取得 RTDB 實例
 function getRtdb() {
@@ -137,6 +143,7 @@ function writeCurrentUserOnlineStatus() {
     if (!rtdb || !currentUser) return;
 
     const currentUid = currentUser.uid;
+    currentTrackedPresenceUid = currentUid;
     const userStatusRef = rtdb.ref(`status/${currentUid}`);
     const resolvedNickname = (window.userData && window.userData.nickname)
         || currentUser.displayName
@@ -153,7 +160,35 @@ function writeCurrentUserOnlineStatus() {
 }
 
 /**
- * 🟢 1. 在線狀態 Presence 綁定與自動離線偵測
+ * 🔴 立即將目前帳號標記為離線（供登出或切換帳號前呼叫）
+ */
+async function setUserOfflineNow() {
+    if (presenceHeartbeatTimer) {
+        clearInterval(presenceHeartbeatTimer);
+        presenceHeartbeatTimer = null;
+    }
+
+    const rtdb = getRtdb();
+    const uid = firebase.auth()?.currentUser?.uid || currentTrackedPresenceUid;
+    if (!rtdb || !uid) return;
+
+    try {
+        const userStatusRef = rtdb.ref(`status/${uid}`);
+        await userStatusRef.onDisconnect().cancel().catch(() => {});
+        await userStatusRef.set({
+            state: 'offline',
+            last_changed: firebase.database.ServerValue.TIMESTAMP
+        });
+    } catch (e) {
+        console.warn("標記離線狀態失敗:", e);
+    } finally {
+        currentTrackedPresenceUid = null;
+    }
+}
+window.setUserOfflineNow = setUserOfflineNow;
+
+/**
+ * 🟢 1. 在線狀態 Presence 綁定、心跳維持與自動離線偵測
  */
 function initUserPresenceTracker() {
     if (isGuestUser()) return;
@@ -161,6 +196,17 @@ function initUserPresenceTracker() {
     const rtdb = getRtdb();
     if (!rtdb || !currentUid) return;
 
+    // 若同分頁切換帳號，先將上一組 UID 標記離線
+    if (currentTrackedPresenceUid && currentTrackedPresenceUid !== currentUid) {
+        const prevRef = rtdb.ref(`status/${currentTrackedPresenceUid}`);
+        prevRef.onDisconnect().cancel().catch(() => {});
+        prevRef.set({
+            state: 'offline',
+            last_changed: firebase.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+    }
+
+    currentTrackedPresenceUid = currentUid;
     const userStatusRef = rtdb.ref(`status/${currentUid}`);
     const connectedRef = rtdb.ref('.info/connected');
 
@@ -178,6 +224,17 @@ function initUserPresenceTracker() {
             writeCurrentUserOnlineStatus();
         }).catch(() => {});
     });
+
+    if (presenceHeartbeatTimer) {
+        clearInterval(presenceHeartbeatTimer);
+    }
+    presenceHeartbeatTimer = setInterval(() => {
+        if (document.visibilityState === 'visible' && !isGuestUser() && firebase.auth()?.currentUser) {
+            rtdb.ref(`status/${currentUid}/last_changed`)
+                .set(firebase.database.ServerValue.TIMESTAMP)
+                .catch(() => {});
+        }
+    }, PRESENCE_HEARTBEAT_MS);
 }
 
 /**
@@ -195,6 +252,12 @@ function initChatRealtimeListeners() {
         onlineUsersMap = snapshot.val() || {};
         renderOnlineStatusUI();
     });
+
+    if (!onlineUiRefreshTimer) {
+        onlineUiRefreshTimer = setInterval(() => {
+            renderOnlineStatusUI();
+        }, 30000);
+    }
 
     if (friendRequestsListener) rtdb.ref('friendRequests').off('value', friendRequestsListener);
     friendRequestsListener = rtdb.ref('friendRequests').on('value', snapshot => {
@@ -251,7 +314,7 @@ function initChatRealtimeListeners() {
 }
 
 /**
- * 👁️ 3. 渲染線上人數、線上名單與管理員透視面板 (支援 i18n)
+ * 👁️ 3. 渲染線上人數、線上名單與管理員透視面板 (支援 i18n 與心跳超時過濾)
  */
 function renderOnlineStatusUI() {
     const onlineCountEl = document.getElementById('onlineUserCountText');
@@ -260,22 +323,29 @@ function renderOnlineStatusUI() {
 
     const isAdmin = window.userData && window.userData.role === 'admin';
     const myPrivacyHide = !isAdmin && !!(window.userData && window.userData.privacyHideStatus);
+    const currentUid = firebase.auth()?.currentUser?.uid || '';
+    const now = Date.now();
 
     let visibleOnlineUsers = [];
     let allOnlineUsersForAdmin = [];
 
     Object.keys(onlineUsersMap).forEach(uid => {
         const userStatus = onlineUsersMap[uid];
-        if (userStatus && userStatus.state === 'online') {
-            allOnlineUsersForAdmin.push({ uid, ...userStatus });
+        if (!userStatus || userStatus.state !== 'online') return;
 
-            const targetUserIsHidden = !!userStatus.hidePrivacy;
+        // 檢查最後心跳時間：本人永遠視為在線，其他帳號超過 2.5 分鐘無心跳則過濾掉（防止幽靈殘留）
+        const lastChanged = typeof userStatus.last_changed === 'number' ? userStatus.last_changed : 0;
+        const isFresh = (uid === currentUid) || (lastChanged > 0 && (now - lastChanged) <= PRESENCE_TIMEOUT_MS);
+        if (!isFresh) return;
 
-            if (isAdmin) {
-                visibleOnlineUsers.push({ uid, ...userStatus });
-            } else if (!myPrivacyHide && !targetUserIsHidden) {
-                visibleOnlineUsers.push({ uid, ...userStatus });
-            }
+        allOnlineUsersForAdmin.push({ uid, ...userStatus });
+
+        const targetUserIsHidden = !!userStatus.hidePrivacy;
+
+        if (isAdmin) {
+            visibleOnlineUsers.push({ uid, ...userStatus });
+        } else if (!myPrivacyHide && !targetUserIsHidden) {
+            visibleOnlineUsers.push({ uid, ...userStatus });
         }
     });
 
@@ -328,13 +398,20 @@ function renderOnlineStatusUI() {
     }
 }
 
-// 手機瀏覽器從背景切回前台時，立即刷新上線狀態與人數
+// 手機瀏覽器切換前後台時，即時同步線上狀態
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
             writeCurrentUserOnlineStatus();
             renderOnlineStatusUI();
         }
+    });
+}
+
+// 關閉分頁或離開網站時主動送出離線狀態
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => {
+        setUserOfflineNow();
     });
 }
 

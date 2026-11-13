@@ -75,11 +75,14 @@ async function loginWithEmail(email, password) {
   }
 }
 
-// 3. 登出（登出前先確保所有作答紀錄已同步至 Firestore）
+// 3. 登出（登出前先確保所有作答紀錄已同步至 Firestore，並立即標記為離線）
 async function logoutUser() {
   try {
     if (typeof StorageEngine !== 'undefined' && typeof StorageEngine.flushCloudSave === 'function') {
       await StorageEngine.flushCloudSave();
+    }
+    if (typeof setUserOfflineNow === 'function') {
+      await setUserOfflineNow();
     }
     await auth.signOut();
     console.log("已成功登出");
