@@ -159,6 +159,10 @@ async function saveFriendsToCloud(friends) {
 
 // 7. 監聽帳號狀態切換，同步雲端資料與字庫記憶
 auth.onAuthStateChanged(async (user) => {
+  if (typeof setAppLoaderProgress === 'function') {
+    setAppLoaderProgress(35, '驗證帳號狀態中...');
+  }
+
   const emailEl = document.getElementById('settings-email');
   const subtextEl = document.getElementById('settings-subtext');
   const avatarEl = document.getElementById('settings-avatar');
@@ -254,12 +258,16 @@ auth.onAuthStateChanged(async (user) => {
   }
 
   try {
+    if (typeof setAppLoaderProgress === 'function') setAppLoaderProgress(60, '同步雲端字庫與設定...');
     if (typeof loadStorage === 'function') await loadStorage();
+
+    if (typeof setAppLoaderProgress === 'function') setAppLoaderProgress(85, '載入畫面與權限中...');
     if (typeof updateUI === 'function') updateUI();
     if (typeof renderStore === 'function') renderStore();
     if (typeof updateUserCoinsUI === 'function') updateUserCoinsUI();
     if (typeof checkAdminPermissions === 'function') checkAdminPermissions();
   } finally {
+    window.__appReadyToHideLoader = true;
     // ✅ 所有雲端資料、字庫與權限同步完成，自動關閉載入畫面
     if (typeof hideAppLoader === 'function') hideAppLoader();
   }

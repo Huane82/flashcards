@@ -39,12 +39,23 @@
 </head>
 <body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans pb-16 sm:pb-0 transition-colors duration-200">
     
-    <!-- 🔄 全域初始化載入畫面 -->
-<div id="appLoadingOverlay" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 transition-opacity duration-300">
-    <div class="w-12 h-12 border-4 border-brand-200 dark:border-slate-700 border-t-brand-600 dark:border-t-brand-400 rounded-full animate-spin mb-4"></div>
-    <p class="text-base font-extrabold text-slate-800 dark:text-slate-100 tracking-wide">LZHCard</p>
-    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">資料同步與初始化中，請稍候...</p>
-</div>
+    <!-- 🔄 全域初始化載入畫面（含即時進度條） -->
+    <div id="appLoadingOverlay" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 transition-opacity duration-300 px-6">
+        <div class="w-12 h-12 border-4 border-brand-200 dark:border-slate-700 border-t-brand-600 dark:border-t-brand-400 rounded-full animate-spin mb-4"></div>
+        <p class="text-base font-extrabold text-slate-800 dark:text-slate-100 tracking-wide">LZHCard</p>
+        <p id="appLoaderStatusText" class="text-xs text-slate-400 dark:text-slate-500 mt-1">資料同步與初始化中，請稍候...</p>
+
+        <!-- 進度條 -->
+        <div class="w-full max-w-xs mt-4 space-y-1.5">
+            <div class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div id="appLoaderProgressBar" class="h-full bg-brand-600 dark:bg-brand-400 rounded-full transition-all duration-300" style="width: 15%;"></div>
+            </div>
+            <div class="flex justify-end">
+                <span id="appLoaderProgressPercent" class="text-[11px] font-bold text-brand-600 dark:text-brand-400 font-mono">15%</span>
+            </div>
+        </div>
+    </div>
+
 
 
     <!-- 🔒 未登入 / 條款同意歡迎 Modal (z-[60] 蓋過所有元件) -->

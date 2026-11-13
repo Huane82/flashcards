@@ -18,25 +18,51 @@ let currentCard = null;
 let selectedWordIds = new Set();
 let currentTab = 'home';
 let isCardActionLocked = false;
+let isAppLoaderHidden = false;
+let currentLoaderProgress = 15;
+
+/**
+ * 📊 更新初始化載入進度條
+ */
+function setAppLoaderProgress(percent, statusText) {
+    if (isAppLoaderHidden) return;
+    currentLoaderProgress = Math.max(currentLoaderProgress, Math.min(100, percent));
+
+    const bar = document.getElementById('appLoaderProgressBar');
+    const pctText = document.getElementById('appLoaderProgressPercent');
+    const statusEl = document.getElementById('appLoaderStatusText');
+
+    if (bar) bar.style.width = `${currentLoaderProgress}%`;
+    if (pctText) pctText.innerText = `${currentLoaderProgress}%`;
+    if (statusEl && statusText) statusEl.innerText = statusText;
+}
 
 /**
  * 🔄 平滑關閉初始化載入遮罩
  */
 function hideAppLoader() {
     if (isAppLoaderHidden) return;
+    setAppLoaderProgress(100, '初始化完成！');
     isAppLoaderHidden = true;
-    
+
     const overlay = document.getElementById('appLoadingOverlay');
     if (!overlay) return;
-    
-    overlay.classList.add('opacity-0', 'pointer-events-none');
+
     setTimeout(() => {
-        overlay.classList.add('hidden');
-    }, 300);
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+        }, 300);
+    }, 180);
+}
+
+if (window.__appReadyToHideLoader) {
+    hideAppLoader();
 }
 
 // 🛡️ 安全保險機制：最多 5 秒後自動解除遮罩，避免離線或網路不穩時卡住
 setTimeout(hideAppLoader, 5000);
+
 
 let wordListRenderLimit = 100; // 🚀 單字列表每次渲染上限（避免一次塞入數千個 DOM）
 window._cachedFilteredWords = [];
